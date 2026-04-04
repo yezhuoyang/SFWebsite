@@ -1,0 +1,29 @@
+# Dependencies
+client/node_modules/
+__pycache__/
+*.pyc
+
+# Build outputs
+client/dist/
+*.vo
+*.vos
+*.vok
+*.glob
+Makefile.coq
+Makefile.coq.conf
+.Makefile.coq.d
+.coqdeps.d
+
+# Database
+sf_learning.db
+
+# Tarballs (original downloads)
+*.tgz
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*~
+Thumbs.db
+.DS_Store
