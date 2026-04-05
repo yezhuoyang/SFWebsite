@@ -1,0 +1,62 @@
+{
+  "chapter": "Multiset",
+  "volume": "vfa",
+  "exercises": {
+    "union_assoc": {
+      "solution": "Proof.\n  intros.\n  extensionality x.\n  unfold union.\n  lia.\nQed.",
+      "explanation": "After extensionality, unfold union to see addition of naturals, then lia handles the associativity of addition."
+    },
+    "union_comm": {
+      "solution": "Proof.\n  intros.\n  extensionality x.\n  unfold union.\n  lia.\nQed.",
+      "explanation": "Similar to union_assoc but uses commutativity of addition."
+    },
+    "union_swap": {
+      "solution": "Proof.\n  intros.\n  rewrite union_assoc.\n  rewrite (union_comm a b).\n  rewrite <- union_assoc.\n  reflexivity.\nQed.",
+      "explanation": "Uses associativity and commutativity of union to swap the nested arguments without needing extensionality."
+    },
+    "insert_contents": {
+      "solution": "Proof.\n  induction l as [| h t IH].\n  - simpl. reflexivity.\n  - simpl. bdestruct (x <=? h).\n    + simpl. reflexivity.\n    + simpl. rewrite IH.\n      simpl. rewrite union_swap.\n      reflexivity.\nQed.",
+      "explanation": "By induction on l. When x > h, we use the IH and union_swap to rearrange the multiset union."
+    },
+    "sort_contents": {
+      "solution": "Proof.\n  induction l as [| h t IH].\n  - simpl. reflexivity.\n  - simpl. rewrite <- insert_contents.\n    rewrite <- IH.\n    reflexivity.\nQed.",
+      "explanation": "By induction on l. The cons case rewrites with insert_contents and the IH."
+    },
+    "insertion_sort_correct": {
+      "solution": "Proof.\n  unfold is_a_sorting_algorithm'.\n  intros al. split.\n  - apply sort_contents.\n  - apply sort_sorted.\nQed.",
+      "explanation": "Direct combination of sort_contents and sort_sorted."
+    },
+    "permutations_vs_multiset": {
+      "solution": "(* Manual grade exercise - no code solution needed *)",
+      "explanation": "This is a manually graded exercise asking students to compare proof approaches. Multisets are generally easier for insert/sort contents proofs."
+    },
+    "perm_contents": {
+      "solution": "Proof.\n  intros al bl Hperm.\n  induction Hperm.\n  - reflexivity.\n  - simpl. rewrite IHHperm. reflexivity.\n  - simpl. extensionality z. unfold union, singleton.\n    bdestruct (z =? y); bdestruct (z =? x); lia.\n  - rewrite IHHperm1. apply IHHperm2.\nQed.",
+      "explanation": "By induction on the Permutation evidence. The swap case needs extensionality and bdestruct on equality tests."
+    },
+    "contents_nil_inv": {
+      "solution": "Proof.\n  intros l H.\n  destruct l as [| a l'].\n  - reflexivity.\n  - specialize (H a). simpl in H.\n    unfold union, singleton in H.\n    bdestruct (a =? a). lia. lia.\nQed.",
+      "explanation": "If l is non-empty with head a, then contents l a >= 1, contradicting the hypothesis that contents l a = 0."
+    },
+    "contents_cons_inv": {
+      "solution": "Proof.\n  induction l as [| h t IH]; intros.\n  - simpl in H. unfold empty in H. discriminate.\n  - simpl in H. unfold union, singleton in H.\n    bdestruct (x =? h).\n    + subst. exists [], t. simpl. split.\n      * reflexivity.\n      * lia.\n    + assert (S n = contents t x) by lia.\n      destruct (IH x n H0) as [l1 [l2 [Heq Hcount]]].\n      exists (h :: l1), l2. split.\n      * simpl. rewrite Heq. reflexivity.\n      * simpl. unfold union, singleton.\n        bdestruct (x =? h). lia. lia.\nQed.",
+      "explanation": "By induction on l. If the head matches x, split there. Otherwise, use the IH on the tail and prepend the head to l1."
+    },
+    "contents_insert_other": {
+      "solution": "Proof.\n  induction l1 as [| h l1' IH]; intros.\n  - simpl. unfold union, singleton.\n    bdestruct (y =? x). lia. reflexivity.\n  - simpl. unfold union, singleton.\n    bdestruct (y =? h);\n    rewrite IH; auto;\n    simpl; unfold union, singleton;\n    bdestruct (y =? h); lia.\nQed.",
+      "explanation": "By induction on l1. The key insight is that since y <> x, the singleton contribution of x cancels out."
+    },
+    "contents_perm": {
+      "solution": "Proof.\n  intros al bl H0.\n  assert (H: forall x, contents al x = contents bl x).\n  { rewrite H0. auto. }\n  clear H0.\n  generalize dependent bl.\n  induction al as [| a al' IH]; intros.\n  - symmetry. apply contents_nil_inv.\n    intro x. specialize (H x). simpl in H. auto.\n  - assert (Ha: S (contents al' a) = contents bl a).\n    { specialize (H a). simpl in H. unfold union, singleton in H.\n      bdestruct (a =? a). lia. lia. }\n    destruct (contents_cons_inv bl a (contents al' a) Ha) as [l1 [l2 [Heq Hcount]]].\n    subst bl.\n    apply Permutation_cons_app.\n    apply IH.\n    intro x.\n    specialize (H x).\n    simpl in H. unfold union, singleton in H.\n    bdestruct (x =? a).\n    + subst. lia.\n    + rewrite contents_insert_other in H by auto. lia.\nQed.",
+      "explanation": "By induction on al. For non-empty al with head a, use contents_cons_inv to find a in bl, then apply IH to the remainders."
+    },
+    "same_contents_iff_perm": {
+      "solution": "Proof.\n  intros al bl. split.\n  - apply contents_perm.\n  - apply perm_contents.\nQed.",
+      "explanation": "Direct combination of both directions."
+    },
+    "sort_specifications_equivalent": {
+      "solution": "Proof.\n  intros f. unfold is_a_sorting_algorithm, is_a_sorting_algorithm'. split.\n  - intros H al. destruct (H al) as [Hperm Hsorted]. split.\n    + apply perm_contents. assumption.\n    + assumption.\n  - intros H al. destruct (H al) as [Hcontents Hsorted]. split.\n    + apply contents_perm. symmetry. assumption.\n    + assumption.\nQed.",
+      "explanation": "Uses same_contents_iff_perm (via its components) to convert between permutation and contents specifications."
+    }
+  }
+}

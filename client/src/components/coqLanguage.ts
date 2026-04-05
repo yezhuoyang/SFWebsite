@@ -153,29 +153,37 @@ export const coqTokenProvider: Monaco.languages.IMonarchLanguage = {
   },
 };
 
+// Colors extracted from SF website's sf.css:
+// .id[title="keyword"]       → #697f2f (olive green)
+// .id[title="constructor"]   → #697f2f
+// .id[title="var"]           → rgb(40%,0%,40%) = #660066
+// .id[title="definition"]    → rgb(0%,40%,0%) = #006600
+// .id[title="inductive"]     → #034764 (dark teal)
+// .inlinecode                → #444444
+// .doc .inlinecode            → rgb(35%,35%,70%) = #5959b3
 export const coqTheme: Monaco.editor.IStandaloneThemeData = {
-  base: 'vs-dark',
+  base: 'vs',
   inherit: true,
   rules: [
-    { token: 'keyword', foreground: 'FF9D57', fontStyle: 'bold' },
-    { token: 'keyword.tactic', foreground: '7ECE6A' },
-    { token: 'keyword.vernacular', foreground: 'FF9D57', fontStyle: 'bold' },
-    { token: 'type', foreground: '4FC1FF' },
-    { token: 'comment', foreground: '5C6370', fontStyle: 'italic' },
-    { token: 'comment.doc', foreground: '6A7380', fontStyle: 'italic' },
-    { token: 'string', foreground: 'CE9178' },
-    { token: 'number', foreground: 'B5CEA8' },
-    { token: 'operator', foreground: 'C8C8D4' },
-    { token: 'delimiter.period', foreground: 'E0E0E8', fontStyle: 'bold' },
-    { token: 'identifier', foreground: 'C4B5FD' },
+    { token: 'keyword', foreground: '697f2f' },             // SF keyword green
+    { token: 'keyword.tactic', foreground: '697f2f' },      // Same as keyword in SF
+    { token: 'keyword.vernacular', foreground: '697f2f' },
+    { token: 'type', foreground: '034764' },                 // SF inductive teal
+    { token: 'comment', foreground: '808080', fontStyle: 'italic' },
+    { token: 'comment.doc', foreground: '808080', fontStyle: 'italic' },
+    { token: 'string', foreground: 'a31515' },
+    { token: 'number', foreground: '098658' },
+    { token: 'operator', foreground: '444444' },
+    { token: 'delimiter.period', foreground: '444444' },
+    { token: 'identifier', foreground: '660066' },           // SF variable purple
   ],
   colors: {
-    'editor.background': '#181a24',
-    'editor.foreground': '#D4D4E8',
-    'editorLineNumber.foreground': '#3d3f52',
-    'editorCursor.foreground': '#7C6BFF',
-    'editor.selectionBackground': '#2A2D45',
-    'editor.lineHighlightBackground': '#1E2030',
+    'editor.background': '#ffffff',
+    'editor.foreground': '#444444',
+    'editorLineNumber.foreground': '#cccccc',
+    'editorCursor.foreground': '#333333',
+    'editor.selectionBackground': '#b0c4de50',
+    'editor.lineHighlightBackground': '#f8f8f5',
   },
 };
 

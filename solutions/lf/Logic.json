@@ -1,0 +1,138 @@
+{
+  "chapter": "Logic",
+  "volume": "lf",
+  "exercises": {
+    "plus_is_O": {
+      "solution": "intros n m H. destruct n as [| n'].\n  - destruct m as [| m'].\n    + split. reflexivity. reflexivity.\n    + discriminate H.\n  - discriminate H.",
+      "explanation": "Destruct n; if n = S n', then n + m = 0 is impossible. If n = 0, destruct m similarly."
+    },
+    "proj2": {
+      "solution": "intros P Q [HP HQ]. apply HQ.",
+      "explanation": "Destruct the conjunction hypothesis to extract Q."
+    },
+    "and_assoc": {
+      "solution": "intros P Q R [HP [HQ HR]]. split.\n  - split. apply HP. apply HQ.\n  - apply HR.",
+      "explanation": "Decompose P /\\ (Q /\\ R) and reassemble as (P /\\ Q) /\\ R."
+    },
+    "mult_is_O": {
+      "solution": "intros n m H. destruct n as [| n'].\n  - left. reflexivity.\n  - destruct m as [| m'].\n    + right. reflexivity.\n    + discriminate H.",
+      "explanation": "If n = 0, left disjunct holds. If n = S n', check m: if m = 0, right holds; otherwise n*m <> 0, contradiction."
+    },
+    "or_commut": {
+      "solution": "intros P Q [HP | HQ].\n  - right. apply HP.\n  - left. apply HQ.",
+      "explanation": "Destruct the disjunction and swap the sides."
+    },
+    "not_implies_our_not": {
+      "solution": "intros P HNP Q HP. unfold not in HNP. apply HNP in HP. destruct HP.",
+      "explanation": "Apply ~P to the proof of P to get False, then destruct False to prove any Q."
+    },
+    "double_neg_informal": {
+      "solution": "(* Informal proof: Assume P holds. We need to show ~~P, i.e., ~P -> False. So assume ~P (i.e., P -> False). But we have P, so applying ~P to P gives False. *)",
+      "explanation": "This is an informal proof exercise; the comment explains the reasoning."
+    },
+    "contrapositive": {
+      "solution": "intros P Q HPQ HNQ HP. apply HNQ. apply HPQ. apply HP.",
+      "explanation": "Assume P -> Q, ~Q, and P. Apply P -> Q to P to get Q, then apply ~Q to Q for contradiction."
+    },
+    "not_both_true_and_false": {
+      "solution": "intros P [HP HNP]. apply HNP. apply HP.",
+      "explanation": "Destruct the conjunction to get P and ~P, then apply ~P to P to derive False."
+    },
+    "not_PNP_informal": {
+      "solution": "(* Informal proof: Suppose P /\\ ~P. Then we have both P and ~P. Since ~P means P -> False, applying it to P gives False. This is a contradiction, so ~(P /\\ ~P). *)",
+      "explanation": "Informal proof exercise showing P /\\ ~P leads to contradiction."
+    },
+    "de_morgan_not_or": {
+      "solution": "intros P Q H. split.\n  - intro HP. apply H. left. apply HP.\n  - intro HQ. apply H. right. apply HQ.",
+      "explanation": "To show ~P, assume P and derive a contradiction via left disjunct. Similarly for ~Q via right disjunct."
+    },
+    "not_S_pred_n": {
+      "solution": "intros H. assert (H0 : S (pred 0) = 0). { apply H. } simpl in H0. discriminate H0.",
+      "explanation": "Instantiate the universal with n=0. Then S (pred 0) = S 0 <> 0, contradiction."
+    },
+    "nil_is_not_cons": {
+      "solution": "intros X x xs H.\n  assert (Hd : (fun l : list X => match l with [] => True | _ :: _ => False end) nil).\n  { simpl. apply I. }\n  rewrite H in Hd. simpl in Hd. apply Hd.",
+      "explanation": "Use a discriminating function that maps nil to True and cons to False, then rewrite to derive False."
+    },
+    "iff_refl": {
+      "solution": "intros P. split.\n  - intro HP. apply HP.\n  - intro HP. apply HP.",
+      "explanation": "Both directions are identity."
+    },
+    "iff_trans": {
+      "solution": "intros P Q R [HPQ HQP] [HQR HRQ]. split.\n  - intro HP. apply HQR. apply HPQ. apply HP.\n  - intro HR. apply HQP. apply HRQ. apply HR.",
+      "explanation": "Chain the implications in both directions."
+    },
+    "or_distributes_over_and": {
+      "solution": "intros P Q R. split.\n  - intros [HP | [HQ HR]].\n    + split. left. apply HP. left. apply HP.\n    + split. right. apply HQ. right. apply HR.\n  - intros [[HP | HQ] [HP' | HR]].\n    + left. apply HP.\n    + left. apply HP.\n    + left. apply HP'.\n    + right. split. apply HQ. apply HR.",
+      "explanation": "Forward: P gives both disjuncts; Q/\\R gives right side of each. Backward: case analysis on both conjuncts."
+    },
+    "dist_not_exists": {
+      "solution": "intros X P H [x HNPx]. apply HNPx. apply H.",
+      "explanation": "Assume exists x, ~P x. Destruct to get x and ~P x. But forall x, P x gives P x, contradiction."
+    },
+    "dist_exists_or": {
+      "solution": "intros X P Q. split.\n  - intros [x [HP | HQ]].\n    + left. exists x. apply HP.\n    + right. exists x. apply HQ.\n  - intros [[x HP] | [x HQ]].\n    + exists x. left. apply HP.\n    + exists x. right. apply HQ.",
+      "explanation": "Split the existential with disjunction into disjunction of existentials and vice versa."
+    },
+    "leb_plus_exists": {
+      "solution": "intros n. induction n as [| n' IHn'].\n  - intros m H. exists m. reflexivity.\n  - intros m H. destruct m as [| m'].\n    + discriminate H.\n    + simpl in H. apply IHn' in H. destruct H as [x Hx]. exists x. simpl. rewrite Hx. reflexivity.",
+      "explanation": "Induction on n. Base: x = m. Step: destruct m; if 0, contradiction; otherwise use IH."
+    },
+    "plus_exists_leb": {
+      "solution": "intros n m [x Hx]. rewrite Hx. induction n as [| n' IHn'].\n  - reflexivity.\n  - simpl. apply IHn'.",
+      "explanation": "Rewrite m = n + x, then induct on n to show n <=? (n + x) = true."
+    },
+    "In_map_iff": {
+      "solution": "intros A B f l y. split.\n  - induction l as [|x l' IHl'].\n    + simpl. intros []. \n    + simpl. intros [H | H].\n      * exists x. split. apply H. left. reflexivity.\n      * destruct (IHl' H) as [x' [Hfx' Hin]]. exists x'. split. apply Hfx'. right. apply Hin.\n  - intros [x [Hfx Hin]]. rewrite <- Hfx. apply In_map. apply Hin.",
+      "explanation": "Forward: induction on l, find the witness. Backward: use In_map theorem."
+    },
+    "In_app_iff": {
+      "solution": "intros A l. induction l as [|a' l' IH].\n  - simpl. intros l' a. split.\n    + intros H. right. apply H.\n    + intros [[] | H]. apply H.\n  - intros l'' a. simpl. rewrite IH. split.\n    + intros [H | [H | H]].\n      * left. left. apply H.\n      * left. right. apply H.\n      * right. apply H.\n    + intros [[H | H] | H].\n      * left. apply H.\n      * right. left. apply H.\n      * right. right. apply H.",
+      "explanation": "Induction on l, using IH to relate In in the tail to disjunctions."
+    },
+    "All": {
+      "solution": "Fixpoint All {T : Type} (P : T -> Prop) (l : list T) : Prop :=\n  match l with\n  | [] => True\n  | x :: l' => P x /\\ All P l'\n  end.\n\nTheorem All_In :\n  forall T (P : T -> Prop) (l : list T),\n    (forall x, In x l -> P x) <->\n    All P l.\nProof.\n  intros T P l. induction l as [| h t IH].\n  - simpl. split.\n    + intros _. apply I.\n    + intros _ x [].\n  - simpl. split.\n    + intros H. split.\n      * apply H. left. reflexivity.\n      * apply IH. intros x Hin. apply H. right. apply Hin.\n    + intros [HPh HAll] x [Heq | Hin].\n      * rewrite <- Heq. apply HPh.\n      * apply IH. apply HAll. apply Hin.\nQed.",
+      "explanation": "All P l holds when P holds for every element. Defined as True for [] and P x /\\ All P l' for x::l'."
+    },
+    "combine_odd_even": {
+      "solution": "Definition combine_odd_even (Podd Peven : nat -> Prop) : nat -> Prop :=\n  fun n => if odd n then Podd n else Peven n.\n\nTheorem combine_odd_even_intro :\n  forall (Podd Peven : nat -> Prop) (n : nat),\n    (odd n = true -> Podd n) ->\n    (odd n = false -> Peven n) ->\n    combine_odd_even Podd Peven n.\nProof.\n  intros Podd Peven n Hodd Heven. unfold combine_odd_even.\n  destruct (odd n) eqn:E.\n  - apply Hodd. reflexivity.\n  - apply Heven. reflexivity.\nQed.\n\nTheorem combine_odd_even_elim_odd :\n  forall (Podd Peven : nat -> Prop) (n : nat),\n    combine_odd_even Podd Peven n ->\n    odd n = true ->\n    Podd n.\nProof.\n  intros Podd Peven n Hcomb Hodd. unfold combine_odd_even in Hcomb.\n  rewrite Hodd in Hcomb. apply Hcomb.\nQed.\n\nTheorem combine_odd_even_elim_even :\n  forall (Podd Peven : nat -> Prop) (n : nat),\n    combine_odd_even Podd Peven n ->\n    odd n = false ->\n    Peven n.\nProof.\n  intros Podd Peven n Hcomb Heven. unfold combine_odd_even in Hcomb.\n  rewrite Heven in Hcomb. apply Hcomb.\nQed.",
+      "explanation": "combine_odd_even checks odd n and dispatches to Podd or Peven accordingly."
+    },
+    "logical_connectives": {
+      "solution": "Theorem andb_true_iff : forall b1 b2:bool,\n  b1 && b2 = true <-> b1 = true /\\ b2 = true.\nProof.\n  intros b1 b2. split.\n  - intros H. destruct b1.\n    + destruct b2.\n      * split. reflexivity. reflexivity.\n      * discriminate H.\n    + discriminate H.\n  - intros [H1 H2]. rewrite H1. rewrite H2. reflexivity.\nQed.\n\nTheorem orb_true_iff : forall b1 b2,\n  b1 || b2 = true <-> b1 = true \\/ b2 = true.\nProof.\n  intros b1 b2. split.\n  - intros H. destruct b1.\n    + left. reflexivity.\n    + simpl in H. right. apply H.\n  - intros [H | H].\n    + rewrite H. reflexivity.\n    + rewrite H. destruct b1. reflexivity. reflexivity.\nQed.",
+      "explanation": "Boolean and/or reflect propositional and/or. Case analysis on the booleans."
+    },
+    "eqb_neq": {
+      "solution": "intros x y. rewrite not_true_iff_false. rewrite eqb_eq. reflexivity.",
+      "explanation": "Chain not_true_iff_false and eqb_eq to relate =? false to <> ."
+    },
+    "eqb_list": {
+      "solution": "Fixpoint eqb_list {A : Type} (eqb : A -> A -> bool)\n                  (l1 l2 : list A) : bool :=\n  match l1, l2 with\n  | [], [] => true\n  | [], _ :: _ => false\n  | _ :: _, [] => false\n  | x1 :: l1', x2 :: l2' => eqb x1 x2 && eqb_list eqb l1' l2'\n  end.\n\nTheorem eqb_list_true_iff :\n  forall A (eqb : A -> A -> bool),\n    (forall a1 a2, eqb a1 a2 = true <-> a1 = a2) ->\n    forall l1 l2, eqb_list eqb l1 l2 = true <-> l1 = l2.\nProof.\n  intros A eqb Heqb l1. induction l1 as [| x1 l1' IH].\n  - intros l2. destruct l2 as [| x2 l2'].\n    + simpl. split. intros _. reflexivity. intros _. reflexivity.\n    + simpl. split. intros H. discriminate H. intros H. discriminate H.\n  - intros l2. destruct l2 as [| x2 l2'].\n    + simpl. split. intros H. discriminate H. intros H. discriminate H.\n    + simpl. rewrite andb_true_iff. rewrite Heqb. rewrite IH. split.\n      * intros [H1 H2]. rewrite H1. rewrite H2. reflexivity.\n      * intros H. injection H as H1 H2. split. apply H1. apply H2.\nQed.",
+      "explanation": "eqb_list compares element-wise using && . Proof by induction on l1 with case analysis on l2."
+    },
+    "All_forallb": {
+      "solution": "Fixpoint forallb {X : Type} (test : X -> bool) (l : list X) : bool :=\n  match l with\n  | [] => true\n  | x :: l' => test x && forallb test l'\n  end.\n\nTheorem forallb_true_iff : forall X test (l : list X),\n  forallb test l = true <-> All (fun x => test x = true) l.\nProof.\n  intros X test l. induction l as [| x l' IH].\n  - simpl. split. intros _. apply I. intros _. reflexivity.\n  - simpl. rewrite andb_true_iff. rewrite IH. split.\n    + intros [H1 H2]. split. apply H1. apply H2.\n    + intros [H1 H2]. split. apply H1. apply H2.\nQed.",
+      "explanation": "forallb tests all elements with &&. Equivalence to All follows by induction using andb_true_iff."
+    },
+    "tr_rev_correct": {
+      "solution": "Theorem tr_rev_correct : forall X, @tr_rev X = @rev X.\nProof.\n  intros X. apply functional_extensionality. intros l.\n  unfold tr_rev.\n  assert (H : forall l1 l2 : list X, rev_append l1 l2 = rev l1 ++ l2).\n  { intros l1. induction l1 as [| x l1' IH].\n    - intros l2. reflexivity.\n    - intros l2. simpl. rewrite IH. rewrite <- app_assoc. reflexivity. }\n  rewrite H. rewrite app_nil_r. reflexivity.\nQed.",
+      "explanation": "Use functional extensionality and prove that rev_append l1 l2 = rev l1 ++ l2 by induction on l1."
+    },
+    "excluded_middle_irrefutable": {
+      "solution": "intros P H. apply H. right. intro HP. apply H. left. apply HP.",
+      "explanation": "Assume ~(P \\/ ~P). Then ~P holds (since assuming P gives P \\/ ~P, contradicting H). But ~P gives P \\/ ~P via right, also contradicting H."
+    },
+    "not_exists_dist": {
+      "solution": "intros EM X P H x. destruct (EM (P x)) as [HPx | HNPx].\n  - apply HPx.\n  - exfalso. apply H. exists x. apply HNPx.",
+      "explanation": "Use excluded middle on P x. If P x, done. If ~P x, then exists x, ~P x contradicts H."
+    },
+    "even_double_conv": {
+      "solution": "intros n. induction n as [| n' IH].\n  - exists 0. reflexivity.\n  - destruct IH as [k Hk]. rewrite even_S.\n    destruct (even n') eqn:E.\n    + exists k. simpl. rewrite Hk. reflexivity.\n    + exists (S k). simpl. rewrite Hk. reflexivity.",
+      "explanation": "Induction on n. Use even_S to flip the parity and adjust the witness k accordingly."
+    },
+    "classical_axioms": {
+      "solution": "(* This exercise asks to prove equivalence of five classical axioms plus excluded_middle.\n   Here is a proof sketch of the circular chain:\n   excluded_middle -> double_negation_elimination:\n     Assume EM. Given ~~P, by EM either P or ~P. If P, done. If ~P, apply ~~P to ~P, contradiction.\n   double_negation_elimination -> peirce:\n     Assume DNE. Apply DNE to ~P. Assume ~P. Apply ((P->Q)->P) to (fun HP => ex_falso (apply ~P HP)).\n   peirce -> consequentia_mirabilis:\n     Apply Peirce with Q := False.\n   consequentia_mirabilis -> implies_to_or:\n     Assume CM. Given P->Q. Apply CM to show ~P \\/ Q.\n     Assume ~(~P \\/ Q). Then P holds (by CM, since ~P gives left disjunct contradiction).\n     So Q holds. Right. Contradiction.\n   implies_to_or -> de_morgan_not_and_not:\n     Given ~(~P /\\ ~Q). From implies_to_or with (P->P), we get ~P \\/ P. Case analysis.\n   de_morgan_not_and_not -> excluded_middle:\n     Apply de_morgan_not_and_not to ~(~P /\\ ~~P). Since ~P /\\ ~~P is always contradictory,\n     we get P \\/ ~P.\n*)",
+      "explanation": "Optional 5-star exercise proving equivalence of classical axioms in a circular chain."
+    }
+  }
+}

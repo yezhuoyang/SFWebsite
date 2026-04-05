@@ -1,0 +1,10 @@
+{
+  "chapter": "Records",
+  "volume": "plf",
+  "exercises": {
+    "examples": {
+      "solution": "Example typing_example_1 :\n  empty |-- <{ i1 := (\\z:A, z), i2 := (\\z:B, z) }> \\in\n    <{ i1 : A->A, i2 : B->B }>.\nProof.\n  apply T_RCons.\n  - apply T_Abs. apply T_Var. reflexivity.\n  - apply T_RCons.\n    + apply T_Abs. apply T_Var. reflexivity.\n    + apply T_RNil.\n    + simpl. reflexivity.\n  - simpl. reflexivity.\nQed.\n\nExample typing_example_2 :\n  empty |-- <{ ((\\z : (i1:A->A, i2:B->B), (z.i2) (z.i1))\n               (i1 := (\\z:A, z), i2 := (\\z:B, z))) }>\n    \\in <{ B->A->B }>.\nProof.\n  eapply T_App.\n  - apply T_Abs. eapply T_App.\n    + eapply T_Proj.\n      * apply T_Var. reflexivity.\n      * simpl. reflexivity.\n    + eapply T_Proj.\n      * apply T_Var. reflexivity.\n      * simpl. reflexivity.\n  - apply T_RCons.\n    + apply T_Abs. apply T_Var. reflexivity.\n    + apply T_RCons.\n      * apply T_Abs. apply T_Var. reflexivity.\n      * apply T_RNil.\n      * simpl. reflexivity.\n    + simpl. reflexivity.\nQed.\n\nExample typing_example_3 :\n  ~ (exists T, empty |-- <{ (\\z:A, z.i1) }> \\in T).\nProof.\n  intros [T H]. inversion H; subst.\n  inversion H4; subst.\n  inversion H2; subst.\n  inversion H5.\nQed.",
+      "explanation": "Type record values using T_RCons and T_RNil. Project fields using T_Proj. The third example shows that projecting i1 from type A is ill-typed."
+    }
+  }
+}

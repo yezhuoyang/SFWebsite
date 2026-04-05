@@ -1,0 +1,14 @@
+{
+  "chapter": "Decide",
+  "volume": "vfa",
+  "exercises": {
+    "insert_sorted_le_dec": {
+      "solution": "Proof.\n  intros a l H.\n  induction H.\n  - constructor.\n  - unfold insert.\n    destruct (le_dec a x) as [Hle | Hgt].\n    + constructor; auto. constructor.\n    + constructor; auto. lia. constructor.\n  - simpl. destruct (le_dec a x) as [Hle | Hgt].\n    + constructor; auto. constructor; auto.\n    + simpl in IHsorted.\n      destruct (le_dec a y) as [Hle2 | Hgt2].\n      * constructor; auto. lia.\n      * constructor; auto. lia.\nQed.",
+      "explanation": "Same structure as the insert_sorted proof from Sort.v, but using destruct (le_dec ...) instead of bdestruct (_ <=? _)."
+    },
+    "list_nat_in": {
+      "solution": "Definition list_nat_in: forall (i: nat) (al: list nat), {In i al}+{~ In i al}\n  := in_dec eq_nat_dec.\n\nExample in_4_pi: (if list_nat_in 4 [3;1;4;1;5;9;2;6] then true else false) = true.\nProof. reflexivity. Qed.",
+      "explanation": "Use in_dec from the standard library with eq_nat_dec as the equality decision procedure for nat."
+    }
+  }
+}

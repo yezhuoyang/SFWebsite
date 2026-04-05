@@ -141,7 +141,7 @@ export default function TacticsPanel() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search tactics..."
-          className="w-full text-sm bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+          className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
         />
       </div>
 
@@ -150,7 +150,7 @@ export default function TacticsPanel() {
           <div key={group.category} className="mb-1">
             <button
               onClick={() => toggle(group.category)}
-              className="w-full flex items-center px-4 py-1.5 hover:bg-gray-800/50 transition-colors"
+              className="w-full flex items-center px-4 py-1.5 hover:bg-gray-50 transition-colors"
             >
               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                 {group.category}
@@ -166,9 +166,9 @@ export default function TacticsPanel() {
                 {group.tactics.map(tactic => (
                   <div
                     key={tactic.name}
-                    className="px-3 py-2 rounded-lg hover:bg-indigo-950/30 group"
+                    className="px-3 py-2 rounded-lg hover:bg-blue-50 group"
                   >
-                    <code className="text-sm font-mono font-semibold text-indigo-400">
+                    <code className="text-sm font-mono font-semibold text-blue-700">
                       {tactic.name}
                     </code>
                     <p className="text-xs text-gray-500 mt-0.5 leading-snug">

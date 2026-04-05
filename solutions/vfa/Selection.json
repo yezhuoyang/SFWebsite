@@ -1,0 +1,86 @@
+{
+  "chapter": "Selection",
+  "volume": "vfa",
+  "exercises": {
+    "select_perm": {
+      "solution": "Proof.\n  intros x l. generalize dependent x.\n  induction l as [| h t IH]; intros; simpl in *.\n  - inv H. apply Permutation_refl.\n  - bdestruct (x <=? h).\n    + destruct (select x t) as [j l'] eqn:E.\n      inv H.\n      specialize (IH x). rewrite E in IH.\n      apply perm_trans with (x :: h :: t).\n      * apply Permutation_refl.\n      * apply perm_skip.\n        apply perm_trans with (j :: l').\n        -- apply perm_trans with (x :: t). apply Permutation_refl. apply IH. reflexivity.\n        -- constructor.\n      Restart.\n  intros x l. generalize dependent x.\n  induction l as [| h t IH]; intros; simpl in *.\n  - inv H. constructor.\n  - bdestruct (x <=? h).\n    + destruct (select x t) as [j l'] eqn:E. inv H.\n      specialize (IH x j l' E).\n      eauto.\n    + destruct (select h t) as [j l'] eqn:E. inv H.\n      specialize (IH h j l' E).\n      eauto.\nQed.",
+      "explanation": "By induction on l. Destruct the select result and use the IH with eauto to find the right permutation via perm_trans."
+    },
+    "select_rest_length": {
+      "solution": "Proof.\n  intros.\n  apply select_perm in H.\n  apply Permutation_length in H.\n  simpl in H. lia.\nQed.",
+      "explanation": "Use select_perm to get a permutation, then Permutation_length to equate lengths."
+    },
+    "selsort_perm": {
+      "solution": "Proof.\n  induction n as [| n' IH]; intros.\n  - destruct l; simpl. constructor. discriminate.\n  - destruct l as [| x r].\n    + simpl. constructor.\n    + simpl. destruct (select x r) as [y r'] eqn:E.\n      apply perm_trans with (y :: r').\n      * apply select_perm. assumption.\n      * apply perm_skip. apply IH.\n        apply select_rest_length in E. simpl in H. lia.\nQed.",
+      "explanation": "By induction on n. For the non-trivial case, use select_perm and select_rest_length to establish the permutation."
+    },
+    "selection_sort_perm": {
+      "solution": "Proof.\n  intros. unfold selection_sort.\n  apply selsort_perm. reflexivity.\nQed.",
+      "explanation": "Unfold selection_sort and apply selsort_perm with the length of the list."
+    },
+    "select_fst_leq": {
+      "solution": "Proof.\n  induction al as [| h t IH]; intros; simpl in *.\n  - inv H. lia.\n  - bdestruct (x <=? h).\n    + destruct (select x t) as [j l'] eqn:E. inv H.\n      apply IH in E. lia.\n    + destruct (select h t) as [j l'] eqn:E. inv H.\n      apply IH in E. lia.\nQed.",
+      "explanation": "By induction on al. In each branch of the bdestruct, use the IH and lia."
+    },
+    "le_all__le_one": {
+      "solution": "Proof.\n  intros. eapply Forall_forall; eauto.\nQed.",
+      "explanation": "Direct application of the Forall_forall lemma from the standard library."
+    },
+    "select_smallest": {
+      "solution": "Proof.\n  induction al as [| h t IH]; intros; simpl in *.\n  - inv H. constructor.\n  - bdestruct (x <=? h).\n    + destruct (select x t) as [j l'] eqn:E. inv H.\n      constructor.\n      * apply select_fst_leq in E. lia.\n      * apply IH in E. assumption.\n    + destruct (select h t) as [j l'] eqn:E. inv H.\n      constructor.\n      * apply select_fst_leq in E. lia.\n      * apply IH in E. assumption.\nQed.",
+      "explanation": "By induction on al. Use select_fst_leq to show the selected element is <= each element in the rest."
+    },
+    "select_in": {
+      "solution": "Proof.\n  induction al as [| h t IH]; intros; simpl in *.\n  - inv H. left. reflexivity.\n  - bdestruct (x <=? h).\n    + destruct (select x t) as [j l'] eqn:E. inv H.\n      specialize (IH x j l' E). simpl in IH.\n      destruct IH as [IH | IH].\n      * left. assumption.\n      * right. right. assumption.\n    + destruct (select h t) as [j l'] eqn:E. inv H.\n      specialize (IH h j l' E). simpl in IH.\n      destruct IH as [IH | IH].\n      * right. left. assumption.\n      * right. right. assumption.\nQed.",
+      "explanation": "By induction on al. Track whether the selected element came from x or from the list."
+    },
+    "cons_of_small_maintains_sort": {
+      "solution": "Proof.\n  intros bl y n Hlen Hle Hsorted.\n  destruct (selsort bl n) as [| z rest] eqn:E.\n  - constructor.\n  - constructor.\n    + unfold le_all in Hle.\n      assert (In z (selsort bl n)).\n      { rewrite E. left. reflexivity. }\n      apply Permutation_sym in (selsort_perm n bl Hlen).\n      apply Permutation_in with (selsort bl n); auto.\n      rewrite E. left. reflexivity.\n      Restart.\n  intros bl y n Hlen Hle Hsorted.\n  destruct (selsort bl n) as [| z rest] eqn:E.\n  - constructor.\n  - constructor.\n    + assert (Hin: In z bl).\n      { apply Permutation_in with (selsort bl n).\n        apply Permutation_sym. apply selsort_perm. assumption.\n        rewrite E. left. reflexivity. }\n      eapply le_all__le_one; eauto.\n    + assumption.\nQed.",
+      "explanation": "Destruct selsort bl n. If empty, trivial. If non-empty with head z, show z is in bl using Permutation, then use le_all to get y <= z."
+    },
+    "selsort_sorted": {
+      "solution": "Proof.\n  induction n as [| n' IH]; intros.\n  - destruct al; simpl. constructor. constructor.\n  - destruct al as [| x r].\n    + simpl. constructor.\n    + simpl. destruct (select x r) as [y r'] eqn:E.\n      apply cons_of_small_maintains_sort.\n      * apply select_rest_length in E. simpl in H. lia.\n      * apply select_smallest in E. assumption.\n      * apply IH. apply select_rest_length in E. simpl in H. lia.\nQed.",
+      "explanation": "By induction on n. Use cons_of_small_maintains_sort with select_smallest and select_rest_length."
+    },
+    "selection_sort_sorted": {
+      "solution": "Proof.\n  intros. unfold selection_sort.\n  apply selsort_sorted. reflexivity.\nQed.",
+      "explanation": "Unfold and apply selsort_sorted with the list length."
+    },
+    "selection_sort_is_correct": {
+      "solution": "Proof.\n  unfold is_a_sorting_algorithm. intros.\n  split.\n  - apply selection_sort_perm.\n  - apply selection_sort_sorted.\nQed.",
+      "explanation": "Direct combination of permutation and sortedness proofs."
+    },
+    "selsort'_perm": {
+      "solution": "Proof.\n  induction n as [| n' IH]; intros.\n  - destruct l; simpl. constructor. discriminate.\n  - destruct l as [| x r].\n    + simpl. constructor.\n    + rewrite selsort'_equation.\n      destruct (select x r) as [y r'] eqn:E.\n      apply perm_trans with (y :: r').\n      * apply select_perm. assumption.\n      * apply perm_skip. apply IH.\n        apply select_rest_length in E. simpl in H. lia.\nQed.",
+      "explanation": "Same strategy as selsort_perm but using selsort'_equation to unfold the Function-defined selsort'."
+    },
+    "cons_of_small_maintains_sort'": {
+      "solution": "Proof.\n  intros bl y Hle Hsorted.\n  destruct (selsort' bl) as [| z rest] eqn:E.\n  - constructor.\n  - constructor.\n    + assert (Hin: In z bl).\n      { apply Permutation_in with (selsort' bl).\n        apply Permutation_sym. apply selsort'_perm with (n := length bl). reflexivity.\n        rewrite E. left. reflexivity. }\n      eapply le_all__le_one; eauto.\n    + assumption.\nQed.",
+      "explanation": "Same approach as cons_of_small_maintains_sort, using selsort'_perm."
+    },
+    "selsort'_sorted": {
+      "solution": "Proof.\n  induction n as [| n' IH]; intros.\n  - destruct al; simpl.\n    + rewrite selsort'_equation. constructor.\n    + discriminate.\n  - destruct al as [| x r].\n    + rewrite selsort'_equation. constructor.\n    + rewrite selsort'_equation.\n      destruct (select x r) as [y r'] eqn:E.\n      apply cons_of_small_maintains_sort'.\n      * apply select_smallest in E. assumption.\n      * apply IH. apply select_rest_length in E. simpl in H. lia.\nQed.",
+      "explanation": "By induction on n, using selsort'_equation and the helper lemmas."
+    },
+    "selsort'_is_correct": {
+      "solution": "Proof.\n  unfold is_a_sorting_algorithm. intros.\n  split.\n  - apply selsort'_perm with (n := length al). reflexivity.\n  - apply selsort'_sorted with (n := length al). reflexivity.\nQed.",
+      "explanation": "Direct combination of selsort'_perm and selsort'_sorted."
+    },
+    "select_contents": {
+      "solution": "Proof.\n  induction al as [| h t IH]; intros; simpl in *.\n  - inv H. simpl. reflexivity.\n  - bdestruct (x <=? h).\n    + destruct (select x t) as [j l'] eqn:E. inv H.\n      specialize (IH x j l' E). simpl.\n      rewrite union_swap. simpl in IH.\n      rewrite <- IH. rewrite union_swap. reflexivity.\n    + destruct (select h t) as [j l'] eqn:E. inv H.\n      specialize (IH h j l' E). simpl.\n      simpl in IH. rewrite <- IH.\n      rewrite (union_swap (singleton x) (singleton h)).\n      reflexivity.\nQed.",
+      "explanation": "By induction on al, using union_swap to rearrange multiset unions."
+    },
+    "selection_sort_contents": {
+      "solution": "Proof.\n  induction n as [| n' IH]; intros.\n  - destruct l; simpl. reflexivity. discriminate.\n  - destruct l as [| x r]; simpl.\n    + reflexivity.\n    + unfold selection_sort. simpl.\n      destruct (select x r) as [y r'] eqn:E.\n      assert (Hsc: union (singleton x) (contents r) = union (singleton y) (contents r')).\n      { apply select_contents with (al := r). assumption. }\n      rewrite Hsc.\n      simpl.\n      rewrite <- IH.\n      * reflexivity.\n      * apply select_rest_length in E. simpl in H. lia.\nQed.",
+      "explanation": "By induction on n, using select_contents to show that select preserves contents."
+    },
+    "sorted_iff_sorted": {
+      "solution": "Proof.\n  split; intros.\n  - induction H; auto.\n  - induction H; auto.\nQed.",
+      "explanation": "The two sorted predicates (from Selection and Sort) have the same structure, so the proof is straightforward by induction."
+    },
+    "selection_sort_correct'": {
+      "solution": "Proof.\n  unfold Multiset.is_a_sorting_algorithm'. intros.\n  split.\n  - apply selection_sort_contents with (n := length al). reflexivity.\n  - apply sorted_iff_sorted. apply selection_sort_sorted.\nQed.",
+      "explanation": "Combines selection_sort_contents and sorted_iff_sorted with selection_sort_sorted."
+    }
+  }
+}

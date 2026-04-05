@@ -1,0 +1,22 @@
+{
+  "chapter": "Perm",
+  "volume": "vfa",
+  "exercises": {
+    "Permutation_properties": {
+      "solution": "(* Manual grade exercise - no code solution needed *)",
+      "explanation": "This is a manually graded exercise asking students to list desirable properties of Permutation. Examples: 5. Permutation preserves length. 6. Permutation is transitive. 7. If Permutation al bl, then for any x, count x al = count x bl."
+    },
+    "permut_example": {
+      "solution": "Proof.\n  intros.\n  rewrite app_nil_r.\n  apply perm_skip.\n  change (6 :: a ++ b) with ((6 :: a) ++ b).\n  change (b ++ 6 :: a) with (b ++ (6 :: a)).\n  apply Permutation_app_comm.\nQed.",
+      "explanation": "We simplify the nil at the end of the right side, then use perm_skip for 5, and Permutation_app_comm to swap (6::a) and b."
+    },
+    "not_a_permutation": {
+      "solution": "Proof.\n  intro H.\n  apply Permutation_cons_inv in H.\n  apply Permutation_length_1_inv in H.\n  discriminate.\nQed.",
+      "explanation": "We remove the common head element 1 using Permutation_cons_inv, then use Permutation_length_1_inv on the remaining singleton lists [1] and [2], which yields 1=2, a contradiction."
+    },
+    "Forall_perm": {
+      "solution": "Proof.\n  intros A f al bl Hperm Hforall.\n  induction Hperm.\n  - assumption.\n  - inv Hforall. constructor; auto.\n  - inv Hforall. inv H2. constructor; auto. constructor; auto.\n  - auto.\nQed.",
+      "explanation": "By induction on the permutation evidence. The skip case uses inversion on Forall; the swap case inverts twice; the trans case chains the two inductive hypotheses."
+    }
+  }
+}

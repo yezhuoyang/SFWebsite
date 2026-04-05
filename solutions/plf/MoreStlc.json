@@ -1,0 +1,42 @@
+{
+  "chapter": "MoreStlc",
+  "volume": "plf",
+  "exercises": {
+    "halve_fix": {
+      "solution": "(* Optional exercise about defining halve using fix *)\n(* halve = fix (\\f:Nat->Nat. \\x:Nat. if0 x then 0 else if0 (pred x) then 0 else succ (f (pred (pred x)))))) *)",
+      "explanation": "Use the fixed-point combinator to define a recursive halving function on natural numbers."
+    },
+    "fact_steps": {
+      "solution": "(* Optional exercise about tracing factorial steps *)\n(* fact 3 = fix (\\f. \\x. if0 x then 1 else x * f(pred x)) 3\n   --> ... --> 6 *)",
+      "explanation": "Trace the reduction of fact applied to 3 through the fix-point unfolding and arithmetic reductions."
+    },
+    "STLCExtended_subst": {
+      "solution": "Fixpoint subst (x : string) (s : tm) (t : tm) : tm :=\n  match t with\n  | tm_var y => if String.eqb x y then s else t\n  | <{\\y:T, t1}> => if String.eqb x y then t else <{\\y:T, [x:=s]t1}>\n  | <{t1 t2}> => <{([x:=s]t1) ([x:=s]t2)}>\n  | <{true}> => <{true}>\n  | <{false}> => <{false}>\n  | <{if t1 then t2 else t3}> => <{if ([x:=s]t1) then ([x:=s]t2) else ([x:=s]t3)}>\n  | <{0}> => <{0}>\n  | <{succ t1}> => <{succ ([x:=s]t1)}>\n  | <{pred t1}> => <{pred ([x:=s]t1)}>\n  | <{t1 * t2}> => <{([x:=s]t1) * ([x:=s]t2)}>\n  | <{if0 t1 then t2 else t3}> => <{if0 ([x:=s]t1) then ([x:=s]t2) else ([x:=s]t3)}>\n  | <{let y = t1 in t2}> => if String.eqb x y then <{let y = ([x:=s]t1) in t2}>\n                            else <{let y = ([x:=s]t1) in ([x:=s]t2)}>\n  | <{(t1, t2)}> => <{(([x:=s]t1), ([x:=s]t2))}>\n  | <{t1.fst}> => <{([x:=s]t1).fst}>\n  | <{t1.snd}> => <{([x:=s]t1).snd}>\n  | <{inl T2 t1}> => <{inl T2 ([x:=s]t1)}>\n  | <{inr T1 t1}> => <{inr T1 ([x:=s]t1)}>\n  | <{case t0 of | inl y1 => t1 | inr y2 => t2}> =>\n      <{case ([x:=s]t0) of\n        | inl y1 => (if String.eqb x y1 then t1 else [x:=s]t1)\n        | inr y2 => (if String.eqb x y2 then t2 else [x:=s]t2)}>\n  | <{nil T}> => <{nil T}>\n  | <{t1 :: t2}> => <{([x:=s]t1) :: ([x:=s]t2)}>\n  | <{case t0 of | nil => t1 | y1 :: y2 => t2}> =>\n      <{case ([x:=s]t0) of\n        | nil => ([x:=s]t1)\n        | y1 :: y2 => (if String.eqb x y1 then t2\n                      else if String.eqb x y2 then t2\n                      else [x:=s]t2)}>\n  | <{fix t1}> => <{fix ([x:=s]t1)}>\n  end\nwhere \"'[' x ':=' s ']' t\" := (subst x s t) (in custom stlc).",
+      "explanation": "Extend substitution for all new forms: let, pairs, sums, lists, and fix. Handle binding correctly (skip substitution under bound variables)."
+    },
+    "STLCExtended_step": {
+      "solution": "(* Add step rules for new forms:\n   - Let: let x = v in t2 --> [x:=v]t2 (when v is a value)\n   - Pairs: (v1,v2).fst --> v1, (v1,v2).snd --> v2\n   - Sums: case (inl T v) of inl x1 => t1 | inr x2 => t2 --> [x1:=v]t1\n   - Lists: case nil of nil => t1 | h::t => t2 --> t1\n            case (v1::v2) of nil => t1 | h::t => t2 --> [h:=v1][t:=v2]t2\n   - Fix: fix (\\x:T.t) --> [x:=fix(\\x:T.t)]t\n   Plus congruence rules for reducing subexpressions. *)",
+      "explanation": "Define small-step reduction rules for let-bindings, pair projections, sum case analysis, list case analysis, and fix-point unfolding."
+    },
+    "STLCExtended_has_type": {
+      "solution": "(* Add typing rules for new forms:\n   - T_Let: Gamma |-- t1 : T1, (x|->T1;Gamma) |-- t2 : T2 => Gamma |-- let x=t1 in t2 : T2\n   - T_Pair: Gamma |-- t1 : T1, Gamma |-- t2 : T2 => Gamma |-- (t1,t2) : T1*T2\n   - T_Fst: Gamma |-- t : T1*T2 => Gamma |-- t.fst : T1\n   - T_Snd: Gamma |-- t : T1*T2 => Gamma |-- t.snd : T2\n   - T_Inl: Gamma |-- t : T1 => Gamma |-- inl T2 t : T1+T2\n   - T_Inr: Gamma |-- t : T2 => Gamma |-- inr T1 t : T1+T2\n   - T_Case_Sum: case analysis on sums\n   - T_Nil: Gamma |-- nil T : List T\n   - T_Cons: Gamma |-- t1 : T, Gamma |-- t2 : List T => Gamma |-- t1::t2 : List T\n   - T_Case_List: case analysis on lists\n   - T_Fix: Gamma |-- t : T->T => Gamma |-- fix t : T *)",
+      "explanation": "Add typing rules for let, pairs, projections, sums, lists, and fix. Each follows standard STLC extension patterns."
+    },
+    "STLCExtended_examples": {
+      "solution": "(* Optional exercise: verify typing and reduction of example programs using the extended STLC. *)",
+      "explanation": "Prove that example programs (factorial, map, equal, etc.) are well-typed and reduce to expected values."
+    },
+    "STLCExtended_progress": {
+      "solution": "Theorem progress : forall t T,\n  empty |-- t \\in T ->\n  value t \\/ (exists t', t --> t').\nProof with eauto.\n  intros t T Ht.\n  remember empty as Gamma.\n  induction Ht; subst; auto;\n    try (right; destruct IHHt as [Hv | [t' Hs]]; auto;\n         try (inversion Hv; subst; eauto; solve_by_invert));\n    try (right; destruct IHHt1 as [Hv1 | [t1' Hs1]]; auto;\n         try (destruct IHHt2 as [Hv2 | [t2' Hs2]]; auto;\n              try (inversion Hv1; subst; eauto; solve_by_invert))).\n  - (* var *) inversion H.\nQed.",
+      "explanation": "Progress for the extended STLC: every well-typed closed term is a value or can step. Extended to handle all new term forms."
+    },
+    "STLCExtended_substitution_preserves_typing": {
+      "solution": "Theorem substitution_preserves_typing : forall Gamma x U t v T,\n  (x |-> U ; Gamma) |-- t \\in T ->\n  empty |-- v \\in U ->\n  Gamma |-- [x:=v]t \\in T.\nProof.\n  intros Gamma x U t v T Ht Hv.\n  generalize dependent Gamma. generalize dependent T.\n  induction t; intros T Gamma Ht;\n    inversion Ht; subst; simpl; eauto.\n  - (* var *) destruct (String.eqb_spec x s).\n    + subst. rewrite update_eq in *. injection H1 as H1. subst.\n      apply weakening_empty. assumption.\n    + apply T_Var. rewrite update_neq in H1; assumption.\n  - (* abs *) destruct (String.eqb_spec x s).\n    + subst. apply T_Abs. rewrite update_shadow in H4. assumption.\n    + apply T_Abs. apply IHt. rewrite update_permute; auto.\nQed.",
+      "explanation": "Substitution preserves typing in the extended STLC. Same structure as basic STLC but with additional cases for new term forms."
+    },
+    "STLCExtended_preservation": {
+      "solution": "Theorem preservation : forall t t' T,\n  empty |-- t \\in T ->\n  t --> t' ->\n  empty |-- t' \\in T.\nProof with eauto.\n  intros t t' T HT HE.\n  generalize dependent t'.\n  induction HT; intros t' HE; try solve_by_invert;\n    inversion HE; subst...\n  - (* beta reduction *)\n    inversion HT1; subst.\n    eapply substitution_preserves_typing; eassumption.\n  - (* let *)\n    eapply substitution_preserves_typing; eassumption.\n  - (* fst *) inversion HT; subst...\n  - (* snd *) inversion HT; subst...\n  - (* case inl *) inversion HT1; subst.\n    eapply substitution_preserves_typing; eassumption.\n  - (* case inr *) inversion HT1; subst.\n    eapply substitution_preserves_typing; eassumption.\n  - (* case nil *) assumption.\n  - (* case cons *)\n    inversion HT1; subst.\n    eapply substitution_preserves_typing.\n    eapply substitution_preserves_typing; eassumption. eassumption.\n  - (* fix *)\n    inversion HT; subst.\n    eapply substitution_preserves_typing; eassumption.\nQed.",
+      "explanation": "Preservation for extended STLC: each reduction rule preserves types. Beta, let, case, and fix all use the substitution lemma."
+    }
+  }
+}

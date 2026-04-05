@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from server.config import BASE_DIR, VOLUMES
+from server.config import BASE_DIR, CORS_ORIGINS, VOLUMES
 from server.database import init_db
 
 
@@ -15,13 +15,16 @@ async def lifespan(app: FastAPI):
     """Startup / shutdown."""
     await init_db()
     yield
+    # Cleanup: close all vscoqtop sessions
+    from server.services.vscoqtop_session import pool
+    await pool.close_all()
 
 
 app = FastAPI(title="SF Learning Platform", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,6 +38,10 @@ app.include_router(grading.router, prefix="/api")
 app.include_router(progress.router, prefix="/api")
 app.include_router(tutor.router, prefix="/api")
 app.include_router(coq_session.router, prefix="/api")
+
+# Auth router (register/login)
+from server.routers import auth  # noqa: E402
+app.include_router(auth.router, prefix="/api")
 
 # Mount SF HTML volumes for reading
 for vol_id, vol_cfg in VOLUMES.items():

@@ -1,0 +1,42 @@
+{
+  "chapter": "IndPrinciples",
+  "volume": "lf",
+  "exercises": {
+    "plus_one_r'": {
+      "solution": "Theorem plus_one_r' : forall n:nat,\n  n + 1 = S n.\nProof.\n  apply nat_ind.\n  - reflexivity.\n  - intros n' IHn'. simpl. rewrite IHn'. reflexivity.\nQed.",
+      "explanation": "Use nat_ind directly instead of the induction tactic. Base case is trivial; inductive step uses simpl and the IH."
+    },
+    "booltree_ind": {
+      "solution": "Definition base_case (P : booltree_property_type) : Prop :=\n  P bt_empty.\n\nDefinition leaf_case (P : booltree_property_type) : Prop :=\n  forall (b : bool), P (bt_leaf b).\n\nDefinition branch_case (P : booltree_property_type) : Prop :=\n  forall (b : bool) (t1 t2 : booltree), P t1 -> P t2 -> P (bt_branch b t1 t2).\n\nTheorem booltree_ind_type_correct : booltree_ind_type.\nProof. exact booltree_ind. Qed.",
+      "explanation": "The induction principle for booltree has three cases: bt_empty, bt_leaf (taking a bool), and bt_branch (taking a bool and two subtrees with IHs)."
+    },
+    "toy_ind": {
+      "solution": "Inductive Toy : Type :=\n  | con1 (b : bool)\n  | con2 (n : nat) (t : Toy).\n\nTheorem Toy_correct : exists f g,\n  forall P : Toy -> Prop,\n    (forall b : bool, P (f b)) ->\n    (forall (n : nat) (t : Toy), P t -> P (g n t)) ->\n    forall t : Toy, P t.\nProof. exists con1, con2. exact Toy_ind. Qed.",
+      "explanation": "The induction principle tells us Toy has two constructors: con1 taking a bool, and con2 taking a nat and a recursive Toy."
+    },
+    "tree": {
+      "solution": "(* tree_ind :\n  forall (X : Type) (P : tree X -> Prop),\n    (forall x : X, P (leaf x)) ->\n    (forall t1 : tree X, P t1 -> forall t2 : tree X, P t2 -> P (node t1 t2)) ->\n    forall t : tree X, P t *)",
+      "explanation": "The induction principle for tree X: P holds for leaf x for all x, and if P holds for t1 and t2 then P holds for node t1 t2."
+    },
+    "mytype": {
+      "solution": "(* Inductive mytype (X : Type) : Type :=\n  | constr1 (x : X)\n  | constr2 (n : nat)\n  | constr3 (m : mytype X) (n : nat). *)",
+      "explanation": "Reading off from the induction principle: constr1 takes an X, constr2 takes a nat, constr3 takes a recursive mytype X and a nat."
+    },
+    "foo": {
+      "solution": "(* Inductive foo (X Y : Type) : Type :=\n  | bar (x : X)\n  | baz (y : Y)\n  | quux (f : nat -> foo X Y). *)",
+      "explanation": "bar takes an X, baz takes a Y, and quux takes a function from nat to foo X Y (with the IH for all nat inputs)."
+    },
+    "foo'": {
+      "solution": "(* foo'_ind :\n  forall (X : Type) (P : foo' X -> Prop),\n    (forall (l : list X) (f : foo' X),\n      P f -> P (C1 l f)) ->\n    P C2 ->\n    forall f : foo' X, P f *)",
+      "explanation": "C1 takes a list and a recursive foo', so the IH is on the foo' argument. C2 takes no arguments. Note: list X is not recursive in foo', so no IH for it."
+    },
+    "t_tree": {
+      "solution": "Definition better_t_tree_ind_type : Prop :=\n  forall (X : Type) (P : t_tree X -> Prop),\n    P t_leaf ->\n    (forall (l : t_tree X) (v : X) (r : t_tree X),\n      P l -> P r -> P (t_branch (l, v, r))) ->\n    forall t : t_tree X, P t.\n\nDefinition better_t_tree_ind : better_t_tree_ind_type :=\n  fun X P Hleaf Hbranch =>\n    fix f (t : t_tree X) : P t :=\n      match t with\n      | t_leaf => Hleaf\n      | t_branch (l, v, r) => Hbranch l v r (f l) (f r)\n      end.\n\nTheorem reflect_involution : forall (X : Type) (t : t_tree X),\n    reflect (reflect t) = t.\nProof.\n  intros X t.\n  apply better_t_tree_ind.\n  - reflexivity.\n  - intros l v r IHl IHr. simpl. rewrite IHl. rewrite IHr. reflexivity.\nQed.",
+      "explanation": "We define a custom induction principle that provides IHs for both subtrees in the tuple, then use it to prove reflect is an involution."
+    },
+    "plus_explicit_prop": {
+      "solution": "(* Definition P_add_assoc (n : nat) : Prop :=\n  forall m p : nat, n + (m + p) = (n + m) + p.\n\nTheorem add_assoc_explicit : forall n : nat, P_add_assoc n.\nProof.\n  apply nat_ind.\n  - unfold P_add_assoc. intros. reflexivity.\n  - unfold P_add_assoc. intros n' IH m p.\n    simpl. rewrite IH. reflexivity.\nQed.\n\nDefinition P_add_comm (n : nat) : Prop :=\n  forall m : nat, n + m = m + n.\n\nTheorem add_comm_explicit : forall n : nat, P_add_comm n.\nProof.\n  apply nat_ind.\n  - unfold P_add_comm. intros m. rewrite add_0_r. reflexivity.\n  - unfold P_add_comm. intros n' IH m.\n    simpl. rewrite IH. rewrite <- plus_n_Sm. reflexivity.\nQed. *)",
+      "explanation": "Define explicit propositions P_add_assoc and P_add_comm, then prove them using nat_ind directly."
+    }
+  }
+}

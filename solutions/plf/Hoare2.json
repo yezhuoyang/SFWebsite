@@ -1,0 +1,66 @@
+{
+  "chapter": "Hoare2",
+  "volume": "plf",
+  "exercises": {
+    "if_minus_plus_correct": {
+      "solution": "Definition if_minus_plus_dec :=\n  <{\n  {{True}}\n  if (X <= Y) then\n              {{ True /\\ X <= Y }} ->>\n              {{ Y - X + X = Y }}\n    Z := Y - X\n              {{ Z + X = Y }}\n  else\n              {{ True /\\ ~(X <= Y) }} ->>\n              {{ X + Z = X + Z }}\n    Y := X + Z\n              {{ Y = X + Z }}\n  end\n  {{ Y = X + Z}} }>.\n\nTheorem if_minus_plus_correct :\n  outer_triple_valid if_minus_plus_dec.\nProof. verify. Qed.",
+      "explanation": "In the then branch (X<=Y), Z:=Y-X makes Z+X=Y, i.e., Y=X+Z. In the else branch, Y:=X+Z directly establishes Y=X+Z."
+    },
+    "div_mod_outer_triple_valid": {
+      "solution": "Definition div_mod_dec (a b : nat) : decorated :=\n  <{\n  {{ True }} ->>\n  {{ 0 * b + a = a }}\n    X := a\n             {{ 0 * b + X = a }};\n    Y := 0\n             {{ Y * b + X = a }};\n    while b <= X do\n             {{ Y * b + X = a /\\ b <= X }} ->>\n             {{ (Y + 1) * b + (X - b) = a }}\n      X := X - b\n             {{ (Y + 1) * b + X = a }};\n      Y := Y + 1\n             {{ Y * b + X = a }}\n    end\n  {{ Y * b + X = a /\\ ~(b <= X) }} ->>\n  {{ Y * b + X = a /\\ ~(b <= X) }} }>.\n\nTheorem div_mod_outer_triple_valid : forall a b,\n  outer_triple_valid (div_mod_dec a b).\nProof. verify. Qed.",
+      "explanation": "Loop invariant: Y*b + X = a. Each iteration subtracts b from X and increments Y, preserving the invariant."
+    },
+    "slow_assignment": {
+      "solution": "Example slow_assignment_dec (m : nat) : decorated :=\n  <{\n    {{ X = m }}\n      Y := 0\n                    {{ X = m /\\ Y = 0 }} ->>\n                    {{ X + Y = m }} ;\n      while X <> 0 do\n                    {{ X + Y = m /\\ X <> 0 }} ->>\n                    {{ (X - 1) + (Y + 1) = m }}\n         X := X - 1\n                    {{ X + (Y + 1) = m }} ;\n         Y := Y + 1\n                    {{ X + Y = m }}\n      end\n    {{ X + Y = m /\\ ~(X <> 0) }} ->>\n    {{ Y = m }}\n  }>.\n\nTheorem slow_assignment : forall m,\n  outer_triple_valid (slow_assignment_dec m).\nProof. verify. Qed.",
+      "explanation": "Loop invariant: X + Y = m. Each iteration decrements X and increments Y. When X = 0, Y = m."
+    },
+    "parity": {
+      "solution": "Definition parity_dec (m:nat) : decorated :=\n  <{\n  {{ X = m }} ->>\n  {{ #parity X = #parity m }}\n    while 2 <= X do\n                  {{ #parity X = #parity m /\\ 2 <= X }} ->>\n                  {{ #parity (X - 2) = #parity m }}\n      X := X - 2\n                  {{ #parity X = #parity m }}\n    end\n  {{ #parity X = #parity m /\\ ~(2 <= X) }} ->>\n  {{ X = #parity m }}\n  }>.\n\nTheorem parity_correct : forall m,\n  outer_triple_valid (parity_dec m).\nProof.\n  verify;\n  (* remaining goals about parity *)\n  try (destruct (st X) as [|[|n']]; simpl; try lia; auto).\nQed.",
+      "explanation": "Loop invariant: parity X = parity m. Subtracting 2 preserves parity. When X < 2, parity X = X."
+    },
+    "factorial_correct": {
+      "solution": "Example factorial_dec (m:nat) : decorated :=\n  <{\n    {{ X = m }} ->>\n    {{ #fact X * 1 = #fact m }}\n      Y := 1\n                  {{ #fact X * Y = #fact m }};\n      while X <> 0 do\n                  {{ #fact X * Y = #fact m /\\ X <> 0 }} ->>\n                  {{ #fact (X - 1) * (X * Y) = #fact m }}\n        Y := X * Y\n                  {{ #fact (X - 1) * Y = #fact m }};\n        X := X - 1\n                  {{ #fact X * Y = #fact m }}\n      end\n    {{ #fact X * Y = #fact m /\\ ~(X <> 0) }} ->>\n    {{ Y = #fact m }}\n  }>.\n\nTheorem factorial_correct: forall m,\n  outer_triple_valid (factorial_dec m).\nProof.\n  verify.\n  - (* loop body implication *)\n    destruct (st X) as [| n']; try lia.\n    simpl. lia.\n  - (* postcondition *)\n    destruct (st X) as [| n']; try lia.\n    simpl in *. lia.\nQed.",
+      "explanation": "Loop invariant: fact(X) * Y = fact(m). Each iteration multiplies Y by X then decrements X. When X=0, Y = fact(m)."
+    },
+    "minimum_correct": {
+      "solution": "Definition minimum_dec (a b : nat) : decorated :=\n  <{\n    {{ True }} ->>\n    {{ 0 + #min a b = #min a b }}\n      X := a\n             {{ 0 + #min X b = #min a b }};\n      Y := b\n             {{ 0 + #min X Y = #min a b }};\n      Z := 0\n             {{ Z + #min X Y = #min a b }};\n      while X <> 0 && Y <> 0 do\n             {{ Z + #min X Y = #min a b /\\ (X <> 0 /\\ Y <> 0) }} ->>\n             {{ (Z + 1) + #min (X - 1) (Y - 1) = #min a b }}\n        X := X - 1\n             {{ (Z + 1) + #min X (Y - 1) = #min a b }};\n        Y := Y - 1\n             {{ (Z + 1) + #min X Y = #min a b }};\n        Z := Z + 1\n             {{ Z + #min X Y = #min a b }}\n      end\n    {{ Z + #min X Y = #min a b /\\ ~(X <> 0 /\\ Y <> 0) }} ->>\n    {{ Z = #min a b }}\n  }>.\n\nTheorem minimum_correct : forall a b,\n  outer_triple_valid (minimum_dec a b).\nProof. verify; lia. Qed.",
+      "explanation": "Loop invariant: Z + min(X,Y) = min(a,b). Each iteration decrements X and Y and increments Z. When either is 0, Z = min(a,b)."
+    },
+    "two_loops": {
+      "solution": "Definition two_loops_dec (a b c : nat) : decorated :=\n  <{\n    {{ True }} ->>\n    {{ c = 0 + 0 + c }}\n      X := 0\n                   {{ c = X + 0 + c }};\n      Y := 0\n                   {{ c = X + Y + c }};\n      Z := c\n                   {{ Z = X + Y + c }};\n      while X <> a do\n                   {{ Z = X + Y + c /\\ X <> a }} ->>\n                   {{ Z + 1 = (X + 1) + Y + c }}\n        X := X + 1\n                   {{ Z + 1 = X + Y + c }};\n        Z := Z + 1\n                   {{ Z = X + Y + c }}\n      end\n                   {{ Z = X + Y + c /\\ ~(X <> a) }} ->>\n                   {{ Z = a + Y + c }};\n      while Y <> b do\n                   {{ Z = a + Y + c /\\ Y <> b }} ->>\n                   {{ Z + 1 = a + (Y + 1) + c }}\n        Y := Y + 1\n                   {{ Z + 1 = a + Y + c }};\n        Z := Z + 1\n                   {{ Z = a + Y + c }}\n      end\n    {{ Z = a + Y + c /\\ ~(Y <> b) }} ->>\n    {{ Z = a + b + c }}\n  }>.\n\nTheorem two_loops : forall a b c,\n  outer_triple_valid (two_loops_dec a b c).\nProof. verify; lia. Qed.",
+      "explanation": "First loop invariant: Z = X + Y + c. After first loop, X=a. Second loop continues with Z = a + Y + c until Y=b."
+    },
+    "dpow2": {
+      "solution": "Definition dpow2_dec (n : nat) :=\n  <{\n    {{ True }} ->>\n    {{ 1 = #pow2 (0 + 1) - 1 /\\ 1 = #pow2 0 }}\n      X := 0\n                {{ 1 = #pow2 (X + 1) - 1 /\\ 1 = #pow2 X }};\n      Y := 1\n                {{ Y = #pow2 (X + 1) - 1 /\\ 1 = #pow2 X }};\n      Z := 1\n                {{ Y = #pow2 (X + 1) - 1 /\\ Z = #pow2 X }};\n      while X <> n do\n                {{ Y = #pow2 (X + 1) - 1 /\\ Z = #pow2 X /\\ X <> n }} ->>\n                {{ Y + 2 * Z = #pow2 ((X + 1) + 1) - 1 /\\ 2 * Z = #pow2 (X + 1) }}\n        Z := 2 * Z\n                {{ Y + Z = #pow2 ((X + 1) + 1) - 1 /\\ Z = #pow2 (X + 1) }};\n        Y := Y + Z\n                {{ Y = #pow2 ((X + 1) + 1) - 1 /\\ Z = #pow2 (X + 1) }};\n        X := X + 1\n                {{ Y = #pow2 (X + 1) - 1 /\\ Z = #pow2 X }}\n      end\n    {{ Y = #pow2 (X + 1) - 1 /\\ Z = #pow2 X /\\ ~(X <> n) }} ->>\n    {{ Y = #pow2 (n + 1) - 1 }}\n  }>.\n\nTheorem dpow2_correct : forall n,\n  outer_triple_valid (dpow2_dec n).\nProof. verify; try lia. Qed.",
+      "explanation": "Loop invariant: Y = 2^(X+1) - 1 and Z = 2^X. Each iteration doubles Z and adds it to Y, then increments X."
+    },
+    "fib_eqn": {
+      "solution": "(* Advanced optional exercise about Fibonacci *)\n(* The key equation is: fib(1) + fib(2) + ... + fib(n) = fib(n+2) - 1 *)",
+      "explanation": "This exercise asks to prove properties of a Fibonacci loop. The loop invariant tracks the running sum of Fibonacci numbers."
+    },
+    "fib": {
+      "solution": "(* Advanced optional exercise about decorated Fibonacci program. *)",
+      "explanation": "Complete decorated program for computing Fibonacci numbers with appropriate loop invariant."
+    },
+    "if_minus_plus_reloaded": {
+      "solution": "(* Optional informal exercise about decorated programs. *)",
+      "explanation": "Write an informal decorated program for if_minus_plus and explain why each assertion holds."
+    },
+    "wp": {
+      "solution": "(* Optional exercise about weakest preconditions. *)\n(* wp(skip, Q) = Q\n   wp(X:=a, Q) = Q[X |-> a]\n   wp(c1;c2, Q) = wp(c1, wp(c2, Q))\n   wp(if b then c1 else c2, Q) = (b -> wp(c1,Q)) /\\ (~b -> wp(c2,Q))\n   wp(while b do c end, Q) = exists I, I /\\ forall st, (I /\\ b -> wp(c,I)) /\\ (I /\\ ~b -> Q) *)",
+      "explanation": "The weakest precondition for each command form follows from the Hoare rules."
+    },
+    "is_wp": {
+      "solution": "(* Advanced optional exercise proving that wp is the weakest precondition. *)\n(* Proof sketch: Show that wp(c, Q) ->> P for any P such that {{P}} c {{Q}}, and that {{wp(c,Q)}} c {{Q}}. *)",
+      "explanation": "wp is the weakest precondition: it is a valid precondition, and any other valid precondition implies it."
+    },
+    "hoare_asgn_weakest": {
+      "solution": "(* Advanced optional exercise about weakest precondition for assignment. *)",
+      "explanation": "Q[X |-> a] is the weakest precondition for X := a with postcondition Q."
+    },
+    "hoare_havoc_weakest": {
+      "solution": "(* Advanced optional exercise about weakest precondition for HAVOC. *)",
+      "explanation": "forall n, Q[X |-> n] is the weakest precondition for HAVOC X with postcondition Q."
+    }
+  }
+}

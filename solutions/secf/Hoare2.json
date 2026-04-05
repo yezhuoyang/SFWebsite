@@ -1,0 +1,70 @@
+{
+  "chapter": "Hoare2",
+  "volume": "secf",
+  "exercises": {
+    "if_minus_plus_reloaded": {
+      "solution": "(* Decorated program:\n   {{ True }}\n     if X <= Y then\n       {{ True /\\ X <= Y }} ->> {{ Y - X + X = Y }}\n       Z := Y - X\n       {{ Z + X = Y }}\n     else\n       {{ True /\\ ~(X <= Y) }} ->> {{ X + Z = X + Z }}\n       Y := X + Z\n       {{ Y = X + Z }}\n     end\n   {{ Y = X + Z }}\n*)",
+      "explanation": "Annotate the if-minus-plus program with a complete decorated proof showing all intermediate assertions."
+    },
+    "if_minus_plus_correct": {
+      "solution": "Theorem if_minus_plus_correct :\n  forall m n, outer_triple_valid (if_minus_plus_dec).\nProof.\n  verify.\nQed.",
+      "explanation": "Verify the decorated if_minus_plus program using the automated verify tactic."
+    },
+    "div_mod_outer_triple_valid": {
+      "solution": "Theorem div_mod_outer_triple_valid : forall a b,\n  outer_triple_valid (div_mod_dec a b).\nProof.\n  verify.\nQed.",
+      "explanation": "Verify the division/modulo decorated program."
+    },
+    "slow_assignment": {
+      "solution": "Example slow_assignment_dec (m : nat) : decorated :=\n  <{\n    {{ X = m }}\n      Y := 0\n    {{ X = m /\\ Y = 0 }} ->> {{ X + Y = m }}\n      ;while X <> 0 do\n        {{ X + Y = m /\\ X <> 0 }} ->> {{ (X - 1) + (Y + 1) = m }}\n          X := X - 1\n        {{ X + (Y + 1) = m }}\n          ;Y := Y + 1\n        {{ X + Y = m }}\n      end\n    {{ X + Y = m /\\ X = 0 }} ->> {{ Y = m }}\n  }>.\n\nTheorem slow_assignment : forall m,\n  outer_triple_valid (slow_assignment_dec m).\nProof.\n  verify.\nQed.",
+      "explanation": "Slow assignment transfers value from X to Y one step at a time. Loop invariant: X + Y = m."
+    },
+    "parity": {
+      "solution": "Definition parity_dec (m:nat) : decorated :=\n  <{\n    {{ X = m }} ->> {{ parity X = parity m }}\n      while 2 <= X do\n        {{ parity X = parity m /\\ 2 <= X }}\n          ->> {{ parity (X - 2) = parity m }}\n          X := X - 2\n        {{ parity X = parity m }}\n      end\n    {{ parity X = parity m /\\ ~(2 <= X) }}\n      ->> {{ X = parity m }}\n  }>.\n\nTheorem parity_outer_triple_valid : forall m,\n  outer_triple_valid (parity_dec m).\nProof.\n  verify.\n  - (* loop body *) rewrite <- H. apply parity_ge_2. omega.\n  - (* post *) rewrite <- H. symmetry. apply parity_lt_2. omega.\nQed.",
+      "explanation": "Compute parity by repeatedly subtracting 2. Invariant: parity X = parity m."
+    },
+    "sqrt": {
+      "solution": "Definition sqrt_dec (m:nat) : decorated :=\n  <{\n    {{ X = m }} ->> {{ X = m /\\ 0 * 0 <= m }}\n      Z := 0\n    {{ X = m /\\ Z * Z <= m }}\n      ;while (Z+1) * (Z+1) <= X do\n        {{ X = m /\\ Z * Z <= m /\\ (Z+1)*(Z+1) <= X }}\n          ->> {{ X = m /\\ (Z+1)*(Z+1) <= m }}\n          Z := Z + 1\n        {{ X = m /\\ Z * Z <= m }}\n      end\n    {{ X = m /\\ Z * Z <= m /\\ ~((Z+1)*(Z+1) <= X) }}\n      ->> {{ Z * Z <= m /\\ m < (Z+1) * (Z+1) }}\n  }>.\n\nTheorem sqrt_correct : forall m,\n  outer_triple_valid (sqrt_dec m).\nProof.\n  verify. all: omega.\nQed.",
+      "explanation": "Integer square root by incrementing Z until (Z+1)^2 > X. Invariant: Z^2 <= m."
+    },
+    "factorial_correct": {
+      "solution": "Example factorial_dec (m:nat) : decorated :=\n  <{\n    {{ X = m }}\n      Y := 1\n    {{ X = m /\\ Y = 1 }} ->> {{ Y * fact X = fact m }}\n      ;while X <> 0 do\n        {{ Y * fact X = fact m /\\ X <> 0 }}\n          ->> {{ (Y * X) * fact (X - 1) = fact m }}\n          Y := Y * X\n        {{ Y * fact (X - 1) = fact m }}\n          ;X := X - 1\n        {{ Y * fact X = fact m }}\n      end\n    {{ Y * fact X = fact m /\\ X = 0 }} ->> {{ Y = fact m }}\n  }>.\n\nTheorem factorial_correct: forall m,\n  outer_triple_valid (factorial_dec m).\nProof.\n  verify.\n  - (* loop body *) destruct (st X) eqn:?.\n    + omega.\n    + simpl. rewrite <- minus_n_O. ring_simplify. omega.\n  - (* postcondition *) simpl in *. omega.\nQed.",
+      "explanation": "Iterative factorial. Loop invariant: Y * fact(X) = fact(m)."
+    },
+    "minimum_correct": {
+      "solution": "Theorem minimum_correct : forall a b,\n  outer_triple_valid (minimum_dec a b).\nProof.\n  verify. all: omega.\nQed.",
+      "explanation": "Verify the minimum-finding program using the automated verify tactic."
+    },
+    "two_loops": {
+      "solution": "Theorem two_loops : forall a b c,\n  outer_triple_valid (two_loops_dec a b c).\nProof.\n  verify. all: omega.\nQed.",
+      "explanation": "Verify the two-loops program that computes a+b+c by incrementing."
+    },
+    "dpow2": {
+      "solution": "Theorem dpow2_down_correct : forall n,\n  outer_triple_valid (dpow2_dec n).\nProof.\n  verify.\n  - (* loop body *) rewrite pow2_plus_1. omega.\n  - (* postcondition *) subst. replace (1 - 1) with 0 by omega.\n    simpl. omega.\nQed.",
+      "explanation": "Verify the power-of-2 computation program."
+    },
+    "fib_eqn": {
+      "solution": "Lemma fib_eqn : forall n,\n  n > 0 ->\n  fib n + fib (Init.Nat.pred n) = fib (n + 1).\nProof.\n  intros n Hn. destruct n.\n  - omega.\n  - simpl. omega.\nQed.",
+      "explanation": "Fibonacci recurrence: fib(n) + fib(n-1) = fib(n+1) for n > 0."
+    },
+    "fib": {
+      "solution": "Theorem dfib_correct : forall n,\n  outer_triple_valid (dfib n).\nProof.\n  verify.\n  - (* loop body invariant preservation *)\n    rewrite fib_eqn by omega. omega.\n  - (* postcondition *) subst. omega.\nQed.",
+      "explanation": "Verify the iterative Fibonacci program."
+    },
+    "wp": {
+      "solution": "(* Examples of weakest preconditions:\n   1) wp (X := 5) (X = 5) = True\n   2) wp (X := Y + 1) (X <= 5) = (Y + 1 <= 5)\n   3) wp (X := Y + 1) (0 <= X /\\ X <= 5) = (0 <= Y + 1 /\\ Y + 1 <= 5)\n*)",
+      "explanation": "The weakest precondition for an assignment X := a with postcondition Q is Q[X/a]."
+    },
+    "is_wp": {
+      "solution": "Theorem is_wp_example :\n  is_wp (fun st => st Y <= 4) <{X := Y + 1}> (fun st => st X <= 5).\nProof.\n  unfold is_wp. split.\n  - eapply hoare_consequence_pre.\n    + apply hoare_asgn.\n    + unfold assert_implies, assertion_sub. intros st H. simpl. omega.\n  - intros P HP st Hst.\n    unfold valid_hoare_triple in HP.\n    specialize (HP st (X !-> aeval st <{Y + 1}> ; st)).\n    assert (Heval: st =[ X := Y + 1 ]=> (X !-> aeval st <{Y + 1}> ; st)).\n    { apply E_Asgn. reflexivity. }\n    specialize (HP Heval Hst). simpl in HP.\n    rewrite t_update_eq in HP. simpl in HP. omega.\nQed.",
+      "explanation": "Show that Y <= 4 is the weakest precondition of X := Y + 1 with respect to X <= 5."
+    },
+    "hoare_asgn_weakest": {
+      "solution": "Theorem hoare_asgn_weakest : forall Q X a,\n  is_wp (Q [X |-> a]) <{X := a}> Q.\nProof.\n  unfold is_wp. split.\n  - apply hoare_asgn.\n  - intros P HP st Hst.\n    unfold valid_hoare_triple in HP.\n    specialize (HP st (X !-> aeval st a ; st) (E_Asgn _ _ _ _ eq_refl) Hst).\n    unfold assertion_sub. assumption.\nQed.",
+      "explanation": "The substitution Q[X/a] is the weakest precondition of X := a with respect to Q."
+    },
+    "hoare_havoc_weakest": {
+      "solution": "Lemma hoare_havoc_weakest : forall (P Q : Assertion) (X : string),\n  {{ P }} havoc X {{ Q }} ->\n  P ->> havoc_pre X Q.\nProof.\n  unfold valid_hoare_triple, havoc_pre, assert_implies.\n  intros P Q X HT st HP n.\n  apply (HT st (X !-> n ; st)).\n  - apply E_Havoc.\n  - assumption.\nQed.",
+      "explanation": "havoc_pre is the weakest precondition for havoc: any valid precondition implies havoc_pre."
+    }
+  }
+}

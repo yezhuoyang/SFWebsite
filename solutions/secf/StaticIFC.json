@@ -1,0 +1,34 @@
+{
+  "chapter": "StaticIFC",
+  "volume": "secf",
+  "exercises": {
+    "not_cf_wt_noninterferent_com": {
+      "solution": "Example not_cf_wt_noninterferent_com :\n  ~ xpub |-cf- <{ if Y=0\n                 then Z := 0\n                 else skip\n                 end }>.\nProof.\n  apply cf_typechecker_complete. reflexivity.\nQed.",
+      "explanation": "Use the type-checker completeness to show the program is not cf-well-typed: the checker returns false because Y is secret."
+    },
+    "ts_typechecker": {
+      "solution": "Fixpoint ts_typechecker (P:pub_vars) (pc:label) (c:com) : bool :=\n  match c with\n  | <{ skip }> => true\n  | <{ X := a }> => can_flow (join pc (label_of_aexp P a)) (P X)\n  | <{ c1 ; c2 }> => ts_typechecker P pc c1 && ts_typechecker P pc c2\n  | <{ if b then c1 else c2 end }> =>\n      ts_typechecker P (join pc (label_of_bexp P b)) c1 &&\n      ts_typechecker P (join pc (label_of_bexp P b)) c2\n  | <{ while b do c1 end }> =>\n      can_flow (join pc (label_of_bexp P b)) public &&\n      ts_typechecker P (join pc (label_of_bexp P b)) c1\n  end.",
+      "explanation": "The ts_typechecker adds a termination-sensitivity check for while loops: the join of pc and the guard label must flow to public, ensuring the guard doesn't depend on secrets."
+    },
+    "ts_typechecker_sound": {
+      "solution": "Lemma ts_typechecker_sound : forall P pc c,\n  ts_typechecker P pc c = true ->\n  P ;; pc |-ts- c.\nProof.\n  intros P pc c. generalize dependent pc.\n  induction c; intros pc H; simpl in *; try econstructor;\n    try repeat rewrite andb_true_iff in *;\n    try destruct H; try tauto;\n    eauto using label_of_aexp_sound, label_of_bexp_sound.\nQed.",
+      "explanation": "Soundness of the ts type-checker: if it returns true, the program is well-typed. By induction on the command."
+    },
+    "ts_typechecker_complete": {
+      "solution": "Lemma ts_typechecker_complete : forall P pc c,\n  ts_typechecker P pc c = false ->\n  ~ P ;; pc |-ts- c.\nProof.\n  intros P pc c H Hc. induction Hc; simpl in *;\n    try rewrite andb_false_iff in *; try tauto; try congruence.\n  - apply label_of_aexp_unique in H0. rewrite H0 in *. congruence.\n  - destruct H; apply label_of_bexp_unique in H0; subst; eauto.\n  - rewrite andb_false_iff in H. destruct H.\n    + apply label_of_bexp_unique in H0. subst. congruence.\n    + apply label_of_bexp_unique in H0. subst. auto.\nQed.",
+      "explanation": "Completeness: if the checker returns false, the program is not well-typed."
+    },
+    "not_ts_non_termination_com": {
+      "solution": "Example not_ts_non_termination_com :\n  ~ xpub ;; public |-ts- termination_leak.\nProof.\n  apply ts_typechecker_complete. reflexivity.\nQed.",
+      "explanation": "The termination_leak program branches on secret Y in a while guard, so it is rejected by the termination-sensitive type system."
+    },
+    "cf_well_typed_ts_cf_secure": {
+      "solution": "Theorem cf_well_typed_ts_cf_secure : forall P c,\n  P |-cf- c ->\n  ts_cf_secure P c.\nProof.\n  intros P c Hwt. induction Hwt; unfold ts_cf_secure; intros.\n  - (* skip *) inversion H0; subst. exists s2. constructor. auto.\n  - (* asgn *) inversion H1; subst. exists (x !-> aeval s2 a ; s2).\n    constructor. auto.\n  - (* seq *) inversion H1; subst.\n    edestruct IHHwt1 as [s2' Hs2']; eauto.\n    edestruct IHHwt2 as [s2'' Hs2'']; eauto.\n    eapply cf_well_typed_noninterferent; eauto.\n    exists s2''. econstructor; eauto.\n  - (* if *) inversion H2; subst.\n    + assert (beval s2 b = true) as Hb2.\n      { eapply noninterferent_bexp; eauto. apply label_of_bexp_sound.\n        rewrite (label_of_bexp_unique _ _ _ H). auto. }\n      edestruct IHHwt1 as [s2' Hs2']; eauto.\n      exists s2'. apply CFE_IfTrue; auto.\n    + assert (beval s2 b = false) as Hb2.\n      { eapply noninterferent_bexp; eauto. apply label_of_bexp_sound.\n        rewrite (label_of_bexp_unique _ _ _ H). auto. }\n      edestruct IHHwt2 as [s2' Hs2']; eauto.\n      exists s2'. apply CFE_IfFalse; auto.\n  - (* while *) inversion H1; subst.\n    assert (beval s2 b = beval s1 b) as Hb.\n    { symmetry. eapply noninterferent_bexp; eauto. apply label_of_bexp_sound.\n      rewrite (label_of_bexp_unique _ _ _ H). auto. }\n    rewrite <- H7 in Hb. destruct (beval s1 b) eqn:Eb.\n    + edestruct IHHwt as [s2' Hs2']; eauto.\n      { eapply cf_well_typed_noninterferent; eauto. }\n      exists s2'. econstructor; eauto. rewrite Hb. auto.\n    + exists s2. constructor. rewrite Hb. auto.\nQed.",
+      "explanation": "cf-well-typed programs are ts_cf_secure: both executions follow the same control flow because guards only depend on public state."
+    },
+    "public_outputs": {
+      "solution": "(* The output typing rule:\n  | ONIWT_Output : forall pc a l,\n      P |-a- a \\in l ->\n      can_flow (join pc l) public = true ->\n      P ;; pc |-ni- output a\n\nThe oni_typechecker case for output:\n  | output a => can_flow (join pc (label_of_aexp P a)) public\n\nThe oni_typechecker_sound case:\n  Output case follows from label_of_aexp_sound and the can_flow check.\n\nThe oni_typechecker_complete case:\n  Output case: use label_of_aexp_unique to derive contradiction.\n\nnot_ni_wt_output1:\n  apply oni_typechecker_complete. reflexivity.\n\nnot_ni_wt_output2:\n  apply oni_typechecker_complete. reflexivity.\n\nweaken_pc for output:\n  Apply ONIWT_Output with can_flow_join_l and can_flow_trans.\n\nsecret_run_no_output:\n  By induction on evaluation. Assignment and skip produce no output.\n  Sequence and if cases use IH. The output case contradicts\n  the typing: join secret l cannot flow to public.\n\noni_well_typed_noninterferent:\n  Extend the ni_well_typed proof with:\n  - Output case: use noninterferent_aexp to show output values are equal.\n  - If/While cases: use different_code for secret branches,\n    different_code_no_output for output equality.\n\noni_well_typed_output_secure:\n  Similar to noninterferent but additionally track output equality\n  using secret_run_no_output for secret branches.\n*)",
+      "explanation": "Extension of the type system with public outputs. The key additions are: typing rule requiring output expressions to flow to public, type-checker case, soundness/completeness cases, and security proofs tracking output equality."
+    }
+  }
+}

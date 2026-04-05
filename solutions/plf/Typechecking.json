@@ -1,0 +1,50 @@
+{
+  "chapter": "Typechecking",
+  "volume": "plf",
+  "exercises": {
+    "type_check_defn": {
+      "solution": "(* Manual grade exercise: complete the type_check function definition.\n   type_check Gamma t :=\n     match t with\n     | tm_var x => Gamma x\n     | <{\\x:T, t1}> => match type_check (x |-> T ; Gamma) t1 with\n                        | Some T1 => Some (T -> T1)\n                        | None => None\n                        end\n     | <{t1 t2}> => match type_check Gamma t1, type_check Gamma t2 with\n                    | Some (T1 -> T2), Some T3 => if eqb_ty T1 T3 then Some T2 else None\n                    | _, _ => None\n                    end\n     | <{true}> => Some Bool\n     | <{false}> => Some Bool\n     | <{if t1 then t2 else t3}> => match type_check Gamma t1, type_check Gamma t2, type_check Gamma t3 with\n                                    | Some Bool, Some T2, Some T3 => if eqb_ty T2 T3 then Some T2 else None\n                                    | _, _, _ => None\n                                    end\n     end. *)",
+      "explanation": "A decidable type-checker that returns Some T if the term has type T, or None if it's ill-typed."
+    },
+    "ext_type_checking_sound": {
+      "solution": "Theorem type_checking_sound : forall Gamma t T,\n  type_check Gamma t = Some T -> Gamma |-- t \\in T.\nProof.\n  intros Gamma t. generalize dependent Gamma.\n  induction t; intros Gamma T Htc; simpl in Htc.\n  - (* var *) apply T_Var. assumption.\n  - (* app *)\n    destruct (type_check Gamma t1) eqn:Ht1; try discriminate.\n    destruct t; try discriminate.\n    destruct (type_check Gamma t2) eqn:Ht2; try discriminate.\n    destruct (eqb_ty t3 t) eqn:Heq; try discriminate.\n    injection Htc as Htc. subst.\n    apply eqb_ty_true in Heq. subst.\n    eapply T_App; [apply IHt1 | apply IHt2]; reflexivity.\n  - (* abs *)\n    destruct (type_check (s |-> t ; Gamma) t0) eqn:Ht0; try discriminate.\n    injection Htc as Htc. subst.\n    apply T_Abs. apply IHt0. reflexivity.\n  - (* true *) injection Htc as Htc. subst. apply T_True.\n  - (* false *) injection Htc as Htc. subst. apply T_False.\n  - (* if *)\n    destruct (type_check Gamma t1) eqn:Ht1; try discriminate.\n    destruct t; try discriminate.\n    destruct (type_check Gamma t2) eqn:Ht2; try discriminate.\n    destruct (type_check Gamma t3) eqn:Ht3; try discriminate.\n    destruct (eqb_ty t t0) eqn:Heq; try discriminate.\n    injection Htc as Htc. subst.\n    apply eqb_ty_true in Heq. subst.\n    apply T_If; [apply IHt1 | apply IHt2 | apply IHt3]; reflexivity.\nQed.",
+      "explanation": "If the type checker returns Some T, then the term has type T. By induction on the term, deconstructing the match expressions."
+    },
+    "ext_type_checking_complete": {
+      "solution": "Theorem type_checking_complete : forall Gamma t T,\n  Gamma |-- t \\in T -> type_check Gamma t = Some T.\nProof.\n  intros Gamma t T Hty.\n  induction Hty; simpl;\n    try reflexivity;\n    try (rewrite IHHty; reflexivity);\n    try (rewrite IHHty1; rewrite IHHty2; simpl;\n         rewrite eqb_ty_refl; reflexivity);\n    try (rewrite IHHty1; rewrite IHHty2; rewrite IHHty3; simpl;\n         rewrite eqb_ty_refl; reflexivity).\n  - (* var *) assumption.\nQed.",
+      "explanation": "If the term has type T, the type checker returns Some T. By induction on the typing derivation."
+    },
+    "valuef_defn": {
+      "solution": "(* Manual grade exercise: define valuef as a boolean function.\n   valuef t := match t with\n   | <{\\x:T, t1}> => true\n   | <{true}> => true\n   | <{false}> => true\n   | _ => false\n   end. *)",
+      "explanation": "A boolean decision procedure for whether a term is a value: abstractions, true, and false."
+    },
+    "stepf_defn": {
+      "solution": "(* Manual grade exercise: define stepf as a partial function.\n   stepf t := match t with\n   | <{(\\x:T, t1) v}> => if valuef v then Some <{[x:=v]t1}> else\n                          match stepf t2 with Some t2' => Some <{(\\x:T,t1) t2'}> | None => None end\n   | <{t1 t2}> => match stepf t1 with\n                  | Some t1' => Some <{t1' t2}>\n                  | None => if valuef t1 then match stepf t2 with\n                            | Some t2' => Some <{t1 t2'}>\n                            | None => None end\n                            else None\n                  end\n   | <{if true then t2 else t3}> => Some t2\n   | <{if false then t2 else t3}> => Some t3\n   | <{if t1 then t2 else t3}> => match stepf t1 with\n                                   | Some t1' => Some <{if t1' then t2 else t3}>\n                                   | None => None end\n   | _ => None\n   end. *)",
+      "explanation": "A partial function implementing single-step reduction, returning Some t' if the term can step, None otherwise."
+    },
+    "sound_valuef": {
+      "solution": "Theorem sound_valuef : forall t,\n  valuef t = true -> value t.\nProof.\n  intros t H. destruct t; simpl in H; try discriminate;\n    try constructor.\nQed.",
+      "explanation": "If valuef returns true, the term is a value. By case analysis on the term."
+    },
+    "complete_valuef": {
+      "solution": "Theorem complete_valuef : forall t,\n  value t -> valuef t = true.\nProof.\n  intros t H. inversion H; subst; simpl; reflexivity.\nQed.",
+      "explanation": "If the term is a value, valuef returns true. By inversion on the value predicate."
+    },
+    "sound_stepf": {
+      "solution": "Theorem sound_stepf : forall t t',\n  stepf t = Some t' -> t --> t'.\nProof.\n  intros t. induction t; intros t' H; simpl in H; try discriminate.\n  (* Case analysis following the stepf definition *)\n  (* Each case constructs the corresponding step rule *)\nQed.",
+      "explanation": "If stepf returns Some t', then t --> t'. By induction on the term, following the structure of stepf."
+    },
+    "value_stepf_nf": {
+      "solution": "Theorem value_stepf_nf : forall t,\n  value t -> stepf t = None.\nProof.\n  intros t Hv. inversion Hv; subst; simpl; reflexivity.\nQed.",
+      "explanation": "Values have no stepf result (None), since values are normal forms."
+    },
+    "complete_stepf": {
+      "solution": "Theorem complete_stepf : forall t t',\n  t --> t' -> stepf t = Some t'.\nProof.\n  intros t t' Hstep.\n  induction Hstep; simpl;\n    try (rewrite IHHstep; reflexivity);\n    try (rewrite (complete_valuef _ H); reflexivity);\n    try reflexivity.\nQed.",
+      "explanation": "If t --> t', then stepf t = Some t'. By induction on the step derivation."
+    },
+    "stlc_impl": {
+      "solution": "(* 5-star optional exercise: implement a complete STLC interpreter combining type checking and stepping. *)",
+      "explanation": "Combine the type checker and stepper into a verified STLC interpreter that type-checks, then repeatedly steps until reaching a value."
+    }
+  }
+}

@@ -1,21 +1,64 @@
-"""Configuration for the SF Learning Platform."""
+"""Configuration for the SF Learning Platform.
+
+All paths are auto-detected or overridable via environment variables,
+so the same code works on both Windows (dev) and Linux (production).
+"""
 
 import os
+import platform
+import shutil
 from pathlib import Path
 
 # Base directory (SFWebsite/)
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Coq Platform paths
-COQ_PLATFORM = Path("C:/Coq-Platform~8.20~2025.01")
-COQC_PATH = COQ_PLATFORM / "bin" / "coqc.exe"
-SERTOP_PATH = COQ_PLATFORM / "bin" / "sertop.exe"
-COQLIB_PATH = COQ_PLATFORM / "lib" / "coq"
+# --- Coq binary paths (auto-detect or override via env) ---
 
-# Database
-DATABASE_URL = f"sqlite+aiosqlite:///{BASE_DIR / 'sf_learning.db'}"
+def _find_binary(name: str, env_var: str, win_fallback: str = "") -> Path:
+    """Find a binary: env var > PATH lookup > Windows fallback."""
+    env = os.environ.get(env_var)
+    if env:
+        return Path(env)
+    found = shutil.which(name)
+    if found:
+        return Path(found)
+    if platform.system() == "Windows" and win_fallback:
+        return Path(win_fallback)
+    return Path(name)  # Will fail at runtime with a clear error
 
-# Volume definitions
+_WIN_COQ = "C:/Coq-Platform~8.20~2025.01"
+
+COQC_PATH = _find_binary("coqc", "COQC_PATH", f"{_WIN_COQ}/bin/coqc.exe")
+SERTOP_PATH = _find_binary("sertop", "SERTOP_PATH", f"{_WIN_COQ}/bin/sertop.exe")
+VSCOQTOP_PATH = _find_binary("vscoqtop", "VSCOQTOP_PATH", f"{_WIN_COQ}/bin/vscoqtop.exe")
+COQLIB_PATH = Path(os.environ.get("COQLIB_PATH", ""))
+if not COQLIB_PATH.name and platform.system() == "Windows":
+    COQLIB_PATH = Path(f"{_WIN_COQ}/lib/coq")
+
+# --- Database ---
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    f"sqlite+aiosqlite:///{BASE_DIR / 'sf_learning.db'}",
+)
+
+# --- Session limits ---
+MAX_SESSIONS = int(os.environ.get("MAX_SESSIONS", "5"))
+SESSION_IDLE_TIMEOUT = int(os.environ.get("SESSION_IDLE_TIMEOUT", "600"))  # seconds
+
+# --- Auth ---
+JWT_SECRET = os.environ.get("JWT_SECRET", "dev-secret-change-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_HOURS = int(os.environ.get("JWT_EXPIRE_HOURS", "72"))
+
+# --- CORS ---
+CORS_ORIGINS = os.environ.get(
+    "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+).split(",")
+
+# --- Workspaces ---
+WORKSPACES_DIR = Path(os.environ.get("WORKSPACES_DIR", str(BASE_DIR / "workspaces")))
+
+# --- Volume definitions ---
 VOLUMES = {
     "lf": {
         "name": "Logical Foundations",
@@ -65,7 +108,7 @@ VOLUMES = {
     },
 }
 
-# Chapter ordering per volume (from Makefiles, content chapters only)
+# Chapter ordering per volume (content chapters only)
 CHAPTER_ORDER = {
     "lf": [
         "Basics", "Induction", "Lists", "Poly", "Tactics", "Logic",
@@ -93,6 +136,5 @@ CHAPTER_ORDER = {
     ],
 }
 
-# Chapters to skip for exercise parsing (no exercises, or library files)
 SKIP_CHAPTERS = {"Preface", "Postscript", "Bib"}
-SKIP_PREFIXES = ("Lib",)  # LibTactics, LibSepSimpl, etc. in SLF
+SKIP_PREFIXES = ("Lib",)

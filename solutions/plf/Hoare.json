@@ -1,0 +1,90 @@
+{
+  "chapter": "Hoare",
+  "volume": "plf",
+  "exercises": {
+    "hoare_post_true": {
+      "solution": "Theorem hoare_post_true : forall (P Q : Assertion) c,\n  (forall st, Q st) ->\n  {{P}} c {{Q}}.\nProof.\n  intros P Q c Hq st st' Heval Hp.\n  apply Hq.\nQed.",
+      "explanation": "If Q holds in every state, then any triple with Q as postcondition is valid regardless of the command."
+    },
+    "hoare_pre_false": {
+      "solution": "Theorem hoare_pre_false : forall (P Q : Assertion) c,\n  (forall st, ~ (P st)) ->\n  {{P}} c {{Q}}.\nProof.\n  intros P Q c Hp st st' Heval Hpst.\n  exfalso. apply (Hp st). assumption.\nQed.",
+      "explanation": "If P holds in no state, the precondition is never satisfied, so the triple holds vacuously."
+    },
+    "hoare_asgn_examples1": {
+      "solution": "Example hoare_asgn_examples1 :\n  exists P,\n    {{ P }}\n      X := 2 * X\n    {{ X <= 10 }}.\nProof.\n  exists (fun st => st X * 2 <= 10).\n  apply hoare_asgn.\nQed.",
+      "explanation": "The precondition is the postcondition with X replaced by 2*X, i.e., (2*X <= 10)."
+    },
+    "hoare_asgn_examples2": {
+      "solution": "Example hoare_asgn_examples2 :\n  exists P,\n    {{ P }}\n      X := 3\n    {{ 0 <= X /\\ X <= 5 }}.\nProof.\n  exists (fun st => 0 <= 3 /\\ 3 <= 5).\n  apply hoare_asgn.\nQed.",
+      "explanation": "The precondition substitutes 3 for X in the postcondition."
+    },
+    "hoare_asgn_wrong": {
+      "solution": "Theorem hoare_asgn_wrong : exists a:aexp,\n  ~ {{ True }} X := a {{ X = a }}.\nProof.\n  exists <{ X + 1 }>.\n  unfold valid_hoare_triple. intros H.\n  specialize (H empty_st (X !-> 1) (E_Asgn empty_st <{X+1}> 1 X eq_refl) I).\n  simpl in H. discriminate.\nQed.",
+      "explanation": "With a = X+1, after X := X+1, X = 1 but a = X+1 = 2. The forward rule is wrong because a is evaluated in the post-state."
+    },
+    "hoare_asgn_fwd": {
+      "solution": "Theorem hoare_asgn_fwd :\n  forall (m:nat) (a:aexp) (P : Assertion),\n  {{P /\\ X = m}}\n    X := a\n  {{ $(fun st => (P (X !-> m ; st)\n             /\\ st X = aeval (X !-> m ; st) a)) }}.\nProof.\n  unfold valid_hoare_triple. intros m a P st st' HE [HP Hm].\n  inversion HE. subst. simpl.\n  rewrite t_update_eq. split.\n  - rewrite t_update_shadow. rewrite t_update_same. assumption.\n  - rewrite t_update_shadow. rewrite t_update_same. reflexivity.\nQed.",
+      "explanation": "The forward assignment rule reconstructs the pre-state using the remembered value m. After assignment, we restore via t_update lemmas."
+    },
+    "hoare_asgn_fwd_exists": {
+      "solution": "Theorem hoare_asgn_fwd_exists :\n  forall (a:aexp) (P : Assertion),\n  {{P}}\n    X := a\n  {{ $(fun st => exists m, P (X !-> m ; st) /\\\n                    st X = aeval (X !-> m ; st) a) }}.\nProof.\n  unfold valid_hoare_triple. intros a P st st' HE HP.\n  inversion HE. subst.\n  exists (st X). rewrite t_update_shadow. rewrite t_update_same. split.\n  - assumption.\n  - reflexivity.\nQed.",
+      "explanation": "Existentially quantify over the old value of X (which is st X). Then use t_update lemmas to simplify."
+    },
+    "hoare_asgn_examples_2": {
+      "solution": "Example assertion_sub_ex1' :\n  {{ X <= 5 }}\n    X := 2 * X\n  {{ X <= 10 }}.\nProof.\n  eapply hoare_consequence_pre.\n  - apply hoare_asgn.\n  - assertion_auto''.\nQed.\n\nExample assertion_sub_ex2' :\n  {{ 0 <= 3 /\\ 3 <= 5 }}\n    X := 3\n  {{ 0 <= X /\\ X <= 5 }}.\nProof.\n  eapply hoare_consequence_pre.\n  - apply hoare_asgn.\n  - assertion_auto''.\nQed.",
+      "explanation": "Apply hoare_asgn backwards from the postcondition, then discharge the precondition implication with assertion_auto''."
+    },
+    "hoare_asgn_example4": {
+      "solution": "Example hoare_asgn_example4 :\n  {{ True }}\n    X := 1;\n    Y := 2\n  {{ X = 1 /\\ Y = 2 }}.\nProof.\n  eapply hoare_seq with (Q := {{ X = 1 }}).\n  - eapply hoare_consequence_pre.\n    + apply hoare_asgn.\n    + assertion_auto''.\n  - eapply hoare_consequence_pre.\n    + apply hoare_asgn.\n    + assertion_auto''.\nQed.",
+      "explanation": "Use hoare_seq with intermediate assertion X=1. Each assignment step uses hoare_asgn backwards."
+    },
+    "swap_exercise": {
+      "solution": "Definition swap_program : com :=\n  <{ Z := X;\n     X := Y;\n     Y := Z }>.\n\nTheorem swap_exercise :\n  {{X <= Y}}\n    swap_program\n  {{Y <= X}}.\nProof.\n  unfold swap_program.\n  eapply hoare_seq.\n  - eapply hoare_seq.\n    + apply hoare_asgn.\n    + apply hoare_asgn.\n  - eapply hoare_consequence_pre.\n    + apply hoare_asgn.\n    + assertion_auto''.\nQed.",
+      "explanation": "Swap X and Y using temp variable Z. The proof chains three assignments backwards from the postcondition."
+    },
+    "invalid_triple": {
+      "solution": "Theorem invalid_triple : ~ forall (a : aexp) (n : nat),\n    {{ a = n }}\n      X := 3; Y := a\n    {{ Y = n }}.\nProof.\n  unfold valid_hoare_triple.\n  intros H.\n  specialize H with (a := <{X}>) (n := 0).\n  simpl in H.\n  assert (Heval : (X !-> 0) =[\n    X := 3; Y := X\n  ]=> (Y !-> 3 ; X !-> 3 ; X !-> 0)).\n  { apply E_Seq with (X !-> 3 ; X !-> 0).\n    - apply E_Asgn. reflexivity.\n    - apply E_Asgn. reflexivity. }\n  assert (HP : aeval (X !-> 0) <{X}> = 0).\n  { reflexivity. }\n  apply H in Heval; [| assumption].\n  simpl in Heval. discriminate.\nQed.",
+      "explanation": "With a=X and n=0: precondition says X=0. After X:=3, X is 3. Then Y:=X sets Y=3, but the postcondition claims Y=0."
+    },
+    "if_minus_plus": {
+      "solution": "Theorem if_minus_plus :\n  {{True}}\n    if (X <= Y)\n      then Z := Y - X\n      else Y := X + Z\n    end\n  {{Y = X + Z}}.\nProof.\n  apply hoare_if.\n  - eapply hoare_consequence_pre.\n    + apply hoare_asgn.\n    + assertion_auto''.\n  - eapply hoare_consequence_pre.\n    + apply hoare_asgn.\n    + assertion_auto''.\nQed.",
+      "explanation": "In the then branch (X<=Y), Z:=Y-X gives Y=X+Z. In the else branch, Y:=X+Z directly establishes the postcondition."
+    },
+    "if1_ceval": {
+      "solution": "  | E_If1True : forall st st' b c,\n      beval st b = true ->\n      st =[ c ]=> st' ->\n      st =[ if1 b then c end ]=> st'\n  | E_If1False : forall st b c,\n      beval st b = false ->\n      st =[ if1 b then c end ]=> st\n\nExample if1true_test :\n  empty_st =[ if1 X = 0 then X := 1 end ]=> (X !-> 1).\nProof. eauto. Qed.\n\nExample if1false_test :\n  (X !-> 2) =[ if1 X = 0 then X := 1 end ]=> (X !-> 2).\nProof. apply E_If1False. reflexivity. Qed.",
+      "explanation": "Add two rules: E_If1True executes c when b is true, E_If1False skips when b is false."
+    },
+    "hoare_if1": {
+      "solution": "Theorem hoare_if1 : forall P Q (b:bexp) c,\n  {{ P /\\ b }} c {{Q}} ->\n  (P /\\ ~ b)%assertion ->> Q ->\n  {{P}} if1 b then c end {{Q}}.\nProof.\n  unfold valid_hoare_triple.\n  intros P Q b c HTrue HFalse st st' HE HP.\n  inversion HE; subst.\n  - apply (HTrue st st'); try assumption. split; assumption.\n  - apply HFalse. split; try assumption. apply bexp_eval_false. assumption.\nQed.",
+      "explanation": "The if1 rule: if b is true, use the Hoare triple for c; if b is false, the precondition plus ~b must imply Q."
+    },
+    "hoare_if1_good": {
+      "solution": "Lemma hoare_if1_good :\n  {{ X + Y = Z }}\n    if1 Y <> 0 then\n      X := X + Y\n    end\n  {{ X = Z }}.\nProof.\n  apply hoare_if1.\n  - eapply hoare_consequence_pre.\n    + apply hoare_asgn.\n    + assertion_auto''.\n  - unfold \"->>\" , bassertion. intros st [H1 H2]. simpl in *.\n    destruct (st Y =? 0) eqn:E.\n    + apply Nat.eqb_eq in E. lia.\n    + exfalso. apply H2. reflexivity.\nQed.",
+      "explanation": "When Y<>0, X:=X+Y makes X = old X + Y = Z. When Y=0, X+0=Z means X=Z already."
+    },
+    "hoare_havoc": {
+      "solution": "Definition havoc_pre (X : string) (Q : Assertion) (st : total_map nat) : Prop :=\n  forall n, Q (X !-> n ; st).\n\nTheorem hoare_havoc : forall (Q : Assertion) (X : string),\n  {{ $(havoc_pre X Q) }} havoc X {{ Q }}.\nProof.\n  unfold valid_hoare_triple. intros Q X st st' HE HP.\n  inversion HE; subst. apply HP.\nQed.",
+      "explanation": "The precondition for HAVOC X requires Q to hold for all possible values n that X could be set to."
+    },
+    "havoc_post": {
+      "solution": "Theorem havoc_post : forall (P : Assertion) (X : string),\n  {{ P }} havoc X {{ $(fun st => exists (n:nat), P (X !-> n ; st)) }}.\nProof.\n  intros P X. eapply hoare_consequence_pre.\n  - apply hoare_havoc.\n  - unfold \"->>\" , havoc_pre. intros st HP n.\n    exists (st X). rewrite t_update_shadow. rewrite t_update_same. assumption.\nQed.",
+      "explanation": "We need to show the precondition implies havoc_pre. For any n, we witness the old value st X and use t_update lemmas."
+    },
+    "assert_assume_differ": {
+      "solution": "Theorem assert_assume_differ : exists (P:Assertion) b (Q:Assertion),\n       ({{P}} assume b {{Q}})\n  /\\ ~ ({{P}} assert b {{Q}}).\nProof.\n  exists (fun _ => True), <{False}>, (fun _ => True).\n  split.\n  - unfold valid_hoare_triple. intros st r H Hp.\n    inversion H. subst. simpl in H0. discriminate.\n  - unfold valid_hoare_triple. intros H.\n    specialize (H empty_st RError).\n    assert (He : empty_st =[ assert false ]=> RError).\n    { apply E_AssertFalse. reflexivity. }\n    destruct (H He I) as [st' [Hcontra _]]. discriminate.\nQed.",
+      "explanation": "With P=True, b=false, Q=True: assume false never executes (vacuously valid), but assert false produces an error."
+    },
+    "assert_implies_assume": {
+      "solution": "Theorem assert_implies_assume : forall P b Q,\n     ({{P}} assert b {{Q}})\n  -> ({{P}} assume b {{Q}}).\nProof.\n  unfold valid_hoare_triple.\n  intros P b Q Hassert st r Heval Hp.\n  inversion Heval. subst.\n  apply (Hassert st (RNormal st)).\n  - apply E_AssertTrue. assumption.\n  - assumption.\nQed.",
+      "explanation": "If assert b succeeds (b is true), then assume b also succeeds with the same state. Assert is strictly stronger."
+    },
+    "hoare_assert_assume": {
+      "solution": "Theorem hoare_assert : forall P (b:bexp),\n  {{ P /\\ b }} assert b {{ P }}.\nProof.\n  unfold valid_hoare_triple.\n  intros P b st r HE [HP Hb].\n  inversion HE; subst.\n  - exists st. split; [reflexivity | assumption].\n  - exfalso. congruence.\nQed.\n\nTheorem hoare_assume : forall P (b:bexp),\n  {{ P /\\ b }} assume b {{ P }}.\nProof.\n  unfold valid_hoare_triple.\n  intros P b st r HE [HP Hb].\n  inversion HE; subst.\n  exists st. split; [reflexivity | assumption].\nQed.\n\nExample assert_assume_example:\n  {{True}}\n    assume (X = 1);\n    X := X + 1;\n    assert (X = 2)\n  {{True}}.\nProof.\n  eapply hoare_seq.\n  - eapply hoare_seq.\n    + eapply hoare_consequence_post.\n      * apply hoare_assert.\n      * unfold \"->>\" . intros st [H _]. assumption.\n    + eapply hoare_consequence_pre.\n      * apply hoare_asgn.\n      * unfold \"->>\" , assertion_sub, t_update, bassertion.\n        intros st H. simpl. split; [auto | ].\n        destruct H as [_ H]. simpl in H.\n        apply Nat.eqb_eq in H. rewrite H. reflexivity.\n  - eapply hoare_consequence_pre.\n    + apply hoare_assume.\n    + unfold \"->>\" , bassertion. intros st Ht. simpl. split.\n      * assumption.\n      * reflexivity.\nQed.",
+      "explanation": "Assert succeeds when b is true (errors on false). Assume only evaluates when b is true. The example chains assume, assignment, and assert."
+    },
+    "hoare_repeat": {
+      "solution": "(* This is an advanced optional exercise involving REPEAT loops. Best-effort solution. *)\n(* The REPEAT c UNTIL b rule: {{P}} c {{Q}}, Q /\\ ~b ->> P |- {{P}} REPEAT c UNTIL b {{Q /\\ b}} *)",
+      "explanation": "REPEAT c UNTIL b executes c at least once, then checks b. The loop invariant must hold after each iteration of c."
+    }
+  }
+}

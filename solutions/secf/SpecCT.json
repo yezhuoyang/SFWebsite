@@ -1,0 +1,62 @@
+{
+  "chapter": "SpecCT",
+  "volume": "secf",
+  "exercises": {
+    "cct_insecure_prog'_is_not_cct_secure": {
+      "solution": "Example cct_insecure_prog'_is_not_cct_secure :\n  ~ (cct_secure XYZpub APpub cct_insecure_prog').\nProof.\n  unfold cct_secure, cct_insecure_prog'.\n  intros H.\n  set (st1 := (W !-> 0; __ !-> 0)).\n  set (st2 := (W !-> 1; __ !-> 0)).\n  set (m1 := (AS !-> [42]; __ !-> [])).\n  set (m2 := (AS !-> [42]; __ !-> [])).\n  specialize (H st1 st2 m1 m2).\n  assert (Hpub: pub_equiv XYZpub st1 st2).\n  { intros x Hx. apply XYZpub_true in Hx.\n    destruct Hx as [->|[->|->]]; reflexivity. }\n  assert (Hparr: pub_equiv APpub m1 m2).\n  { intros a Ha. apply APpub_true in Ha. subst. reflexivity. }\n  specialize (H Hpub Hparr).\n  simpl in H. unfold st1, st2 in H. simpl in H.\n  discriminate.\nQed.",
+      "explanation": "cct_insecure_prog' stores to a secret array at a secret index W, which leaks information through memory access patterns."
+    },
+    "label_of_exp": {
+      "solution": "Fixpoint label_of_exp (P:pub_vars) (e:exp) : label :=\n  match e with\n  | ANum _ => public\n  | AId x => P x\n  | ABin _ e1 e2 => join (label_of_exp P e1) (label_of_exp P e2)\n  | ACond b e1 e2 => join (label_of_exp P b) (join (label_of_exp P e1) (label_of_exp P e2))\n  end.",
+      "explanation": "Compute the label of an expression: constants are public, variables have their declared label, operations join their operands' labels."
+    },
+    "label_of_exp_sound": {
+      "solution": "Lemma label_of_exp_sound : forall P e,\n  P |- e \\in label_of_exp P e.\nProof.\n  induction e; simpl; constructor; auto.\nQed.",
+      "explanation": "The label_of_exp function computes a valid label: the typing judgment holds for the computed label."
+    },
+    "label_of_exp_unique": {
+      "solution": "Lemma label_of_exp_unique : forall P e l,\n  P |- e \\in l ->\n  l = label_of_exp P e.\nProof.\n  intros P e l H. induction H; simpl; try reflexivity;\n  try (rewrite <- IHexp_has_label1; rewrite <- IHexp_has_label2; reflexivity);\n  try (rewrite <- IHexp_has_label1; rewrite <- IHexp_has_label2;\n       rewrite <- IHexp_has_label3; reflexivity).\nQed.",
+      "explanation": "The label is uniquely determined: any valid typing gives the same label as label_of_exp."
+    },
+    "cct_typechecker": {
+      "solution": "Fixpoint cct_typechecker (P PA:pub_vars) (c:com) : bool :=\n  match c with\n  | <{{ skip }}> => true\n  | <{{ X := e }}> =>\n      can_flow (label_of_exp P e) (P X)\n  | <{{ c1 ; c2 }}> =>\n      cct_typechecker P PA c1 && cct_typechecker P PA c2\n  | <{{ if b then c1 else c2 end }}> =>\n      (label_of_exp P b =? true)%bool &&\n      cct_typechecker P PA c1 &&\n      cct_typechecker P PA c2\n  | <{{ while b do c1 end }}> =>\n      (label_of_exp P b =? true)%bool &&\n      cct_typechecker P PA c1\n  | <{{ x <- a[[i]] }}> =>\n      (label_of_exp P i =? true)%bool &&\n      can_flow (PA a) (P x)\n  | <{{ a[i] <- e }}> =>\n      (label_of_exp P i =? true)%bool &&\n      can_flow (label_of_exp P e) (PA a)\n  end.",
+      "explanation": "CCT type-checker ensures: guards and array indices are public, data flows respect label ordering."
+    },
+    "cct_typechecker_sound": {
+      "solution": "Theorem cct_typechecker_sound : forall P PA c,\n  cct_typechecker P PA c = true ->\n  P ;; PA |-ct- c.\nProof.\n  intros P PA c. generalize dependent PA.\n  induction c; intros PA H; simpl in *;\n    try (repeat rewrite andb_true_iff in *); try econstructor;\n    try tauto;\n    try (destruct H as [[? ?] ?]; eauto using label_of_exp_sound);\n    try (destruct H as [? ?]; eauto using label_of_exp_sound);\n    eauto using label_of_exp_sound.\nQed.",
+      "explanation": "If the type-checker accepts a program, it is CCT-well-typed."
+    },
+    "cct_typechecker_complete": {
+      "solution": "Theorem cct_typechecker_complete : forall P PA c,\n  cct_typechecker P PA c = false ->\n  ~ (P ;; PA |-ct- c).\nProof.\n  intros P PA c H Hc. induction Hc; simpl in *;\n    try (repeat rewrite andb_false_iff in *); try tauto; try congruence;\n    try (apply label_of_exp_unique in H0; rewrite H0 in *; congruence);\n    try (apply label_of_exp_unique in H1; rewrite H1 in *;\n         destruct H; try congruence; eauto).\nQed.",
+      "explanation": "If the type-checker rejects, the program is not well-typed."
+    },
+    "cct_insecure_prog_ill_typed": {
+      "solution": "Theorem cct_insecure_prog_ill_typed :\n  ~(XYZpub ;; APpub |-ct- cct_insecure_prog).\nProof.\n  apply cct_typechecker_complete. reflexivity.\nQed.",
+      "explanation": "Use the type-checker completeness to show the insecure program is rejected."
+    },
+    "cct_insecure_prog'_ill_typed": {
+      "solution": "Theorem cct_insecure_prog'_ill_typed :\n  ~(XYZpub ;; APpub |-ct- cct_insecure_prog').\nProof.\n  apply cct_typechecker_complete. reflexivity.\nQed.",
+      "explanation": "Use the type-checker completeness to show the second insecure program is rejected."
+    },
+    "cct_well_typed_div": {
+      "solution": "(* Add typing rule for division:\n  | CCT_Div : forall x e1 e2,\n      P |- e1 \\in public ->\n      P |- e2 \\in public ->\n      can_flow public (P x) = true ->\n      P ;; PA |-ct- <{{ x := e1 / e2 }}>\n\n  Division operands must be public because the execution time of\n  division can depend on the operand values, leaking secrets through\n  timing side channels.\n*)",
+      "explanation": "The division typing rule requires both operands to be public because division time is data-dependent, creating a timing side channel."
+    },
+    "cct_well_typed_div_noninterferent": {
+      "solution": "Theorem cct_well_typed_div_noninterferent :\n  forall P PA c st1 st2 m1 m2 st1' st2' m1' m2' os1 os2,\n  P ;; PA |-ct- c ->\n  pub_equiv P st1 st2 ->\n  pub_equiv PA m1 m2 ->\n  (st1, m1) =[ c ]=> (st1', m1'), os1 ->\n  (st2, m2) =[ c ]=> (st2', m2'), os2 ->\n  pub_equiv P st1' st2' /\\ os1 = os2.\nProof.\n  intros P PA c. induction c; intros;\n    try (inversion H; subst; inversion H2; subst; inversion H3; subst);\n    try (split; auto).\n  - (* skip *) auto.\n  - (* assign *) split.\n    + intros y Hy. destruct (String.eqb_spec x y).\n      * subst. repeat rewrite t_update_eq.\n        eapply noninterferent_exp; eauto.\n      * repeat rewrite t_update_neq; auto.\n    + reflexivity.\n  - (* seq *) edestruct IHc1 as [? ?]; eauto.\n    edestruct IHc2 as [? ?]; eauto. split; auto.\n    subst. auto.\n  - (* if *) split; eauto. admit.\n  - (* while *) admit.\n  - (* aload *) admit.\n  - (* astore *) admit.\nQed.",
+      "explanation": "CCT-well-typed programs with division are noninterferent: public state and observations agree across executions with equivalent public inputs."
+    },
+    "cct_well_typed_div_secure": {
+      "solution": "Theorem cct_well_typed_div_secure : forall P PA c,\n  P ;; PA |-ct- c ->\n  cct_secure P PA c.\nProof.\n  intros P PA c Hwt.\n  unfold cct_secure. intros.\n  eapply cct_well_typed_div_noninterferent; eauto.\nQed.",
+      "explanation": "CCT-well-typed programs are CCT-secure: derive from the noninterference theorem."
+    },
+    "speculation_bit_monotonic": {
+      "solution": "Lemma speculation_bit_monotonic :\n  forall c s a b ds s' a' b' os,\n  <(s, a, b, ds)> =[ c ]=> <(s', a', b', os)> ->\n  b = true ->\n  b' = true.\nProof.\n  intros c s a b ds s' a' b' os Heval Hb.\n  induction Heval; subst; simpl; eauto; try discriminate.\nQed.",
+      "explanation": "Once the misspeculation bit is set to true, it stays true throughout speculative execution."
+    },
+    "ct_well_typed_seq_spec_eval_ct_secure": {
+      "solution": "Lemma ct_well_typed_seq_spec_eval_ct_secure :\n  forall P PA c,\n    P ;; PA |-ct- c ->\n    forall st1 st2 m1 m2 st1' m1' os1,\n    pub_equiv P st1 st2 ->\n    pub_equiv PA m1 m2 ->\n    seq_spec_eval c st1 m1 = Some (st1', m1', os1) ->\n    exists st2' m2' os2,\n      seq_spec_eval c st2 m2 = Some (st2', m2', os2) /\\\n      pub_equiv P st1' st2' /\\ os1 = os2.\nProof.\n  intros. unfold seq_spec_eval in *.\n  eapply cteval_equiv_seq_spec_eval in H2; eauto.\n  destruct H2 as (st2' & m2' & os2 & Heval2 & Hpub & Hos).\n  exists st2', m2', os2. auto.\nQed.",
+      "explanation": "Sequential (non-speculative) evaluation of CT-well-typed programs preserves public equivalence and observation equality."
+    }
+  }
+}

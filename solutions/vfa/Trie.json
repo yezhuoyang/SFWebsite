@@ -1,0 +1,70 @@
+{
+  "chapter": "Trie",
+  "volume": "vfa",
+  "exercises": {
+    "succ_correct": {
+      "solution": "Proof.\n  induction p; simpl; try lia.\n  rewrite IHp. lia.\nQed.",
+      "explanation": "By induction on p. The xI case uses the IH; the xO and xH cases are direct."
+    },
+    "addc_correct": {
+      "solution": "Proof.\n  induction p; destruct q; destruct c; simpl;\n  try rewrite IHp; try rewrite succ_correct; try lia.\nQed.",
+      "explanation": "By induction on p with case analysis on q and c. Rewrite with IH and succ_correct, then lia handles arithmetic."
+    },
+    "compare_correct": {
+      "solution": "Fixpoint compare x y {struct x} :=\n  match x, y with\n  | p~1, q~1 => compare p q\n  | p~1, q~0 => match compare p q with Lt => Lt | _ => Gt end\n  | p~1, xH => Gt\n  | p~0, q~1 => match compare p q with Gt => Gt | _ => Lt end\n  | p~0, q~0 => compare p q\n  | p~0, xH => Lt\n  | xH, q~1 => Lt\n  | xH, q~0 => Lt\n  | xH, xH => Eq\n  end.\n\nTheorem compare_correct:\n forall x y,\n  match compare x y with\n  | Lt => positive2nat x < positive2nat y\n  | Eq => positive2nat x = positive2nat y\n  | Gt => positive2nat x > positive2nat y\n end.\nProof.\n  induction x; destruct y; simpl;\n  try (specialize (IHx y); destruct (compare x y); lia);\n  try (pose proof (positive2nat_pos x); lia);\n  try (pose proof (positive2nat_pos y); lia);\n  try lia.\nQed.",
+      "explanation": "Complete the compare function with all 9 cases, then prove correctness by induction on x with destruct on y, using IH and positive2nat_pos."
+    },
+    "successor_of_Z_constant_time": {
+      "solution": "(* Manual grade exercise *)",
+      "explanation": "The successor function does a carry from low-order to high-order bits, stopping at the first 0 bit. For a random number, the probability of k consecutive 1 bits at the low end is 1/2^k, so the expected number of carry operations is sum(k/2^k) = 2, which is constant."
+    },
+    "look_leaf": {
+      "solution": "Proof.\n  intros. destruct j; reflexivity.\nQed.",
+      "explanation": "By case analysis on j. In all cases (xI, xO, xH), look on a Leaf returns the default."
+    },
+    "look_ins_same": {
+      "solution": "Proof.\n  induction k; destruct t; simpl; auto.\nQed.",
+      "explanation": "By induction on k with case analysis on t. The recursive cases follow from the IH."
+    },
+    "look_ins_other": {
+      "solution": "Proof.\n  induction j; destruct k; destruct t; simpl; intros; auto;\n  try (apply IHj; intro; subst; auto; fail);\n  try (rewrite look_leaf; auto; fail);\n  try (apply IHj; congruence).\nQed.",
+      "explanation": "By induction on j with case analysis on k and t. Uses look_leaf and the IH with congruence to handle the j <> k condition."
+    },
+    "pos2nat_injective": {
+      "solution": "Proof.\n  intros.\n  rewrite <- (pos2nat2pos p).\n  rewrite <- (pos2nat2pos q).\n  rewrite H. reflexivity.\nQed.",
+      "explanation": "Use pos2nat2pos to convert back from nat to positive, then rewrite with the hypothesis."
+    },
+    "nat2pos_injective": {
+      "solution": "Proof.\n  intros.\n  rewrite <- (nat2pos2nat i).\n  rewrite <- (nat2pos2nat j).\n  rewrite H. reflexivity.\nQed.",
+      "explanation": "Use nat2pos2nat to convert back from positive to nat, then rewrite with the hypothesis."
+    },
+    "is_trie": {
+      "solution": "Definition is_trie {A: Type} (t: trie_table A) : Prop := True.",
+      "explanation": "The simplest representation invariant: all trie tables are well-formed. This suffices because the trie operations always produce valid structures."
+    },
+    "empty_is_trie": {
+      "solution": "Proof.\n  intros. exact I.\nQed.",
+      "explanation": "Since is_trie is True, this is trivial."
+    },
+    "insert_is_trie": {
+      "solution": "Proof.\n  intros. exact I.\nQed.",
+      "explanation": "Since is_trie is True, this is trivial."
+    },
+    "empty_relate": {
+      "solution": "Proof.\n  intros. unfold Abs, abstract, lookup, empty. simpl.\n  extensionality n. unfold t_empty.\n  rewrite look_leaf. reflexivity.\nQed.",
+      "explanation": "Unfold definitions, use extensionality, and apply look_leaf to show all lookups return the default."
+    },
+    "lookup_relate": {
+      "solution": "Proof.\n  intros. unfold Abs, abstract in H0.\n  rewrite <- H0. unfold lookup.\n  rewrite pos2nat2pos. reflexivity.\nQed.",
+      "explanation": "Unfold the Abs relation, use pos2nat2pos to convert between positive and nat representations."
+    },
+    "insert_relate": {
+      "solution": "Proof.\n  intros. unfold Abs, abstract in *.\n  extensionality n.\n  unfold lookup, insert, t_update.\n  bdestruct (pos2nat k =? n).\n  - subst. rewrite pos2nat2pos. simpl.\n    rewrite look_ins_same. reflexivity.\n  - rewrite <- H0. unfold lookup.\n    rewrite pos2nat2pos. simpl.\n    rewrite look_ins_other.\n    + reflexivity.\n    + intro. subst. apply H1. apply nat2pos_injective in H2.\n      rewrite nat2pos2nat in H2. auto.\n      Restart.\n  intros. unfold Abs, abstract in *.\n  extensionality n.\n  unfold lookup, insert, t_update.\n  bdestruct (pos2nat k =? n).\n  - subst. rewrite pos2nat2pos. simpl.\n    rewrite look_ins_same. reflexivity.\n  - rewrite pos2nat2pos. simpl.\n    rewrite look_ins_other.\n    + rewrite <- H0. unfold lookup. rewrite pos2nat2pos. reflexivity.\n    + intro. subst. apply H1. apply pos2nat_injective. rewrite nat2pos2nat. reflexivity.\nQed.",
+      "explanation": "Use extensionality, then case split on pos2nat k =? n. The same-key case uses look_ins_same; the different-key case uses look_ins_other with pos2nat_injective."
+    },
+    "Abs_three_ten": {
+      "solution": "Proof.\n  apply insert_relate. exact I.\n  apply insert_relate. exact I.\n  apply empty_relate.\nQed.",
+      "explanation": "Chain insert_relate twice with empty_relate, using I for the trivial is_trie proofs."
+    }
+  }
+}

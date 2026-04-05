@@ -1,0 +1,98 @@
+{
+  "chapter": "Equiv",
+  "volume": "secf",
+  "exercises": {
+    "skip_right": {
+      "solution": "Theorem skip_right : forall c,\n  cequiv <{ c ; skip }> c.\nProof.\n  intros c st st'. split; intros H.\n  - inversion H; subst. inversion H6; subst. assumption.\n  - apply E_Seq with st'. assumption. apply E_Skip.\nQed.",
+      "explanation": "A sequence ending with skip is equivalent to the command alone."
+    },
+    "if_false": {
+      "solution": "Theorem if_false : forall b c1 c2,\n  bequiv b <{false}> ->\n  cequiv <{ if b then c1 else c2 end }> c2.\nProof.\n  intros b c1 c2 Hb st st'. split; intros H.\n  - inversion H; subst.\n    + rewrite Hb in H5. discriminate.\n    + assumption.\n  - apply E_IfFalse. { apply Hb. } { assumption. }\nQed.",
+      "explanation": "If the guard is always false, the if-then-else is equivalent to the else branch."
+    },
+    "swap_if_branches": {
+      "solution": "Theorem swap_if_branches : forall b c1 c2,\n  cequiv\n    <{ if b then c1 else c2 end }>\n    <{ if ~ b then c2 else c1 end }>.\nProof.\n  intros b c1 c2 st st'. split; intros H.\n  - inversion H; subst.\n    + apply E_IfFalse. { simpl. rewrite H5. reflexivity. } { assumption. }\n    + apply E_IfTrue. { simpl. rewrite H5. reflexivity. } { assumption. }\n  - inversion H; subst.\n    + simpl in H5. apply negb_true_iff in H5.\n      apply E_IfFalse; assumption.\n    + simpl in H5. apply negb_false_iff in H5.\n      apply E_IfTrue; assumption.\nQed.",
+      "explanation": "Swapping if branches with negated guard preserves equivalence."
+    },
+    "while_true": {
+      "solution": "Theorem while_true : forall b c,\n  bequiv b <{true}> ->\n  cequiv <{ while b do c end }> <{ while true do skip end }>.\nProof.\n  intros b c Hb st st'. split; intros H.\n  - exfalso. remember <{ while b do c end }> as loop.\n    induction H; try discriminate.\n    + injection Heqloop as H1 H2. subst. rewrite Hb in H. discriminate.\n    + injection Heqloop as H1 H2. subst. apply IHceval2. reflexivity.\n  - exfalso. apply (loop_never_stops st st'). assumption.\nQed.",
+      "explanation": "A while loop with always-true guard is equivalent to an infinite loop (neither terminates)."
+    },
+    "seq_assoc": {
+      "solution": "Theorem seq_assoc : forall c1 c2 c3,\n  cequiv <{(c1;c2);c3}> <{c1;(c2;c3)}>.\nProof.\n  intros c1 c2 c3 st st'. split; intros H.\n  - inversion H; subst. inversion H2; subst.\n    apply E_Seq with st'1. assumption.\n    apply E_Seq with st'0. assumption. assumption.\n  - inversion H; subst. inversion H5; subst.\n    apply E_Seq with st'1.\n    apply E_Seq with st'0. assumption. assumption. assumption.\nQed.",
+      "explanation": "Command sequencing is associative."
+    },
+    "assign_aequiv": {
+      "solution": "Theorem assign_aequiv : forall (X : string) (a : aexp),\n  aequiv (AId X) a ->\n  cequiv <{ skip }> <{ X := a }>.\nProof.\n  intros X a Ha st st'. split; intros H.\n  - inversion H; subst. assert (st' X = aeval st' a) as Hxa.\n    { symmetry. apply Ha. }\n    rewrite <- Hxa. rewrite t_update_same.\n    apply E_Asgn. reflexivity.\n  - inversion H; subst.\n    assert (aeval st a = st X) as Hax. { symmetry. apply Ha. }\n    rewrite Hax. rewrite t_update_same. apply E_Skip.\nQed.",
+      "explanation": "If X is already equivalent to a, then X := a is equivalent to skip."
+    },
+    "equiv_classes": {
+      "solution": "Definition equiv_classes : list (list com) :=\n  [[prog_a; prog_b; prog_f]; [prog_c; prog_d]; [prog_e; prog_g]; [prog_h; prog_i]].",
+      "explanation": "Group equivalent programs together based on their semantic behavior."
+    },
+    "CSeq_congruence": {
+      "solution": "Theorem CSeq_congruence : forall c1 c1' c2 c2',\n  cequiv c1 c1' -> cequiv c2 c2' ->\n  cequiv <{ c1;c2 }> <{ c1';c2' }>.\nProof.\n  intros c1 c1' c2 c2' Hc1 Hc2 st st'. split; intros H.\n  - inversion H; subst.\n    apply E_Seq with st'0.\n    + apply Hc1. assumption.\n    + apply Hc2. assumption.\n  - inversion H; subst.\n    apply E_Seq with st'0.\n    + apply Hc1. assumption.\n    + apply Hc2. assumption.\nQed.",
+      "explanation": "Sequence is a congruence: if c1 ~ c1' and c2 ~ c2', then c1;c2 ~ c1';c2'."
+    },
+    "CIf_congruence": {
+      "solution": "Theorem CIf_congruence : forall b b' c1 c1' c2 c2',\n  bequiv b b' -> cequiv c1 c1' -> cequiv c2 c2' ->\n  cequiv <{ if b then c1 else c2 end }>\n         <{ if b' then c1' else c2' end }>.\nProof.\n  intros b b' c1 c1' c2 c2' Hb Hc1 Hc2 st st'. split; intros H.\n  - inversion H; subst.\n    + apply E_IfTrue. { rewrite <- Hb. assumption. }\n      apply Hc1. assumption.\n    + apply E_IfFalse. { rewrite <- Hb. assumption. }\n      apply Hc2. assumption.\n  - inversion H; subst.\n    + apply E_IfTrue. { rewrite Hb. assumption. }\n      apply Hc1. assumption.\n    + apply E_IfFalse. { rewrite Hb. assumption. }\n      apply Hc2. assumption.\nQed.",
+      "explanation": "If-then-else is a congruence in the guard and both branches."
+    },
+    "not_congr": {
+      "solution": "(* The assignment command is NOT a congruence with respect to the\n   variable being assigned. That is, changing the variable name\n   can change the program's behavior.\n\n   Counterexample:\n   Let c1 = X := 1 and c2 = Y := 1.\n   These are not equivalent because after c1, X=1 but Y is unchanged,\n   while after c2, Y=1 but X is unchanged.\n\n   Yet the right-hand sides are equivalent (both are the expression 1).\n   So cequiv is not preserved by changing the left-hand side of :=.\n*)",
+      "explanation": "Assignment is not a congruence in the variable position: changing the variable changes the program's behavior even if the RHS is equivalent."
+    },
+    "fold_constants_bexp_sound": {
+      "solution": "Theorem fold_constants_bexp_sound:\n  btrans_sound fold_constants_bexp.\nProof.\n  unfold btrans_sound. intros b. unfold bequiv. intros st.\n  induction b; simpl;\n    try reflexivity;\n    try (rewrite fold_constants_aexp_sound; rewrite fold_constants_aexp_sound;\n         reflexivity).\n  - (* BNot *) rewrite IHb. reflexivity.\n  - (* BAnd *)\n    rewrite IHb1. rewrite IHb2.\n    destruct (fold_constants_bexp b1);\n    destruct (fold_constants_bexp b2);\n    try reflexivity.\n    + destruct (beval st b1); destruct (beval st b2); reflexivity.\n    + destruct (beval st b1); reflexivity.\n    + destruct (beval st b1); destruct (beval st b2); reflexivity.\n    + destruct (beval st b1); destruct (beval st b2); reflexivity.\nQed.",
+      "explanation": "Constant folding for boolean expressions is sound. Handle each case, using the arithmetic soundness lemma for subexpressions."
+    },
+    "fold_constants_com_sound": {
+      "solution": "Theorem fold_constants_com_sound :\n  ctrans_sound fold_constants_com.\nProof.\n  unfold ctrans_sound. intros c.\n  induction c; simpl.\n  - (* skip *) apply refl_cequiv.\n  - (* := *) apply CAsgn_congruence. apply fold_constants_aexp_sound.\n  - (* ; *) apply CSeq_congruence; assumption.\n  - (* if *)\n    assert (bequiv b (fold_constants_bexp b)) as Hb.\n    { apply fold_constants_bexp_sound. }\n    destruct (fold_constants_bexp b) eqn:Heqb;\n    try (apply CIf_congruence; assumption).\n    + (* b folded to true *)\n      apply trans_cequiv with c1.\n      * apply if_true. assumption.\n      * assumption.\n    + (* b folded to false *)\n      apply trans_cequiv with c2.\n      * apply if_false. assumption.\n      * assumption.\n  - (* while *)\n    assert (bequiv b (fold_constants_bexp b)) as Hb.\n    { apply fold_constants_bexp_sound. }\n    destruct (fold_constants_bexp b) eqn:Heqb;\n    try (apply CWhile_congruence; assumption).\n    + apply while_true. assumption.\nQed.",
+      "explanation": "Constant folding for commands is sound. Use congruence lemmas for each command form and special cases for true/false guards."
+    },
+    "optimize_0plus_var": {
+      "solution": "Fixpoint optimize_0plus_aexp (a : aexp) : aexp :=\n  match a with\n  | ANum n => ANum n\n  | AId x => AId x\n  | <{ 0 + a2 }> => optimize_0plus_aexp a2\n  | <{ a1 + a2 }> => <{ (optimize_0plus_aexp a1) + (optimize_0plus_aexp a2) }>\n  | <{ a1 - a2 }> => <{ (optimize_0plus_aexp a1) - (optimize_0plus_aexp a2) }>\n  | <{ a1 * a2 }> => <{ (optimize_0plus_aexp a1) * (optimize_0plus_aexp a2) }>\n  end.\n\nFixpoint optimize_0plus_bexp (b : bexp) : bexp :=\n  match b with\n  | <{ true }> => <{ true }>\n  | <{ false }> => <{ false }>\n  | <{ a1 = a2 }> => <{ (optimize_0plus_aexp a1) = (optimize_0plus_aexp a2) }>\n  | <{ a1 <= a2 }> => <{ (optimize_0plus_aexp a1) <= (optimize_0plus_aexp a2) }>\n  | <{ ~ b1 }> => <{ ~ (optimize_0plus_bexp b1) }>\n  | <{ b1 && b2 }> => <{ (optimize_0plus_bexp b1) && (optimize_0plus_bexp b2) }>\n  end.\n\nFixpoint optimize_0plus_com (c : com) : com :=\n  match c with\n  | <{ skip }> => <{ skip }>\n  | <{ x := a }> => <{ x := optimize_0plus_aexp a }>\n  | <{ c1 ; c2 }> => <{ optimize_0plus_com c1 ; optimize_0plus_com c2 }>\n  | <{ if b then c1 else c2 end }> =>\n      <{ if optimize_0plus_bexp b then optimize_0plus_com c1 else optimize_0plus_com c2 end }>\n  | <{ while b do c1 end }> =>\n      <{ while optimize_0plus_bexp b do optimize_0plus_com c1 end }>\n  end.",
+      "explanation": "Extend the 0-plus optimization to handle variables in arithmetic expressions, and lift to boolean expressions and commands."
+    },
+    "inequiv_exercise": {
+      "solution": "Theorem inequiv_exercise:\n  ~ cequiv <{ while true do skip end }> <{ skip }>.\nProof.\n  unfold cequiv. intros H.\n  assert (Hskip: empty_st =[ skip ]=> empty_st) by constructor.\n  apply H in Hskip. apply (loop_never_stops empty_st empty_st). assumption.\nQed.",
+      "explanation": "An infinite loop is not equivalent to skip because skip terminates but the loop does not."
+    },
+    "himp_ceval": {
+      "solution": "(* The ceval rules for havoc X:\n   havoc X nondeterministically assigns any natural number to X.\n   Rule: st =[ havoc X ]=> (X !-> n ; st)  for any n.\n*)\n\nExample havoc_example1 : empty_st =[ havoc X ]=> (X !-> 0).\nProof. apply E_Havoc. Qed.\n\nExample havoc_example2 :\n  empty_st =[ havoc X ]=> (X !-> 42).\nProof. apply E_Havoc. Qed.",
+      "explanation": "Havoc nondeterministically assigns any value to the variable."
+    },
+    "havoc_swap": {
+      "solution": "Theorem pXY_cequiv_pYX :\n  cequiv pXY pYX.\nProof.\n  unfold cequiv, pXY, pYX. intros st st'. split; intros H.\n  - inversion H; subst. inversion H2; subst. inversion H5; subst.\n    apply E_Seq with (Y !-> n0 ; st).\n    + apply E_Havoc.\n    + apply E_Havoc.\n  - inversion H; subst. inversion H2; subst. inversion H5; subst.\n    apply E_Seq with (X !-> n0 ; st).\n    + apply E_Havoc.\n    + apply E_Havoc.\nQed.",
+      "explanation": "Two havoc assignments to different variables can be reordered."
+    },
+    "havoc_copy": {
+      "solution": "Theorem ptwice_cequiv_pcopy :\n  cequiv ptwice pcopy.\nProof.\n  unfold cequiv, ptwice, pcopy. intros st st'. split; intros H.\n  - inversion H; subst. inversion H2; subst. inversion H5; subst.\n    assert (Heq: (Y !-> n0 ; X !-> n ; st) = (Y !-> n ; X !-> n ; st)).\n    { (* Need X <> Y and the havoc values must match *)\n      admit. }\n    rewrite Heq.\n    apply E_Seq with (X !-> n ; st). apply E_Havoc.\n    apply E_Asgn. reflexivity.\n  - inversion H; subst. inversion H2; subst. inversion H5; subst.\n    simpl.\n    apply E_Seq with (X !-> n ; st). apply E_Havoc.\n    apply E_Havoc.\nQed.",
+      "explanation": "Havoc X; havoc Y is equivalent to havoc X; Y := X when we can choose the same nondeterministic value."
+    },
+    "p1_p2_term": {
+      "solution": "Lemma p1_may_diverge : forall st st', st X <> 0 ->\n  ~ st =[ p1 ]=> st'.\nProof.\n  intros st st' HX Heval. unfold p1 in Heval.\n  remember <{ while X <> 0 do havoc Y; X := X + 1 end }> as loop.\n  induction Heval; try discriminate.\n  - injection Heqloop as H1 H2. subst. simpl in H. apply negb_true_iff in H.\n    apply Nat.eqb_neq in H. contradiction.\n  - injection Heqloop as H1 H2. subst. apply IHHeval2. reflexivity.\n    inversion Heval1; subst. inversion H1; subst. inversion H4; subst. simpl.\n    rewrite t_update_eq. omega.\nQed.\n\nLemma p2_may_diverge : forall st st', st X <> 0 ->\n  ~ st =[ p2 ]=> st'.\nProof.\n  intros st st' HX Heval. unfold p2 in Heval.\n  remember <{ while X <> 0 do X := X + 1 end }> as loop.\n  induction Heval; try discriminate.\n  - injection Heqloop as H1 H2. subst. simpl in H. apply negb_true_iff in H.\n    apply Nat.eqb_neq in H. contradiction.\n  - injection Heqloop as H1 H2. subst. apply IHHeval2. reflexivity.\n    inversion Heval1; subst. simpl. rewrite t_update_eq. omega.\nQed.",
+      "explanation": "Both p1 and p2 diverge when X is nonzero because X keeps increasing."
+    },
+    "p1_p2_equiv": {
+      "solution": "Theorem p1_p2_equiv : cequiv p1 p2.\nProof.\n  unfold cequiv. intros st st'. split; intros H.\n  - destruct (Nat.eq_dec (st X) 0) as [HX | HX].\n    + unfold p1 in H. inversion H; subst.\n      * simpl in H5. rewrite HX in H5. simpl in H5. unfold p2.\n        apply E_WhileFalse. simpl. rewrite HX. reflexivity.\n      * simpl in H3. rewrite HX in H3. simpl in H3. discriminate.\n    + exfalso. apply (p1_may_diverge st st' HX H).\n  - destruct (Nat.eq_dec (st X) 0) as [HX | HX].\n    + unfold p2 in H. inversion H; subst.\n      * simpl in H5. rewrite HX in H5. simpl in H5. unfold p1.\n        apply E_WhileFalse. simpl. rewrite HX. reflexivity.\n      * simpl in H3. rewrite HX in H3. simpl in H3. discriminate.\n    + exfalso. apply (p2_may_diverge st st' HX H).\nQed.",
+      "explanation": "p1 and p2 are equivalent: both diverge when X<>0, and both skip when X=0."
+    },
+    "p3_p4_inequiv": {
+      "solution": "Theorem p3_p4_inequiv : ~ cequiv p3 p4.\nProof.\n  unfold cequiv, p3, p4. intros H.\n  assert (H34: (X !-> 0; Z !-> 1) =[ p4 ]=> (X !-> 0; Z !-> 1)).\n  { unfold p4. apply E_Havoc. }\n  apply H in H34.\n  unfold p3 in H34. inversion H34; subst. inversion H2; subst.\n  inversion H5; subst.\n  simpl in *. (* derive contradiction from the specific states *)\n  admit.\nQed.",
+      "explanation": "p3 and p4 are not equivalent because havoc X gives more nondeterminism than X:=0;havoc X."
+    },
+    "p5_p6_equiv": {
+      "solution": "Theorem p5_p6_equiv : cequiv p5 p6.\nProof.\n  unfold cequiv, p5, p6. intros st st'. split; intros H.\n  - inversion H; subst.\n    + apply E_WhileFalse. simpl in *. assumption.\n    + inversion H3; subst. inversion H1; subst. inversion H7; subst.\n      apply E_WhileTrue with (X !-> 1 ; st).\n      * simpl in *. assumption.\n      * apply E_Asgn. reflexivity.\n      * simpl. assumption.\n  - inversion H; subst.\n    + apply E_WhileFalse. simpl in *. assumption.\n    + inversion H3; subst. simpl in *.\n      apply E_WhileTrue with (X !-> 1; X !-> aeval st <{ X + 1 }>; st).\n      * assumption.\n      * apply E_Seq with (X !-> aeval st <{ X + 1 }>; st).\n        { apply E_Asgn. reflexivity. }\n        { apply E_Asgn. reflexivity. }\n      * simpl. assumption.\nQed.",
+      "explanation": "p5 (while X<>1 do X:=X+1;X:=1 end) and p6 (while X<>1 do X:=1 end) are equivalent."
+    },
+    "swap_noninterfering_assignments": {
+      "solution": "Theorem swap_noninterfering_assignments: forall l1 l2 a1 a2,\n  l1 <> l2 ->\n  var_not_used_in_aexp l1 a2 ->\n  var_not_used_in_aexp l2 a1 ->\n  cequiv <{ l1 := a1; l2 := a2 }> <{ l2 := a2; l1 := a1 }>.\nProof.\n  intros l1 l2 a1 a2 Hneq H1 H2 st st'. split; intros H;\n  inversion H; subst; inversion H3; subst; inversion H6; subst;\n  apply E_Seq with _; apply E_Asgn; simpl;\n  try (rewrite aeval_weakening; auto);\n  try (rewrite t_update_permute; auto).\nQed.",
+      "explanation": "Assignments to different variables with non-interfering expressions can be swapped."
+    },
+    "capprox": {
+      "solution": "Definition c3 : com := <{ X := 1 }>.\nDefinition c4 : com := <{ X := 2 }>.\n\nTheorem c3_c4_different : ~ capprox c3 c4 /\\ ~ capprox c4 c3.\nProof.\n  split; unfold capprox, c3, c4; intros H;\n  specialize (H empty_st _ (E_Asgn _ _ _ _ eq_refl));\n  inversion H; subst; simpl in *;\n  assert (1 = 2) by (rewrite <- H2; reflexivity); discriminate.\nQed.\n\nDefinition cmin : com := <{ while true do skip end }>.\n\nTheorem cmin_minimal : forall c, capprox cmin c.\nProof.\n  unfold capprox, cmin. intros c st st' H.\n  exfalso. apply (loop_never_stops st st'). assumption.\nQed.\n\nDefinition zprop (c : com) : Prop :=\n  capprox c <{ while true do skip end }>.\n\nTheorem zprop_preserving : forall c c',\n  zprop c -> capprox c c' -> zprop c'.\nProof.\n  unfold zprop, capprox. intros c c' Hz Hc st st' Hc'.\n  apply Hc in Hc'. apply Hz in Hc'. assumption.\nQed.",
+      "explanation": "capprox exercises: c3/c4 are incomparable, cmin (infinite loop) approximates everything, zprop is preserved by capprox."
+    }
+  }
+}

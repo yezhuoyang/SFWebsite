@@ -1,0 +1,46 @@
+{
+  "chapter": "WPgen",
+  "volume": "slf",
+  "exercises": {
+    "wpgen_conseq": {
+      "solution": "Lemma wpgen_conseq : forall t E Q1 Q2,\n  Q1 ===> Q2 ->\n  wpgen E t Q1 ==> wpgen E t Q2.\nProof using.\n  introv M. applys mkstruct_conseq M.\nQed.",
+      "explanation": "Consequence for wpgen follows directly from mkstruct_conseq, since wpgen wraps everything in mkstruct."
+    },
+    "wpgen_frame": {
+      "solution": "Lemma wpgen_frame : forall t E H Q,\n  wpgen E t Q \\* H ==> wpgen E t (Q \\*+ H).\nProof using.\n  intros. applys mkstruct_frame.\nQed.",
+      "explanation": "Frame for wpgen follows directly from mkstruct_frame."
+    },
+    "triple_succ_using_incr_with_xlemmas": {
+      "solution": "Lemma triple_succ_using_incr_with_xlemmas : forall (n:int),\n  triple (succ_using_incr n)\n    \\[]\n    (fun r => \\[r = n + 1]).\nProof using.\n  intros. applys triple_app_fun_of_wpgen. simpl.\n  applys xstruct_lemma. applys xlet_lemma.\n  { applys xstruct_lemma. applys xapp_lemma. applys triple_ref. xsimpl. xsimpl. }\n  intros p. simpl. applys xstruct_lemma. applys xseq_lemma.\n  { applys xstruct_lemma. applys xapp_lemma. applys triple_incr. xsimpl. xsimpl. }\n  applys xstruct_lemma. applys xapp_lemma. applys triple_get. xsimpl.\n  xsimpl. auto.\nQed.",
+      "explanation": "Prove succ_using_incr using the x-lemmas (xstruct_lemma, xlet_lemma, xseq_lemma, xapp_lemma) instead of x-tactics."
+    },
+    "triple_succ_using_incr_with_xtactics": {
+      "solution": "Lemma triple_succ_using_incr_with_xtactics : forall (n:int),\n  triple (succ_using_incr n)\n    \\[]\n    (fun r => \\[r = n + 1]).\nProof using.\n  xwp. xapp. intros p. xapp. xapp. xsimpl. auto.\nQed.",
+      "explanation": "Same proof but using x-tactics (xwp, xapp, xsimpl) which automate the application of x-lemmas."
+    },
+    "triple_succtwice_using_xletval": {
+      "solution": "Lemma triple_succtwice_using_xletval : forall (n:int),\n  triple (succtwice n)\n    \\[]\n    (fun r => \\[r = n + 2]).\nProof using.\n  xwp. xletval. intros g Hg. xapp. xsimpl. math.\nQed.",
+      "explanation": "Use xletval to handle the local function binding, then apply the function."
+    },
+    "triple_succtwice_using_xfun": {
+      "solution": "Lemma triple_succtwice_using_xfun : forall (n:int),\n  triple (succtwice n)\n    \\[]\n    (fun r => \\[r = n + 2]).\nProof using.\n  xwp. xfun (fun g => forall m, triple (g m) \\[] (fun r => \\[r = m + 1])).\n  { intros. xwp. xapp. xsimpl. math. }\n  intros Hg. xapp. xsimpl. math.\nQed.",
+      "explanation": "Use xfun to specify the local function with its spec, prove the spec, then use it."
+    },
+    "wpgen_sound_seq": {
+      "solution": "Lemma wpgen_seq_sound : forall t1' t2' F1 F2,\n  formula_sound t1' F1 ->\n  formula_sound t2' F2 ->\n  formula_sound (trm_seq t1' t2') (wpgen_seq F1 F2).\nProof using.\n  introv S1 S2. unfolds formula_sound. intros Q.\n  unfolds wpgen_seq. applys himpl_trans.\n  2:{ applys wp_seq. }\n  { applys himpl_trans.\n    { applys S1. }\n    { applys wp_conseq. intros v. applys S2. } }\nQed.",
+      "explanation": "Soundness for sequence: chain the soundness of F1 and F2 through the wp_seq rule."
+    },
+    "wpgen_val_sound": {
+      "solution": "Lemma wpgen_val_sound : forall v,\n  formula_sound (trm_val v) (wpgen_val v).\nProof using. intros. intros Q. unfolds wpgen_val. applys wp_val. Qed.",
+      "explanation": "Values are trivially sound: wpgen_val v Q = Q v which entails wp (trm_val v) Q."
+    },
+    "wpgen_let_sound": {
+      "solution": "Lemma wpgen_let_sound : forall F1 F2of x t1 t2,\n  formula_sound t1 F1 ->\n  (forall v, formula_sound (subst x v t2) (F2of v)) ->\n  formula_sound (trm_let x t1 t2) (wpgen_let F1 F2of).\nProof using.\n  introv S1 S2. intros Q. unfolds wpgen_let. applys himpl_trans_r wp_let.\n  applys himpl_trans S1. applys wp_conseq. intros v. applys S2.\nQed.",
+      "explanation": "Soundness for let: compose soundness of the bound expression and the body after substitution."
+    },
+    "mkstruct_idempotent": {
+      "solution": "Lemma mkstruct_idempotent : forall F,\n  mkstruct (mkstruct F) = mkstruct F.\nProof using.\n  intros. apply functional_extensionality. intros Q.\n  apply himpl_antisym.\n  { unfold mkstruct. xpull. intros Q'. xchange (mkstruct_erase F Q').\n    intros H M. xsimpl (Q' \\*+ H) . auto. xsimpl. }\n  { applys mkstruct_erase. }\nQed.",
+      "explanation": "mkstruct is idempotent: applying it twice is the same as applying it once, since it already includes consequence and frame."
+    }
+  }
+}

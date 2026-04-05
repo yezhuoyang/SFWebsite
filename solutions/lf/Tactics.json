@@ -1,0 +1,74 @@
+{
+  "chapter": "Tactics",
+  "volume": "lf",
+  "exercises": {
+    "silly_ex": {
+      "solution": "Theorem silly_ex : forall p,\n  (forall n, even n = true -> even (S n) = false) ->\n  (forall n, even n = false -> odd n = true) ->\n  even p = true ->\n  odd (S p) = true.\nProof.\n  intros p H1 H2 H3.\n  apply H2. apply H1. apply H3.\nQed.",
+      "explanation": "Chain apply: from even p = true, apply H1 to get even (S p) = false, then apply H2 to get odd (S p) = true."
+    },
+    "apply_exercise1": {
+      "solution": "Theorem rev_exercise1 : forall (l l' : list nat),\n  l = rev l' ->\n  l' = rev l.\nProof.\n  intros l l' H.\n  rewrite H. symmetry. apply rev_involutive.\nQed.",
+      "explanation": "Rewrite l to rev l', then use symmetry and rev_involutive to show l' = rev (rev l') = l'."
+    },
+    "apply_rewrite": {
+      "solution": "(* apply is used when the goal exactly matches the conclusion of a hypothesis or lemma. rewrite is used to replace one side of an equality in the goal with the other side. Both can be used when the goal is an equality that matches a hypothesis exactly - apply finishes the proof directly, while rewrite would transform one side and then require reflexivity. *)",
+      "explanation": "apply matches the whole goal against a hypothesis; rewrite substitutes using an equality. apply finishes proofs; rewrite transforms goals."
+    },
+    "trans_eq_exercise": {
+      "solution": "Example trans_eq_exercise : forall (n m o p : nat),\n     m = (minustwo o) ->\n     (n + p) = m ->\n     (n + p) = (minustwo o).\nProof.\n  intros n m o p H1 H2.\n  apply trans_eq with (y := m).\n  apply H2. apply H1.\nQed.",
+      "explanation": "Use transitivity through m: first show (n+p) = m (by H2), then m = minustwo o (by H1)."
+    },
+    "injection_ex3": {
+      "solution": "Example injection_ex3 : forall (X : Type) (x y z : X) (l j : list X),\n  x :: y :: l = z :: j ->\n  j = z :: l ->\n  x = y.\nProof.\n  intros X x y z l j H1 H2.\n  injection H1 as H3 H4.\n  rewrite H3. rewrite H2 in H4. injection H4 as H5.\n  symmetry. apply H5.\nQed.",
+      "explanation": "From H1, injection gives x=z and y::l=j. Rewrite j in the second using H2 to get y::l=z::l, then injection gives y=z. Combined with x=z, we get x=y."
+    },
+    "discriminate_ex3": {
+      "solution": "Example discriminate_ex3 :\n  forall (X : Type) (x y z : X) (l j : list X),\n    x :: y :: l = [] ->\n    x = z.\nProof.\n  intros X x y z l j H.\n  discriminate H.\nQed.",
+      "explanation": "The hypothesis states a cons equals nil, which is impossible. discriminate solves the goal immediately from the contradictory hypothesis."
+    },
+    "eqb_true": {
+      "solution": "Theorem eqb_true : forall n m,\n  n =? m = true -> n = m.\nProof.\n  intros n. induction n as [| n' IHn'].\n  - intros m H. destruct m as [| m'].\n    + reflexivity.\n    + discriminate H.\n  - intros m H. destruct m as [| m'].\n    + discriminate H.\n    + simpl in H. apply IHn' in H. rewrite H. reflexivity.\nQed.",
+      "explanation": "By induction on n with m generalized. Base: n=0, destruct m. Step: n=S n', destruct m; use IH on the simplified hypothesis."
+    },
+    "plus_n_n_injective": {
+      "solution": "Theorem plus_n_n_injective : forall n m,\n  n + n = m + m ->\n  n = m.\nProof.\n  intros n. induction n as [| n' IHn'].\n  - intros m H. destruct m as [| m'].\n    + reflexivity.\n    + discriminate H.\n  - intros m H. destruct m as [| m'].\n    + discriminate H.\n    + f_equal. apply IHn'. simpl in H. injection H as H1.\n      rewrite <- plus_n_Sm in H1. rewrite <- plus_n_Sm in H1.\n      injection H1 as H2. apply H2.\nQed.",
+      "explanation": "Induction on n with m general. In the S case, simplify S n' + S n' = S m' + S m' using plus_n_Sm to extract n' + n' = m' + m' for the IH."
+    },
+    "nth_error_always_none": {
+      "solution": "Lemma nth_error_always_none: forall (l : list nat),\n  (forall i, nth_error l i = None) ->\n  l = [].\nProof.\n  intros l H.\n  specialize H with (i := 0).\n  destruct l as [| h t].\n  - reflexivity.\n  - discriminate H.\nQed.",
+      "explanation": "Specialize the hypothesis with i=0. For a non-empty list, nth_error (h::t) 0 = Some h, contradicting None."
+    },
+    "gen_dep_practice": {
+      "solution": "Theorem nth_error_after_last: forall (n : nat) (X : Type) (l : list X),\n  length l = n ->\n  nth_error l n = None.\nProof.\n  intros n X l. generalize dependent n.\n  induction l as [| h t IHt].\n  - intros n H. reflexivity.\n  - intros n H. simpl in H. rewrite <- H. simpl.\n    apply IHt. reflexivity.\nQed.",
+      "explanation": "Generalize n, then induct on l. Empty list is trivial. For h::t, length gives n = S(length t), so nth_error at S(length t) reduces to nth_error t (length t), handled by IH."
+    },
+    "combine_split": {
+      "solution": "Theorem combine_split : forall X Y (l : list (X * Y)) l1 l2,\n  split l = (l1, l2) ->\n  combine l1 l2 = l.\nProof.\n  intros X Y l. induction l as [| [x y] t IHt].\n  - intros l1 l2 H. simpl in H. injection H as H1 H2.\n    rewrite <- H1. rewrite <- H2. reflexivity.\n  - intros l1 l2 H. simpl in H.\n    destruct (split t) as [lx ly] eqn:Hsplit.\n    injection H as H1 H2.\n    rewrite <- H1. rewrite <- H2. simpl.\n    rewrite (IHt lx ly). reflexivity. reflexivity.\nQed.",
+      "explanation": "Induction on l (destructing pairs). In the cons case, destruct split t, inject to get l1 and l2 components, then apply IH."
+    },
+    "destruct_eqn_practice": {
+      "solution": "Theorem bool_fn_applied_thrice :\n  forall (f : bool -> bool) (b : bool),\n  f (f (f b)) = f b.\nProof.\n  intros f b.\n  destruct b eqn:Eb.\n  - destruct (f true) eqn:Eft.\n    + rewrite Eft. apply Eft.\n    + destruct (f false) eqn:Eff.\n      * apply Eft.\n      * apply Eff.\n  - destruct (f false) eqn:Eff.\n    + destruct (f true) eqn:Eft.\n      * apply Eft.\n      * apply Eff.\n    + rewrite Eff. apply Eff.\nQed.",
+      "explanation": "Case analysis on b, then on f true and f false. In each case, the equation rewrites let us simplify f(f(f b)) to f b."
+    },
+    "eqb_sym": {
+      "solution": "Theorem eqb_sym : forall (n m : nat),\n  (n =? m) = (m =? n).\nProof.\n  intros n. induction n as [| n' IHn'].\n  - intros m. destruct m as [| m'].\n    + reflexivity.\n    + reflexivity.\n  - intros m. destruct m as [| m'].\n    + reflexivity.\n    + simpl. apply IHn'.\nQed.",
+      "explanation": "By induction on n with m general. Base cases are trivial. In the S case, S n' =? S m' simplifies to n' =? m', and symmetry follows from IH."
+    },
+    "eqb_trans": {
+      "solution": "Theorem eqb_trans : forall n m p,\n  n =? m = true ->\n  m =? p = true ->\n  n =? p = true.\nProof.\n  intros n m p H1 H2.\n  apply eqb_true in H1. apply eqb_true in H2.\n  rewrite H1. rewrite H2. rewrite eqb_refl. reflexivity.\nQed.",
+      "explanation": "Use eqb_true to convert both hypotheses to equalities, rewrite to make n=p, then eqb_refl shows n =? n = true."
+    },
+    "split_combine": {
+      "solution": "Definition split_combine_statement : Prop :=\n  forall X Y (l1 : list X) (l2 : list Y),\n    length l1 = length l2 ->\n    split (combine l1 l2) = (l1, l2).\n\nTheorem split_combine : split_combine_statement.\nProof.\n  unfold split_combine_statement.\n  intros X Y l1. induction l1 as [| h1 t1 IHt1].\n  - intros l2 H. destruct l2 as [| h2 t2].\n    + reflexivity.\n    + discriminate H.\n  - intros l2 H. destruct l2 as [| h2 t2].\n    + discriminate H.\n    + simpl. rewrite (IHt1 t2).\n      * reflexivity.\n      * simpl in H. injection H as H1. apply H1.\nQed.",
+      "explanation": "The statement requires equal-length lists. Induction on l1, destruct l2 in each case. The IH applies with the tail lengths equal."
+    },
+    "filter_exercise": {
+      "solution": "Theorem filter_exercise : forall (X : Type) (test : X -> bool)\n                                 (x : X) (l lf : list X),\n  filter test l = x :: lf ->\n  test x = true.\nProof.\n  intros X test x l. induction l as [| h t IHt].\n  - intros lf H. discriminate H.\n  - intros lf H. simpl in H.\n    destruct (test h) eqn:Eth.\n    + injection H as H1 H2. rewrite <- H1. apply Eth.\n    + apply (IHt lf H).\nQed.",
+      "explanation": "Induction on l. Empty list contradicts non-empty filter result. For h::t, if test h is true then h=x and test x = true; if false, apply IH."
+    },
+    "forall_exists_challenge": {
+      "solution": "Fixpoint forallb {X : Type} (test : X -> bool) (l : list X) : bool :=\n  match l with\n  | [] => true\n  | h :: t => andb (test h) (forallb test t)\n  end.\n\nExample test_forallb_1 : forallb odd [1;3;5;7;9] = true.\nProof. reflexivity. Qed.\n\nExample test_forallb_2 : forallb negb [false;false] = true.\nProof. reflexivity. Qed.\n\nExample test_forallb_3 : forallb even [0;2;4;5] = false.\nProof. reflexivity. Qed.\n\nExample test_forallb_4 : forallb (eqb 5) [] = true.\nProof. reflexivity. Qed.\n\nFixpoint existsb {X : Type} (test : X -> bool) (l : list X) : bool :=\n  match l with\n  | [] => false\n  | h :: t => orb (test h) (existsb test t)\n  end.\n\nExample test_existsb_1 : existsb (eqb 5) [0;2;3;6] = false.\nProof. reflexivity. Qed.\n\nExample test_existsb_2 : existsb (andb true) [true;true;false] = true.\nProof. reflexivity. Qed.\n\nExample test_existsb_3 : existsb odd [1;0;0;0;0;3] = true.\nProof. reflexivity. Qed.\n\nExample test_existsb_4 : existsb even [] = false.\nProof. reflexivity. Qed.\n\nDefinition existsb' {X : Type} (test : X -> bool) (l : list X) : bool :=\n  negb (forallb (fun x => negb (test x)) l).\n\nTheorem existsb_existsb' : forall (X : Type) (test : X -> bool) (l : list X),\n  existsb test l = existsb' test l.\nProof.\n  intros X test l. induction l as [| h t IHt].\n  - reflexivity.\n  - simpl. unfold existsb'. simpl.\n    destruct (test h) eqn:Eth.\n    + reflexivity.\n    + simpl. fold (existsb' test t). rewrite <- IHt. reflexivity.\nQed.",
+      "explanation": "forallb checks all elements satisfy test (conjunction). existsb checks if any element satisfies test (disjunction). existsb' uses De Morgan's law: exists = not (forall (not test)). The equivalence proof proceeds by induction on l."
+    }
+  }
+}

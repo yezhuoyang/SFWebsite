@@ -2,8 +2,15 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getChapters, getVolumes } from '../api/client';
 import type { Chapter, Volume } from '../types';
+import { getChapterIllustration } from '../components/ChapterIllustrations';
 
-const STAR_COLORS = ['', 'text-yellow-500', 'text-yellow-500', 'text-orange-500', 'text-red-500', 'text-red-600'];
+const VOLUME_GRADIENTS: Record<string, string> = {
+  lf: 'from-blue-500 to-indigo-600',
+  plf: 'from-violet-500 to-purple-600',
+  vfa: 'from-emerald-500 to-green-600',
+  slf: 'from-amber-500 to-orange-600',
+  secf: 'from-rose-500 to-red-600',
+};
 
 export default function VolumePage() {
   const { volumeId } = useParams<{ volumeId: string }>();
@@ -16,25 +23,32 @@ export default function VolumePage() {
     getChapters(volumeId).then(setChapters).catch(console.error);
   }, [volumeId]);
 
-  if (!volumeId || !volume) return <div className="p-8 text-gray-500">Loading...</div>;
+  if (!volumeId || !volume) return <div className="p-10 text-gray-400">Loading...</div>;
 
   const overallPct = volume.exercise_count > 0
     ? Math.round((volume.completed_count / volume.exercise_count) * 100)
     : 0;
+  const gradient = VOLUME_GRADIENTS[volumeId] || 'from-gray-500 to-gray-600';
 
   return (
-    <div className="p-8">
-      <Link to="/" className="text-sm text-gray-500 hover:text-gray-400 mb-4 inline-block">
-        &larr; All Volumes
+    <div className="p-10 max-w-4xl mx-auto">
+      <Link to="/" className="text-sm text-gray-400 hover:text-gray-600 mb-6 inline-flex items-center gap-1 font-medium transition-colors">
+        <span>&larr;</span> All Volumes
       </Link>
 
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-100">{volume.name}</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {volume.completed_count}/{volume.exercise_count} exercises completed ({overallPct}%)
+      {/* Header */}
+      <div className="mb-8 mt-2">
+        <div className="flex items-center gap-3 mb-3">
+          <span className={`text-xs font-bold font-mono px-2.5 py-1 rounded-lg bg-gradient-to-r ${gradient} text-white shadow-sm`}>
+            {volume.namespace}
+          </span>
+        </div>
+        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">{volume.name}</h1>
+        <p className="text-sm text-gray-500 mt-2">
+          {volume.completed_count} of {volume.exercise_count} exercises completed ({overallPct}%)
         </p>
-        <div className="w-full max-w-md bg-gray-800 rounded-full h-2 mt-2">
-          <div className="bg-indigo-500 h-2 rounded-full" style={{ width: `${overallPct}%` }} />
+        <div className="w-full max-w-sm bg-gray-100 rounded-full h-2.5 mt-3">
+          <div className={`bg-gradient-to-r ${gradient} h-2.5 rounded-full transition-all`} style={{ width: `${overallPct}%` }} />
         </div>
       </div>
 
@@ -45,39 +59,64 @@ export default function VolumePage() {
             ? Math.round((ch.completed_count / ch.exercise_count) * 100)
             : 0;
 
+          const ChIllust = getChapterIllustration(ch.name);
           return (
             <Link
               key={ch.id}
               to={`/volume/${volumeId}/chapter/${ch.name}`}
-              className="flex items-center gap-4 bg-[#16171f] rounded-lg border border-gray-800 p-4 hover:border-gray-700 transition-colors"
+              className="group flex items-center gap-4 bg-white rounded-xl border border-gray-100 p-4 hover:shadow-sm hover:border-gray-200 transition-all"
             >
-              <span className="text-sm text-gray-500 w-6 text-right">{i + 1}</span>
+              <span className="text-sm text-gray-300 w-7 text-right font-mono font-medium shrink-0">{i + 1}</span>
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-gray-100">{ch.name}</h3>
+                  <h3 className="text-sm font-bold text-gray-800 group-hover:text-indigo-700 transition-colors">{ch.name}</h3>
                   {ch.exercise_count === 0 && (
-                    <span className="text-xs text-gray-500">(no exercises)</span>
+                    <span className="text-[11px] text-gray-300 font-medium">(reading only)</span>
                   )}
                 </div>
-                {ch.exercise_count > 0 && (
-                  <div className="flex items-center gap-2 mt-1">
-                    <div className="flex-1 max-w-xs bg-gray-800 rounded-full h-1.5">
-                      <div
-                        className="bg-indigo-500 h-1.5 rounded-full"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-gray-500">
-                      {ch.completed_count}/{ch.exercise_count}
-                    </span>
-                  </div>
+                {ch.summary && (
+                  <p className="text-xs text-gray-400 mt-0.5 line-clamp-2 leading-relaxed">{ch.summary}</p>
                 )}
+                <div className="flex items-center gap-3 mt-1.5 text-[11px] text-gray-400">
+                  {ch.exercise_count > 0 && (
+                    <>
+                      <span className="font-medium">{ch.exercise_count} exercises</span>
+                      <span>&middot;</span>
+                    </>
+                  )}
+                  {ch.line_count > 0 && (
+                    <span>{ch.line_count.toLocaleString()} lines</span>
+                  )}
+                  {ch.exercise_count > 0 && (
+                    <>
+                      <span>&middot;</span>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-20 bg-gray-100 rounded-full h-1.5">
+                          <div
+                            className={`bg-gradient-to-r ${gradient} h-1.5 rounded-full transition-all`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className="font-mono">{ch.completed_count}/{ch.exercise_count}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
 
-              <span className="text-xs text-gray-500">
+              {/* Chapter illustration */}
+              {ChIllust && (
+                <div className="shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
+                  <ChIllust />
+                </div>
+              )}
+
+              <span className="text-[11px] text-gray-300 font-medium shrink-0">
                 {ch.max_points_standard > 0 && `${ch.max_points_standard} pts`}
               </span>
+
+              <span className="text-gray-300 group-hover:text-gray-400 transition-colors">&rsaquo;</span>
             </Link>
           );
         })}

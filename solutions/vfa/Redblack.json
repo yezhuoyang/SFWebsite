@@ -1,0 +1,62 @@
+{
+  "chapter": "Redblack",
+  "volume": "vfa",
+  "exercises": {
+    "balanceP": {
+      "solution": "Proof.\n  intros. unfold balance.\n  repeat\n    match goal with\n    | H: ForallT _ (T _ _ _ _ _) |- _ => destruct H as [? [? ?]]\n    | |- ForallT _ (T _ _ _ _ _) => repeat split\n    | |- ForallT _ (match ?c with Red => _ | Black => _ end) => destruct c\n    | |- ForallT _ (match ?t with E => _ | T _ _ _ _ _ => _ end) => destruct t\n    end;\n    auto.\nQed.",
+      "explanation": "Uses the same automated case analysis technique as balance_BST, destructing colors and trees, then auto."
+    },
+    "insP": {
+      "solution": "Proof.\n  intros V P t. induction t; intros.\n  - simpl. repeat split; auto.\n  - simpl in *. destruct H as [Hkv [Hl Hr]].\n    bdestruct (ltb k k0).\n    + apply balanceP; auto.\n    + bdestruct (ltb k0 k).\n      * apply balanceP; auto.\n      * simpl. repeat split; auto.\nQed.",
+      "explanation": "By induction on t. Use balanceP for the recursive cases and bdestruct for the comparisons."
+    },
+    "ins_BST": {
+      "solution": "Proof.\n  intros V t k v Hbst.\n  induction Hbst.\n  - simpl. constructor; auto; simpl; auto.\n  - simpl. bdestruct (ltb k k0).\n    + apply balance_BST; auto.\n      apply insP; auto. simpl. lia.\n    + bdestruct (ltb k0 k).\n      * apply balance_BST; auto.\n        apply insP; auto. simpl. lia.\n      * constructor; auto.\n        -- eapply ForallT_imp; eauto. intros. simpl in *.\n           assert (Abs k = Abs k0) by lia. rewrite H5. assumption.\n        -- eapply ForallT_imp; eauto. intros. simpl in *.\n           assert (Abs k = Abs k0) by lia. rewrite H5. assumption.\nQed.",
+      "explanation": "By induction on BST evidence. Uses balance_BST and insP. The equal case requires ForallT_imp to update the key."
+    },
+    "insert_BST": {
+      "solution": "Proof.\n  intros V t v k Hbst.\n  unfold insert.\n  destruct (ins k v t) eqn:E.\n  - simpl. constructor.\n  - simpl. assert (BST (ins k v t)) by (apply ins_BST; auto).\n    rewrite E in H. inv H. constructor; auto.\nQed.",
+      "explanation": "Unfold insert as make_black (ins k v t). Show ins preserves BST, then make_black preserves BST by changing root color."
+    },
+    "balance_lookup": {
+      "solution": "Proof.\n  intros. unfold balance.\n  repeat\n    match goal with\n    | H: ForallT _ (T _ _ _ _ _) |- _ => destruct H as [? [? ?]]\n    | H: BST (T _ _ _ _ _) |- _ => inv H\n    | |- context [match ?c with Red => _ | Black => _ end] => destruct c\n    | |- context [match ?t with E => _ | T _ _ _ _ _ => _ end] => destruct t\n    end;\n    simpl; repeat (bdestruct_guard; try lia; auto).\nQed.",
+      "explanation": "Automated case analysis on colors and trees, then bdestruct_guard and lia to handle all comparison cases."
+    },
+    "lookup_ins_eq": {
+      "solution": "Proof.\n  intros V d t k v Hbst.\n  induction Hbst.\n  - simpl. bdestruct (ltb k k). lia. bdestruct (ltb k k). lia. reflexivity.\n  - simpl. bdestruct (ltb k k0).\n    + rewrite balance_lookup; auto.\n      * bdestruct (Abs k <? Abs k0). apply IHHbst1. lia.\n      * apply ins_BST; auto.\n      * apply insP; auto. simpl. lia.\n    + bdestruct (ltb k0 k).\n      * rewrite balance_lookup; auto.\n        -- bdestruct (Abs k <? Abs k0). lia.\n           bdestruct (Abs k >? Abs k0). apply IHHbst2. lia.\n        -- apply ins_BST; auto.\n        -- apply insP; auto. simpl. lia.\n      * simpl. bdestruct (ltb k k). lia. bdestruct (ltb k k). lia. reflexivity.\nQed.",
+      "explanation": "By induction on BST evidence, using balance_lookup and insP to handle each case."
+    },
+    "lookup_ins_neq": {
+      "solution": "Proof.\n  intros V d t k k' v Hbst Hneq.\n  induction Hbst.\n  - simpl. bdestruct (ltb k k'); bdestruct (ltb k' k);\n    simpl; bdestruct (ltb k' k'); try lia; auto.\n    assert (Abs k = Abs k') by lia. apply Abs_inj in H. contradiction.\n  - simpl. bdestruct (ltb k k0).\n    + rewrite balance_lookup; auto.\n      * bdestruct (Abs k' <? Abs k0).\n        -- apply IHHbst1.\n        -- bdestruct (Abs k' >? Abs k0); simpl;\n           bdestruct (ltb k' k0); try lia; auto.\n      * apply ins_BST; auto.\n      * apply insP; auto. simpl. lia.\n    + bdestruct (ltb k0 k).\n      * rewrite balance_lookup; auto.\n        -- bdestruct (Abs k' <? Abs k0).\n           ++ simpl. bdestruct (ltb k' k0); try lia. auto.\n           ++ bdestruct (Abs k' >? Abs k0).\n              ** apply IHHbst2.\n              ** simpl. bdestruct (ltb k' k0); try lia.\n                 bdestruct (ltb k0 k'); try lia. auto.\n        -- apply ins_BST; auto.\n        -- apply insP; auto. simpl. lia.\n      * simpl. bdestruct (ltb k' k0); try lia.\n        bdestruct (ltb k0 k'); try lia.\n        assert (Abs k = Abs k0) by lia. apply Abs_inj in H.\n        subst. auto.\nQed.",
+      "explanation": "By induction on BST evidence, using balance_lookup. The key <> case requires careful comparison reasoning."
+    },
+    "lookup_insert_eq": {
+      "solution": "Proof.\n  intros V d t k v Hbst.\n  unfold insert, make_black.\n  destruct (ins k v t) eqn:E.\n  - simpl. assert (ins k v t <> E) by (apply ins_not_E). rewrite E in H. contradiction.\n  - simpl. assert (lookup d k (ins k v t) = v) by (apply lookup_ins_eq; auto).\n    rewrite E in H. simpl in H.\n    bdestruct (ltb k k0); try lia; auto.\n    bdestruct (ltb k0 k); try lia; auto.\nQed.",
+      "explanation": "Unfold insert and make_black. Use lookup_ins_eq and handle the root color change."
+    },
+    "lookup_insert_neq": {
+      "solution": "Proof.\n  intros V d t k k' v Hbst Hneq.\n  unfold insert, make_black.\n  destruct (ins k v t) eqn:E.\n  - assert (ins k v t <> E) by (apply ins_not_E). rewrite E in H. contradiction.\n  - assert (lookup d k' (ins k v t) = lookup d k' t) by (apply lookup_ins_neq; auto).\n    rewrite E in H. simpl in H.\n    simpl. bdestruct (ltb k' k0); auto.\n    bdestruct (ltb k0 k'); auto.\nQed.",
+      "explanation": "Unfold insert and make_black. Use lookup_ins_neq and handle the root color change."
+    },
+    "RB_blacken_parent": {
+      "solution": "Proof.\n  intros V t n H. inv H.\n  - constructor.\n  - constructor; auto.\n  - constructor; auto.\nQed.",
+      "explanation": "Inversion on the RB hypothesis handles all cases: leaf stays leaf, red becomes red with black parent, black stays black."
+    },
+    "ins_RB": {
+      "solution": "Ltac prove_RB :=\n  unfold balance;\n  repeat match goal with\n  | H: NearlyRB _ _ |- _ => inv H\n  | |- context [match ?c with Red => _ | Black => _ end] => destruct c\n  | |- context [match ?t with E => _ | T _ _ _ _ _ => _ end] => destruct t\n  | |- NearlyRB _ _ => constructor\n  | |- RB _ _ _ => constructor\n  end; auto.\n\nLemma ins_RB : forall (V : Type) (k : key) (v : V) (t : tree V) (n : nat),\n    (RB t Black n -> NearlyRB (ins k v t) n) /\\\n      (RB t Red n -> RB (ins k v t) Black n).\nProof.\n  induction t; split; intros; inv H; repeat constructor; simpl.\n  - specialize (IHt1 n). specialize (IHt2 n).\n    intuition. clear H H1. prove_RB.\n  - specialize (IHt1 n0). specialize (IHt2 n0). intuition.\n    clear H0 H2. prove_RB.\n  - specialize (IHt1 n0). specialize (IHt2 n0). intuition.\n    clear H0 H2. prove_RB.\nQed.",
+      "explanation": "Define prove_RB tactic to automate case analysis on balance by destructing colors and trees, then applying RB/NearlyRB constructors."
+    },
+    "RB_blacken_root": {
+      "solution": "Proof.\n  intros V t n H. inv H.\n  - exists 0. simpl. constructor.\n  - exists (S n0). simpl. constructor; auto.\n  - exists (S n0). simpl. constructor; auto.\nQed.",
+      "explanation": "Inversion on RB t Black n. The leaf case gives n'=0. The red and black node cases use the existing sub-tree invariants."
+    },
+    "insert_RB": {
+      "solution": "Proof.\n  intros V t k v n Hrb.\n  unfold insert.\n  assert (H: NearlyRB (ins k v t) n).\n  { destruct (ins_RB V k v t n) as [H1 H2]. apply H2 in Hrb.\n    inv Hrb.\n    - constructor; auto.\n    - constructor; auto. }\n  inv H.\n  - exists n. simpl. constructor; auto. apply RB_blacken_parent. auto.\n    apply RB_blacken_parent. auto.\n  - exists (S n0). simpl. constructor; auto.\nQed.",
+      "explanation": "Use ins_RB to get NearlyRB for ins, then apply make_black via RB_blacken_root reasoning."
+    },
+    "redblack_bound": {
+      "solution": "Fixpoint height {V : Type} (t : tree V) : nat :=\n  match t with\n  | E => 0\n  | T _ l _ _ r => 1 + max (height l) (height r)\n  end.\n\nFixpoint mindepth {V : Type} (t : tree V) : nat :=\n  match t with\n  | E => 0\n  | T _ l _ _ r => 1 + min (mindepth l) (mindepth r)\n  end.\n\nLemma RB_height_upper : forall (V : Type) (t : tree V) (c : color) (n : nat),\n    RB t c n -> (height t <= 2 * n + 1)%nat.\nProof.\n  intros V t c n H. induction H; simpl; lia.\nQed.\n\nLemma RB_mindepth_lower : forall (V : Type) (t : tree V) (c : color) (n : nat),\n    RB t c n -> (n <= mindepth t)%nat.\nProof.\n  intros V t c n H. induction H; simpl; lia.\nQed.\n\nLemma redblack_balanced : forall (V : Type) (t : tree V) (c : color) (n : nat),\n    RB t c n -> (height t <= 2 * mindepth t + 1)%nat.\nProof.\n  intros.\n  assert (height t <= 2 * n + 1)%nat by (apply RB_height_upper with c; auto).\n  assert (n <= mindepth t)%nat by (apply RB_mindepth_lower with c; auto).\n  lia.\nQed.",
+      "explanation": "Define height and mindepth recursively. Prove upper bound on height (2n+1) and lower bound on mindepth (n), then combine. Manual grade exercise."
+    }
+  }
+}

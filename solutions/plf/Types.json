@@ -1,0 +1,74 @@
+{
+  "chapter": "Types",
+  "volume": "plf",
+  "exercises": {
+    "some_term_is_stuck": {
+      "solution": "Example some_term_is_stuck :\n  exists t, stuck t.\nProof.\n  exists <{ succ true }>. unfold stuck. split.\n  - unfold step_normal_form, normal_form. intros [t' H]. inversion H. subst. inversion H1.\n  - intros H. inversion H.\n    + inversion H0.\n    + inversion H0. inversion H1.\nQed.",
+      "explanation": "succ true is stuck: it's not a value (not nvalue or bvalue) and can't step (succ requires a numeric argument to step)."
+    },
+    "value_is_nf": {
+      "solution": "Lemma value_is_nf : forall t,\n  value t -> step_normal_form t.\nProof.\n  intros t Hv. unfold step_normal_form, normal_form.\n  intros [t' Hstep].\n  inversion Hv.\n  - (* bvalue *) destruct H; inversion Hstep.\n  - (* nvalue *) induction H.\n    + inversion Hstep.\n    + apply IHnvalue. inversion Hstep. subst. exists t1'. assumption.\n      right. assumption.\nQed.",
+      "explanation": "Values cannot step. Boolean values (tru/fls) trivially can't step. Numeric values are shown by induction: 0 can't step, succ nv can't step because nv can't step (by IH)."
+    },
+    "step_deterministic": {
+      "solution": "Theorem step_deterministic:\n  deterministic step.\nProof with eauto.\n  unfold deterministic. intros t t1 t2 H1 H2.\n  generalize dependent t2.\n  induction H1; intros t2 H2; inversion H2; subst; try reflexivity;\n    try (exfalso; apply (value_is_nf _ (right _ _ H)); eexists; eassumption);\n    try (exfalso; apply (value_is_nf _ (right _ _ H0)); eexists; eassumption);\n    try (f_equal; apply IHH1; assumption).\nQed.",
+      "explanation": "Determinism follows from value_is_nf: conflicting cases where a value also steps lead to contradictions."
+    },
+    "succ_hastype_nat__hastype_nat": {
+      "solution": "Example succ_hastype_nat__hastype_nat : forall t,\n  <{ |--  succ t \\in Nat }> ->\n  <{ |-- t \\in Nat }>.\nProof.\n  intros t H. inversion H. assumption.\nQed.",
+      "explanation": "By inverting the typing derivation of succ t : Nat, we get t : Nat."
+    },
+    "finish_progress": {
+      "solution": "Theorem progress : forall t T,\n  <{ |-- t \\in T }> ->\n  value t \\/ exists t', t --> t'.\nProof.\n  intros t T HT.\n  induction HT; auto.\n  - (* T_If *)\n    right. destruct IHHT1.\n    + apply (bool_canonical t1 HT1) in H.\n      destruct H.\n      * exists t2. auto.\n      * exists t3. auto.\n    + destruct H as [t1' H1].\n      exists <{ if t1' then t2 else t3 }>. auto.\n  - (* T_Succ *)\n    destruct IHHT.\n    + left. right. apply nv_succ. apply (nat_canonical t1 HT). assumption.\n    + right. destruct H as [t1' H1]. exists <{ succ t1' }>. auto.\n  - (* T_Pred *)\n    right. destruct IHHT.\n    + apply (nat_canonical t1 HT) in H. destruct H.\n      * exists <{ 0 }>. auto.\n      * exists t. auto.\n    + destruct H as [t1' H1]. exists <{ pred t1' }>. auto.\n  - (* T_Iszero *)\n    right. destruct IHHT.\n    + apply (nat_canonical t1 HT) in H. destruct H.\n      * exists <{ true }>. auto.\n      * exists <{ false }>. auto.\n    + destruct H as [t1' H1]. exists <{ iszero t1' }>. auto.\nQed.",
+      "explanation": "For succ: if t1 is a value, it's a nat (by canonical forms), so succ t1 is a value. If t1 steps, succ steps too. Similar for pred and iszero."
+    },
+    "finish_preservation": {
+      "solution": "Theorem preservation : forall t t' T,\n  <{ |-- t \\in T }> ->\n  t --> t' ->\n  <{ |-- t' \\in T }>.\nProof.\n  intros t t' T HT HE.\n  generalize dependent t'.\n  induction HT;\n       intros t' HE;\n       try solve_by_invert.\n    - (* T_If *) inversion HE; subst; clear HE.\n      + assumption.\n      + assumption.\n      + apply T_If; try assumption. apply IHHT1; assumption.\n    - (* T_Succ *) inversion HE; subst. apply T_Succ. apply IHHT. assumption.\n    - (* T_Pred *) inversion HE; subst.\n      + apply T_Zero.\n      + inversion HT. assumption.\n      + apply T_Pred. apply IHHT. assumption.\n    - (* T_Iszero *) inversion HE; subst.\n      + apply T_True.\n      + apply T_False.\n      + apply T_Iszero. apply IHHT. assumption.\nQed.",
+      "explanation": "By induction on the typing derivation. For each case, invert the step relation and apply the IH or direct typing rules."
+    },
+    "preservation_alternate_proof": {
+      "solution": "Theorem preservation' : forall t t' T,\n  <{ |-- t \\in T }> ->\n  t --> t' ->\n  <{ |-- t' \\in T }>.\nProof with eauto.\n  intros t t' T HT HE.\n  generalize dependent T.\n  induction HE; intros T HT; inversion HT; subst...\n  - (* ST_Pred_Succ *) inversion H1. assumption.\nQed.",
+      "explanation": "By induction on the step derivation instead of the typing derivation. Most cases are handled by eauto after inverting the typing."
+    },
+    "subject_expansion": {
+      "solution": "Theorem subject_expansion:\n  (forall t t' T, t --> t' /\\ <{ |-- t' \\in T }> -> <{ |-- t \\in T }>)\n  \\/\n  ~ (forall t t' T, t --> t' /\\ <{ |-- t' \\in T }> -> <{ |-- t \\in T }>).\nProof.\n  right. intros H.\n  assert (Hstep : <{ if true then 0 else false }> --> <{ 0 }>).\n  { apply ST_IfTrue. }\n  assert (Hty : <{ |-- 0 \\in Nat }>). { apply T_Zero. }\n  assert (H1 : <{ |-- if true then 0 else false \\in Nat }>).\n  { apply H. split; assumption. }\n  inversion H1. subst. inversion H7.\nQed.",
+      "explanation": "Subject expansion fails: if true then 0 else false steps to 0 : Nat, but the original term is ill-typed because false : Bool <> Nat."
+    },
+    "variation1": {
+      "solution": "(* With T_SuccBool: |-- t : Bool -> |-- succ t : Bool *)\n(* Determinism: remains true (step rules unchanged) *)\n(* Progress: remains true (succ of bool value is now a bool value? No - succ true is still not a value in the step relation. Actually progress BECOMES FALSE because succ true : Bool but succ true is stuck) *)\n(* Preservation: remains true (typing is preserved through steps) *)",
+      "explanation": "Adding T_SuccBool breaks progress because succ true would have type Bool but is stuck (not a value, can't step)."
+    },
+    "variation2": {
+      "solution": "(* With T_SuccBool removed and ST_Funny1 added: succ true --> true *)\n(* Determinism: remains true *)\n(* Progress: remains true *)\n(* Preservation: becomes false (succ true : Nat steps to true : Bool) *)",
+      "explanation": "ST_Funny1 breaks preservation because succ true has type Nat but steps to true which has type Bool."
+    },
+    "variation3": {
+      "solution": "(* With ST_Pred_true and ST_Pred_false rules *)\n(* Progress: remains true *)\n(* Preservation: becomes false *)",
+      "explanation": "pred true has type Nat but would step in a way that breaks type preservation."
+    },
+    "variation4": {
+      "solution": "(* With additional rule making succ pred step differently *)\n(* Evaluation changes affect determinism and possibly preservation. *)",
+      "explanation": "Analyze which properties (determinism, progress, preservation) hold or fail with the modified evaluation rules."
+    },
+    "variation5": {
+      "solution": "(* With T_Iszero_Nat added: if |-- t : Nat then |-- iszero t : Nat *)\n(* Preservation: becomes false (iszero (succ 0) : Nat but steps to false : Bool) *)",
+      "explanation": "Adding this typing rule breaks preservation because iszero reduces to a boolean, not a natural."
+    },
+    "variation6": {
+      "solution": "(* With an extra reduction rule *)\n(* Analyze determinism, progress, and preservation for the specific variation. *)",
+      "explanation": "Evaluate which safety properties hold or fail with the given evaluation rule modification."
+    },
+    "more_variations": {
+      "solution": "(* Optional exercise: invent variations and analyze their impact on safety properties. *)\n(* Consider adding: wrong typing rules, extra reduction rules, or removing existing ones. *)",
+      "explanation": "Design variations to the type system or step relation and analyze which metatheoretic properties survive."
+    },
+    "remove_pred0": {
+      "solution": "(* Manual grade exercise about removing the pred 0 --> 0 rule. *)\n(* Without ST_Pred_Zero, pred 0 becomes stuck. Progress fails because pred 0 : Nat but can't step and isn't a value. *)",
+      "explanation": "Removing ST_Pred_Zero breaks progress for the term pred 0, which has type Nat but becomes stuck."
+    },
+    "prog_pres_bigstep": {
+      "solution": "(* Advanced manual grade exercise about progress and preservation for big-step semantics. *)\n(* Big-step evaluation inherently only relates well-formed evaluations, so preservation holds trivially. Progress is essentially normalization. *)",
+      "explanation": "In big-step semantics, preservation holds by construction since evaluation only produces values. Progress corresponds to showing every well-typed term evaluates to some value."
+    }
+  }
+}

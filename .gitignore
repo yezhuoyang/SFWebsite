@@ -20,6 +20,15 @@ sf_learning.db
 # Tarballs (original downloads)
 *.tgz
 
+# Environment
+.env
+
+# Workspaces (per-user data)
+workspaces/
+
+# Python venv
+venv/
+
 # IDE / OS
 .vscode/
 .idea/

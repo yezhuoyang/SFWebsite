@@ -1,0 +1,62 @@
+{
+  "chapter": "Himpl",
+  "volume": "slf",
+  "exercises": {
+    "himpl_antisym": {
+      "solution": "Lemma himpl_antisym : forall H1 H2,\n  (H1 ==> H2) ->\n  (H2 ==> H1) ->\n  H1 = H2.\nProof using.\n  introv M1 M2. apply hprop_eq. intros h. iff.\n  { apply M1. }\n  { apply M2. }\nQed.",
+      "explanation": "Antisymmetry of entailment: if H1 ==> H2 and H2 ==> H1, then H1 = H2 by predicate extensionality."
+    },
+    "qimpl_antisym": {
+      "solution": "Lemma qimpl_antisym : forall Q1 Q2,\n  (Q1 ===> Q2) ->\n  (Q2 ===> Q1) ->\n  Q1 = Q2.\nProof using.\n  introv M1 M2. apply qprop_eq. intros v. apply himpl_antisym.\n  { apply M1. }\n  { apply M2. }\nQed.",
+      "explanation": "Antisymmetry of postcondition entailment follows from himpl_antisym applied pointwise."
+    },
+    "himpl_hstar_hpure_r": {
+      "solution": "Lemma himpl_hstar_hpure_r : forall (P:Prop) H H',\n  P ->\n  (H ==> H') ->\n  H ==> H' \\* \\[P].\nProof using.\n  introv HP M. intros h Hh.\n  exists h Fmap.empty. splits.\n  { apply M. auto. }\n  { hnf. auto. }\n  { auto. }\n  { rewrite Fmap.union_empty_r. auto. }\nQed.",
+      "explanation": "To prove H ==> H' * [P], witness the split with h for H' and empty for [P], using that P holds."
+    },
+    "himpl_hstar_hpure_l": {
+      "solution": "Lemma himpl_hstar_hpure_l : forall (P:Prop) (H H':hprop),\n  (P -> H ==> H') ->\n  \\[P] \\* H ==> H'.\nProof using.\n  introv M. intros h (h1&h2&(E1&HP)&M2&D&U). subst.\n  rewrite Fmap.union_empty_l in U. subst.\n  apply M. auto. auto.\nQed.",
+      "explanation": "From [P] * H, extract P from the pure part (which is the empty heap), use P to get H ==> H', and apply to H h."
+    },
+    "himpl_hexists_r": {
+      "solution": "Lemma himpl_hexists_r : forall A (x:A) H J,\n  H ==> J x ->\n  H ==> (\\exists x, J x).\nProof using.\n  introv M. intros h Hh. exists x. apply M. auto.\nQed.",
+      "explanation": "To prove H ==> exists x, J x, provide a witness x and use H ==> J x."
+    },
+    "himpl_hexists_l": {
+      "solution": "Lemma himpl_hexists_l : forall (A:Type) (H:hprop) (J:A->hprop),\n  (forall x, J x ==> H) ->\n  (\\exists x, J x) ==> H.\nProof using.\n  introv M. intros h (x&Hx). apply (M x). auto.\nQed.",
+      "explanation": "To prove (exists x, J x) ==> H, destruct the existential and apply J x ==> H."
+    },
+    "hexists_named_eq": {
+      "solution": "Lemma hexists_named_eq : forall H,\n  H = (\\exists H', \\[H' = H] \\* H').\nProof using.\n  intros. apply himpl_antisym.\n  { intros h M. exists H. exists Fmap.empty h. splits.\n    { hnf. auto. } { auto. } { auto. }\n    { rewrite Fmap.union_empty_l. auto. } }\n  { intros h (H'&h1&h2&(E1&HE)&M2&D&U). subst.\n    rewrite Fmap.union_empty_l in U. subst. auto. }\nQed.",
+      "explanation": "Any H equals the existential quantification over H' with H'=H conjoined. Witness H' := H for forward; extract equality for backward."
+    },
+    "himpl_example_1": {
+      "solution": "Lemma himpl_example_1 : forall p1 p2 p3 p4,\n  p1 ~~> 1 \\* p2 ~~> 2 \\* p3 ~~> 3 \\* p4 ~~> 4\n  ==> p4 ~~> 4 \\* p1 ~~> 1 \\* p2 ~~> 2 \\* p3 ~~> 3.\nProof using. xsimpl. Qed.",
+      "explanation": "Reorder separating conjunction. xsimpl handles the permutation automatically."
+    },
+    "himpl_example_2": {
+      "solution": "Lemma himpl_example_2 : forall p1 p2 p3 n,\n  p1 ~~> 1 \\* p2 ~~> 2 \\* p3 ~~> n\n  ==> p2 ~~> 2 \\* \\exists n, p3 ~~> n \\* p1 ~~> 1.\nProof using. xsimpl. Qed.",
+      "explanation": "Reorder and introduce an existential for n. xsimpl handles both."
+    },
+    "himpl_example_3": {
+      "solution": "Lemma himpl_example_3 : forall p,\n  (\\exists n, p ~~> n) ==> (\\exists n, p ~~> (n + 1)).\nProof using.\n  xsimpl. intros n. exists (n-1). fmap_eq.\nQed.",
+      "explanation": "For any n, witness n-1 on the right side so that (n-1)+1 = n."
+    },
+    "xchange_lemma": {
+      "solution": "Lemma xchange_lemma : forall H1 H1' H H' H2,\n  H1 ==> H1' ->\n  H ==> H1 \\* H2 ->\n  H1' \\* H2 ==> H' ->\n  H ==> H'.\nProof using.\n  introv M1 M2 M3. applys himpl_trans M2.\n  applys himpl_trans. { applys himpl_frame_l M1. } { applys M3. }\nQed.",
+      "explanation": "Chain entailments: split H into H1*H2, strengthen H1 to H1', then use H1'*H2 ==> H'."
+    },
+    "himpl_frame_l": {
+      "solution": "Lemma himpl_frame_l : forall H2 H1 H1',\n  H1 ==> H1' ->\n  H1 \\* H2 ==> H1' \\* H2.\nProof using.\n  introv M. intros h (h1&h2&M1&M2&D&U). exists h1 h2.\n  splits. { apply M. auto. } { auto. } { auto. } { auto. }\nQed.",
+      "explanation": "Frame on the left: if H1 ==> H1', then H1 * H2 ==> H1' * H2 by applying M to h1."
+    },
+    "himpl_frame_r": {
+      "solution": "Lemma himpl_frame_r : forall H1 H2 H2',\n  H2 ==> H2' ->\n  H1 \\* H2 ==> H1 \\* H2'.\nProof using.\n  introv M. intros h (h1&h2&M1&M2&D&U). exists h1 h2.\n  splits. { auto. } { apply M. auto. } { auto. } { auto. }\nQed.",
+      "explanation": "Frame on the right: apply the entailment to the second component of the star."
+    },
+    "himpl_frame_lr": {
+      "solution": "Lemma himpl_frame_lr : forall H1 H1' H2 H2',\n  H1 ==> H1' ->\n  H2 ==> H2' ->\n  H1 \\* H2 ==> H1' \\* H2'.\nProof using.\n  introv M1 M2. applys himpl_trans.\n  { applys himpl_frame_l M1. }\n  { applys himpl_frame_r M2. }\nQed.",
+      "explanation": "Frame both sides by composing left frame and right frame."
+    }
+  }
+}

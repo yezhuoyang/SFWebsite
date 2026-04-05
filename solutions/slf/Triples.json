@@ -1,0 +1,70 @@
+{
+  "chapter": "Triples",
+  "volume": "slf",
+  "exercises": {
+    "triple_conseq_frame": {
+      "solution": "Lemma triple_conseq_frame : forall H2 H1 Q1 t H Q,\n  triple t H1 Q1 ->\n  H ==> H1 \\* H2 ->\n  Q1 \\*+ H2 ===> Q ->\n  triple t H Q.\nProof using.\n  introv M WH WQ. applys triple_conseq.\n  { applys triple_frame M. }\n  { applys WH. }\n  { applys WQ. }\nQed.",
+      "explanation": "Combine consequence and frame rules. First frame M with H2, then use consequence to adjust pre/postconditions."
+    },
+    "triple_hpure'": {
+      "solution": "Lemma triple_hpure' : forall t (P:Prop) Q,\n  (P -> triple t \\[] Q) ->\n  triple t \\[P] Q.\nProof using.\n  introv M. applys triple_hpure. intros HP.\n  applys triple_conseq. { applys M HP. }\n  { xsimpl. } { xsimpl. }\nQed.",
+      "explanation": "Extract the pure fact P, then use the hypothesis to get a triple with empty precondition, and adjust via consequence."
+    },
+    "triple_hexists": {
+      "solution": "Lemma triple_hexists : forall t (A:Type) (J:A->hprop) Q,\n  (forall x, triple t (J x) Q) ->\n  triple t (\\exists x, J x) Q.\nProof using.\n  introv M. intros h (x&Hx). applys M Hx.\nQed.",
+      "explanation": "To prove a triple with an existential precondition, destruct the existential witness and use the hypothesis."
+    },
+    "triple_named_heap": {
+      "solution": "Lemma triple_named_heap : forall t H Q,\n  (forall h, H h -> triple t (= h) Q) ->\n  triple t H Q.\nProof using.\n  introv M. intros h Hh. applys M Hh. auto.\nQed.",
+      "explanation": "Name the heap h satisfying H, then use the hypothesis with the exact heap predicate (= h)."
+    },
+    "triple_hexists2": {
+      "solution": "Lemma triple_hexists2 : forall A (Hof:A->hprop) (Qof:A->val->hprop) t,\n  (forall x, triple t (Hof x) (Qof x)) ->\n  triple t (\\exists x, Hof x) (\\exists x, Qof x).\nProof using.\n  introv M. applys triple_hexists. intros x.\n  applys triple_conseq. { applys M. }\n  { xsimpl. } { intros v. xsimpl. }\nQed.",
+      "explanation": "Extract the existential from the precondition, apply the per-witness triple, then pack the existential into the postcondition."
+    },
+    "triple_hexists_of_triple_hexists2": {
+      "solution": "Lemma triple_hexists_of_triple_hexists2 : forall t (A:Type) (Hof:A->hprop) Q,\n  (forall x, triple t (Hof x) Q) ->\n  triple t (\\exists x, Hof x) Q.\nProof using.\n  introv M. applys triple_conseq (triple_hexists2 M).\n  { xsimpl. }\n  { intros v. xsimpl. intros x. auto. }\nQed.",
+      "explanation": "Derive triple_hexists from triple_hexists2 by collapsing the existential postcondition via consequence."
+    },
+    "seval_val_inv": {
+      "solution": "Lemma seval_val_inv : forall s v Q,\n  seval s (trm_val v) Q ->\n  Q v s.\nProof using.\n  introv M. destruct M as (HR&HS&HC). applys HC.\n  { applys steps_refl. }\n  { intros t' s' R. inverts R. false. inverts H. }\nQed.",
+      "explanation": "A value is already fully evaluated. Extract correctness from seval, apply it with zero steps, and show values are not reducible."
+    },
+    "seval_terminates": {
+      "solution": "Lemma seval_terminates : forall s t Q,\n  seval s t Q ->\n  exists v s', steps s t s' (trm_val v).\nProof using.\n  introv (HR&HS&HC). induction t; try solve [exists* _ s].\n  { applys HS. }\nQed.",
+      "explanation": "seval implies termination: extract the termination component from seval and provide the witness."
+    },
+    "seval_safe": {
+      "solution": "Lemma seval_safe : forall s t Q,\n  seval s t Q ->\n  safe s t.\nProof using.\n  introv (HR&HS&HC). intros s' t' R.\n  tests C: (trm_is_val t').\n  { left. auto. }\n  { right. applys HS. applys R. }\nQed.",
+      "explanation": "seval implies safety (never stuck): for any reachable configuration, either it's a value or it can step further."
+    },
+    "seval_correct": {
+      "solution": "Lemma seval_correct : forall s t Q,\n  seval s t Q ->\n  correct s t Q.\nProof using.\n  introv (HR&HS&HC). intros v s' R. applys HC R.\n  intros t' s'' R'. inverts R'. false. inverts H.\nQed.",
+      "explanation": "seval implies correctness: if t steps to value v in state s', then Q v s' holds."
+    },
+    "seval_seq": {
+      "solution": "Lemma seval_seq : forall s t1 t2 Q1 Q,\n  seval s t1 Q1 ->\n  (forall v1 s2, Q1 v1 s2 -> seval s2 t2 Q) ->\n  seval s (trm_seq t1 t2) Q.\nProof using.\n  introv M1 M2. destruct M1 as (HR1&HS1&HC1). splits.\n  { intros s' t' R. inverts R; try solve [inverts H].\n    tests C: (trm_is_val t1').\n    { destruct C as (v1&->). lets (HR2&HS2&HC2): M2 (HC1 (steps_refl _ _)\n        (fun t' s' R => inverts R; [false; inverts H | ])).\n      inverts H0. applys HS2. applys steps_refl. }\n    { applys HS1. auto. } }\n  { lets (v&s'&R): HR1. exists v. exists s'. applys steps_of_step.\n    applys step_seq. }\n  { intros v s' R NS. applys seval_sound. applys M2.\n    applys HC1. auto. auto. auto. }\nQed.",
+      "explanation": "Sequencing for small-step seval: compose the evaluations of t1 and t2, threading the intermediate state."
+    },
+    "seval_let": {
+      "solution": "Lemma seval_let : forall s x t1 t2 Q1 Q,\n  seval s t1 Q1 ->\n  (forall v1 s2, Q1 v1 s2 -> seval s2 (subst x v1 t2) Q) ->\n  seval s (trm_let x t1 t2) Q.\nProof using.\n  introv M1 M2. destruct M1 as (HR1&HS1&HC1). splits.\n  { intros s' t' R. inverts R; try solve [inverts H].\n    tests C: (trm_is_val t1').\n    { destruct C as (v1&->). lets (HR2&HS2&HC2): M2 (HC1 (steps_refl _ _)\n        (fun t' s' R => inverts R; [false; inverts H | ])).\n      inverts H0. applys HS2. applys steps_refl. }\n    { applys HS1. auto. } }\n  { lets (v&s'&R): HR1. exists v. exists s'. applys steps_of_step.\n    applys step_let. }\n  { intros v s' R NS. applys seval_sound. applys M2.\n    applys HC1. auto. auto. auto. }\nQed.",
+      "explanation": "Let-binding for small-step seval: evaluate t1 to v1, substitute v1 for x in t2, then evaluate t2."
+    },
+    "hoare_conseq": {
+      "solution": "Lemma hoare_conseq : forall t H Q H' Q',\n  hoare t H' Q' ->\n  H ==> H' ->\n  Q' ===> Q ->\n  hoare t H Q.\nProof using.\n  introv M MH MQ. intros h Hh.\n  lets (v&h'&HR&HQ): M (MH _ Hh).\n  exists v h'. splits. { auto. } { applys MQ HQ. }\nQed.",
+      "explanation": "Consequence rule for Hoare triples: strengthen precondition, weaken postcondition."
+    },
+    "btriple_frame": {
+      "solution": "Lemma btriple_frame : forall t H Q H',\n  btriple t H Q ->\n  btriple t (H \\* H') (Q \\*+ H').\nProof using.\n  introv M. unfolds btriple. intros H''. specializes M (H' \\* H'').\n  applys hoare_conseq M.\n  { xsimpl. }\n  { intros v. xsimpl. }\nQed.",
+      "explanation": "Frame rule for bundled triples: instantiate the universal quantifier with H' * H'' and adjust via consequence."
+    },
+    "hoare_let": {
+      "solution": "Lemma hoare_let : forall x t1 t2 H Q Q1,\n  hoare t1 H Q1 ->\n  (forall v, hoare (subst x v t2) (Q1 v) Q) ->\n  hoare (trm_let x t1 t2) H Q.\nProof using.\n  introv M1 M2. intros h Hh.\n  lets (v1&h1&HR1&HQ1): M1 Hh.\n  lets (v2&h2&HR2&HQ2): M2 HQ1.\n  exists v2 h2. splits.\n  { applys eval_let HR1 HR2. }\n  { auto. }\nQed.",
+      "explanation": "Let-binding for Hoare triples: evaluate t1 to get v1, substitute into t2, evaluate t2."
+    },
+    "btriple_let": {
+      "solution": "Lemma btriple_let : forall x t1 t2 Q1 H Q,\n  btriple t1 H Q1 ->\n  (forall v, btriple (subst x v t2) (Q1 v) Q) ->\n  btriple (trm_let x t1 t2) H Q.\nProof using.\n  introv M1 M2. unfolds btriple. intros H'.\n  applys hoare_let.\n  { applys M1. }\n  { intros v. applys hoare_conseq. { applys M2. } { xsimpl. } { xsimpl. } }\nQed.",
+      "explanation": "Let-binding for bundled triples: combine the Hoare let rule with the universal frame."
+    }
+  }
+}

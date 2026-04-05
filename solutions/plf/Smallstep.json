@@ -1,0 +1,110 @@
+{
+  "chapter": "Smallstep",
+  "volume": "plf",
+  "exercises": {
+    "test_step_2": {
+      "solution": "Example test_step_2 :\n      P\n        (C 0)\n        (P\n          (C 2)\n          (P (C 1) (C 3)))\n      -->\n      P\n        (C 0)\n        (P\n          (C 2)\n          (C 4)).\nProof.\n  apply ST_P2.\n  - apply v_C.\n  - apply ST_P2.\n    + apply v_C.\n    + apply ST_PCC.\nQed.",
+      "explanation": "The left operand C 0 is a value, so we step the right operand using ST_P2 twice, eventually reducing P (C 1) (C 3) to C 4."
+    },
+    "redo_determinism": {
+      "solution": "Theorem step_deterministic :\n  deterministic step.\nProof.\n  unfold deterministic. intros x y1 y2 H1 H2.\n  generalize dependent y2.\n  induction H1; intros y2 H2.\n  - (* ST_PCC *) inversion H2; subst.\n    + reflexivity.\n    + inversion H3.\n    + inversion H4.\n  - (* ST_P1 *) inversion H2; subst.\n    + inversion H1.\n    + f_equal. apply IHH1. assumption.\n    + inversion H; subst. inversion H1.\n  - (* ST_P2 *) inversion H2; subst.\n    + inversion H1.\n    + inversion H; subst. inversion H5.\n    + f_equal. apply IHH1. assumption.\nQed.",
+      "explanation": "By induction on the first step derivation, then inverting the second. Value/step conflicts are resolved by inverting value assumptions."
+    },
+    "value_not_same_as_normal_form1": {
+      "solution": "Lemma value_not_same_as_normal_form :\n  exists v, value v /\\ ~ normal_form step v.\nProof.\n  exists (P (C 0) (C 1)). split.\n  - apply v_funny.\n  - unfold normal_form. intros H. apply H.\n    exists (C 1). apply ST_PCC.\nQed.",
+      "explanation": "P (C 0) (C 1) is a value (by v_funny) but can step to C 1 by ST_PCC, so it's not a normal form."
+    },
+    "value_not_same_as_normal_form2": {
+      "solution": "Lemma value_not_same_as_normal_form :\n  exists v, value v /\\ ~ normal_form step v.\nProof.\n  exists (C 0). split.\n  - apply v_C.\n  - unfold normal_form. intros H. apply H.\n    exists (P (C 0) (C 0)). apply ST_Funny.\nQed.",
+      "explanation": "C 0 is a value but can step via ST_Funny, so values and normal forms don't coincide."
+    },
+    "value_not_same_as_normal_form3": {
+      "solution": "Lemma value_not_same_as_normal_form :\n  exists t, ~ value t /\\ normal_form step t.\nProof.\n  exists (P (C 0) (P (C 1) (C 2))). split.\n  - intros H. inversion H.\n  - unfold normal_form. intros [t' Hstep].\n    inversion Hstep; subst.\n    + inversion H3.\n    + inversion H0.\nQed.",
+      "explanation": "P (C 0) (P (C 1) (C 2)) is not a value but is stuck because ST_P2 is missing and ST_P1 doesn't apply (C 0 is a value, not P)."
+    },
+    "smallstep_bools": {
+      "solution": "(* Manual grade exercise about writing small-step rules for booleans. *)\n(* step_if_true: test tru t1 t2 --> t1\n   step_if_false: test fls t1 t2 --> t2\n   step_if: t1 --> t1' -> test t1 t2 t3 --> test t1' t2 t3 *)",
+      "explanation": "Small-step semantics for booleans: reduce the guard first, then branch based on tru/fls."
+    },
+    "strong_progress_bool": {
+      "solution": "Theorem strong_progress_bool : forall t,\n  value t \\/ (exists t', t --> t').\nProof.\n  induction t.\n  - left. constructor.\n  - left. constructor.\n  - right. destruct IHt1.\n    + inversion H; subst.\n      * exists t2. apply ST_IfTrue.\n      * exists t3. apply ST_IfFalse.\n    + destruct H as [t1' Ht1'].\n      exists (test t1' t2 t3). apply ST_If. assumption.\nQed.",
+      "explanation": "By induction on t: tru and fls are values. For test, either the guard is a value (tru/fls) and we branch, or it can step."
+    },
+    "step_deterministic_bool": {
+      "solution": "Theorem step_deterministic :\n  deterministic step.\nProof.\n  unfold deterministic. intros x y1 y2 H1 H2.\n  generalize dependent y2.\n  induction H1; intros y2 H2; inversion H2; subst;\n    try reflexivity;\n    try (inversion H1);\n    try (inversion H3);\n    try (f_equal; apply IHH1; assumption).\nQed.",
+      "explanation": "By induction on the first derivation, inverting the second. Conflicting rules (e.g., value stepping) are contradictions."
+    },
+    "smallstep_bool_shortcut": {
+      "solution": "(* The shortcut rule allows test to step directly from guard to branch without reducing guard to a value first. This makes the relation non-deterministic. *)",
+      "explanation": "Adding a shortcut test rule that evaluates to the then-branch when the guard is not fls (without fully reducing) breaks determinism."
+    },
+    "test_multistep_2": {
+      "solution": "Lemma test_multistep_2:\n  C 3 -->* C 3.\nProof. apply multi_refl. Qed.",
+      "explanation": "C 3 is already a value/normal form, so zero steps suffice."
+    },
+    "test_multistep_3": {
+      "solution": "Lemma test_multistep_3:\n      P (C 0) (C 3)\n   -->*\n      P (C 0) (C 3).\nProof. apply multi_refl. Qed.",
+      "explanation": "Zero steps: the term is already in the target form."
+    },
+    "test_multistep_4": {
+      "solution": "Lemma test_multistep_4:\n      P\n        (C 0)\n        (P\n          (C 2)\n          (P (C 0) (C 3)))\n  -->*\n      P\n        (C 0)\n        (C (2 + (0 + 3))).\nProof.\n  eapply multi_step.\n  { apply ST_P2. apply v_C. apply ST_P2. apply v_C. apply ST_PCC. }\n  eapply multi_step.\n  { apply ST_P2. apply v_C. apply ST_PCC. }\n  apply multi_refl.\nQed.",
+      "explanation": "Two steps: first reduce the innermost P (C 0) (C 3) to C 3, then reduce P (C 2) (C 3) to C 5."
+    },
+    "normal_forms_unique": {
+      "solution": "Theorem normal_forms_unique:\n  deterministic (normal_form_of step).\nProof.\n  unfold deterministic. unfold normal_form_of.\n  intros x y1 y2 P1 P2.\n  destruct P1 as [P11 P12].\n  destruct P2 as [P21 P22].\n  generalize dependent y2.\n  induction P11; intros y2 P21 P22.\n  - (* x = y1, zero steps *)\n    induction P21.\n    + reflexivity.\n    + exfalso. apply P12. exists y. assumption.\n  - (* x --> y --> ... --> y1 *)\n    induction P21.\n    + exfalso. apply P22. exists y. assumption.\n    + assert (y = y0) by (apply step_deterministic with x; assumption).\n      subst. apply IHP11; assumption.\nQed.",
+      "explanation": "Normal forms are unique because step is deterministic. If x reaches both y1 and y2 as normal forms, they must be equal."
+    },
+    "multistep_congr_2": {
+      "solution": "Lemma multistep_congr_2 : forall v1 t2 t2',\n     value v1 ->\n     t2 -->* t2' ->\n     P v1 t2 -->* P v1 t2'.\nProof.\n  intros v1 t2 t2' Hv H. induction H.\n  - apply multi_refl.\n  - apply multi_step with (P v1 y).\n    + apply ST_P2; assumption.\n    + apply IHmulti.\nQed.",
+      "explanation": "By induction on the multi-step derivation, using ST_P2 at each step since v1 is a value."
+    },
+    "eval__multistep": {
+      "solution": "Theorem eval__multistep : forall t n,\n  t ==> n -> t -->* C n.\nProof.\n  intros t n H. induction H.\n  - apply multi_refl.\n  - eapply multi_trans.\n    + apply multistep_congr_1. apply IHeval1.\n    + eapply multi_trans.\n      * apply multistep_congr_2. apply v_C. apply IHeval2.\n      * apply multi_R. apply ST_PCC.\nQed.",
+      "explanation": "By induction on the big-step derivation. For P, first reduce t1 to C n1, then t2 to C n2, then apply ST_PCC."
+    },
+    "step__eval": {
+      "solution": "Lemma step__eval : forall t t' n,\n     t --> t' ->\n     t' ==> n ->\n     t  ==> n.\nProof.\n  intros t t' n Hs. generalize dependent n.\n  induction Hs; intros n Heval.\n  - (* ST_PCC *) inversion Heval. subst. constructor; constructor.\n  - (* ST_P1 *) inversion Heval. subst.\n    constructor.\n    + apply IHHs. assumption.\n    + assumption.\n  - (* ST_P2 *) inversion Heval. subst.\n    constructor.\n    + assumption.\n    + apply IHHs. assumption.\nQed.",
+      "explanation": "If t steps to t' and t' big-step evaluates to n, then t also big-step evaluates to n. By induction on the step derivation."
+    },
+    "multistep__eval": {
+      "solution": "Theorem multistep__eval : forall t t',\n  normal_form_of step t t' -> exists n, t' = C n /\\ t ==> n.\nProof.\n  unfold normal_form_of.\n  intros t t' [Hsteps Hnf].\n  induction Hsteps.\n  - (* multi_refl *)\n    apply nf_same_as_value in Hnf.\n    inversion Hnf. exists n. split; [reflexivity | constructor].\n  - (* multi_step *)\n    apply IHHsteps in Hnf.\n    destruct Hnf as [n [Heq Heval]]. subst.\n    exists n. split; [reflexivity | eapply step__eval; eassumption].\nQed.",
+      "explanation": "By induction on multi-step. At the base, the normal form must be a value C n. At each step, use step__eval to build the big-step derivation."
+    },
+    "interp_tm": {
+      "solution": "Theorem evalF_eval : forall t n,\n  evalF t = n <-> t ==> n.\nProof.\n  split.\n  - generalize dependent n. induction t; intros n H; simpl in H; subst.\n    + constructor.\n    + constructor; [apply IHt1 | apply IHt2]; reflexivity.\n  - intros H. induction H; simpl.\n    + reflexivity.\n    + rewrite IHeval1. rewrite IHeval2. reflexivity.\nQed.",
+      "explanation": "evalF and eval are equivalent by straightforward induction in both directions."
+    },
+    "combined_step_deterministic": {
+      "solution": "Theorem combined_step_deterministic: (deterministic step) \\/ ~ (deterministic step).\nProof.\n  left. unfold deterministic.\n  intros x y1 y2 H1 H2.\n  generalize dependent y2.\n  induction H1; intros y2 H2; inversion H2; subst;\n    try reflexivity;\n    try (inversion H1);\n    try (inversion H);\n    try (exfalso; inversion H0; subst; inversion H1);\n    try (f_equal; apply IHH1; assumption).\n  - inversion H3.\n  - inversion H4.\n  - inversion H; subst; inversion H5.\nQed.",
+      "explanation": "The combined language is still deterministic because arithmetic and boolean rules don't overlap."
+    },
+    "combined_strong_progress": {
+      "solution": "Theorem combined_strong_progress :\n  (forall t, value t \\/ (exists t', t --> t'))\n  \\/ ~ (forall t, value t \\/ (exists t', t --> t')).\nProof.\n  right. intros H.\n  assert (H1 : value (P tru (C 0)) \\/ (exists t', P tru (C 0) --> t')).\n  { apply H. }\n  destruct H1.\n  - inversion H0.\n  - destruct H0 as [t' Hstep]. inversion Hstep; subst.\n    + inversion H4.\n    + inversion H0.\nQed.",
+      "explanation": "Strong progress fails: P tru (C 0) is not a value but cannot step because tru is not a numeric value for ST_P1/ST_P2 and not two constants for ST_PCC."
+    },
+    "par_body_n__Sn": {
+      "solution": "Lemma par_body_n__Sn : forall n st,\n  st X = n /\\ st Y = 0 ->\n  par_loop / st -->* par_loop / (X !-> S n ; st).\nProof.\n  (* By executing: Y:=1, then the if-true branch X:=X+1, then Y:=0 *)\n  intros n st [HX HY].\n  eapply multi_step. apply CS_Par2. apply CS_SeqStep. apply CS_Asgn.\n  eapply multi_step. apply CS_Par2. apply CS_SeqFinish.\n  eapply multi_step. apply CS_Par2. apply CS_SeqStep.\n    apply CS_IfTrue. rewrite t_update_eq. rewrite HY. reflexivity.\n  eapply multi_step. apply CS_Par2. apply CS_SeqStep. apply CS_Asgn.\n  eapply multi_step. apply CS_Par2. apply CS_SeqFinish.\n  eapply multi_step. apply CS_Par2. apply CS_SeqStep. apply CS_Asgn.\n  simpl. rewrite t_update_eq. rewrite HX.\n  eapply multi_step. apply CS_Par2. apply CS_SeqFinish.\n  apply multi_refl.\nQed.",
+      "explanation": "Execute the par loop body: Y:=1, then if Y<>0 then X:=X+1, then Y:=0. This increments X by 1."
+    },
+    "par_body_n": {
+      "solution": "Lemma par_body_n : forall n st,\n  st X = 0 /\\ st Y = 0 ->\n  exists st', par_loop / st -->* par_loop / st' /\\ st' X = n /\\ st' Y = 0.\nProof.\n  induction n; intros st [HX HY].\n  - exists st. split. apply multi_refl. split; assumption.\n  - destruct (IHn st) as [st' [Hsteps [HX' HY']]]; [split; assumption |].\n    exists (X !-> S n ; st'). split.\n    + eapply multi_trans. apply Hsteps.\n      apply par_body_n__Sn. split; assumption.\n    + split. apply t_update_eq. rewrite t_update_neq. assumption. discriminate.\nQed.",
+      "explanation": "By induction on n: execute the body n times, each time incrementing X by 1."
+    },
+    "compiler_is_correct": {
+      "solution": "(* Advanced exercise about compiler correctness using small-step semantics. *)\n(* The compiler translates Imp commands to a sequence of small-step reductions.\n   Correctness means: if the command evaluates to a state st', then the compiled\n   code multi-steps to the corresponding configuration. *)",
+      "explanation": "Compiler correctness bridges big-step and small-step semantics, showing compiled code produces the same final state."
+    },
+    "properties_of_altered_step": {
+      "solution": "(* Manual grade exercise about properties of the altered step relation.\n   With the shortcut rule added:\n   - Determinism: becomes false (both the normal path and shortcut can apply)\n   - Strong progress: remains true (more terms can step now)\n   - Values are normal forms: remains true (values still can't step) *)",
+      "explanation": "The shortcut evaluation rule breaks determinism but preserves strong progress and the property that values are normal forms."
+    },
+    "normalize_ex": {
+      "solution": "Lemma normalize_ex : exists e',\n  (P (C 3) (P (C 2) (C 1))) -->* e' /\\ normal_form step e'.\nProof.\n  eexists. split.\n  - normalize.\n  - apply nf_same_as_value. apply v_C.\nQed.",
+      "explanation": "Use the normalize tactic to reduce the expression to its normal form C 6."
+    },
+    "normalize_ex'": {
+      "solution": "Lemma normalize_ex' : exists e',\n  (P (C 3) (P (C 2) (C 1))) -->* e' /\\ normal_form step e'.\nProof.\n  exists (C 6). split.\n  - eapply multi_step. { apply ST_P2. apply v_C. apply ST_PCC. }\n    eapply multi_step. { apply ST_PCC. }\n    apply multi_refl.\n  - apply nf_same_as_value. apply v_C.\nQed.",
+      "explanation": "Manually reduce: P (C 2) (C 1) -> C 3, then P (C 3) (C 3) -> C 6."
+    }
+  }
+}

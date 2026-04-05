@@ -1,0 +1,62 @@
+{
+  "chapter": "Basic",
+  "volume": "slf",
+  "exercises": {
+    "triple_quadruple": {
+      "solution": "Lemma triple_quadruple : forall (n:int),\n  triple (quadruple n)\n    \\[]\n    (fun r => \\[r = 4 * n]).\nProof using.\n  xwp. xapp. xapp. xsimpl. math.\nQed.",
+      "explanation": "Specify quadruple returns 4*n. The function computes m = n+n then returns m+m. xwp starts the WP reasoning, xapp handles the additions, and xsimpl with math closes the arithmetic goal."
+    },
+    "triple_inplace_double": {
+      "solution": "Lemma triple_inplace_double : forall (p:loc) (n:int),\n  triple (inplace_double p)\n    (p ~~> n)\n    (fun _ => p ~~> (2 * n)).\nProof using.\n  xwp. xapp. xapp. xapp. xsimpl. math.\nQed.",
+      "explanation": "Specify inplace_double reads n from p, computes m=n+n, writes m to p. xapp handles read, addition, and write; xsimpl closes with math for 2*n = n+n."
+    },
+    "triple_transfer": {
+      "solution": "Lemma triple_transfer : forall (p q:loc) (n m:int),\n  triple (transfer p q)\n    (p ~~> n \\* q ~~> m)\n    (fun _ => p ~~> (n + m) \\* q ~~> 0).\nProof using.\n  xwp. xapp. xapp. xapp. xapp. xapp. xsimpl.\nQed.",
+      "explanation": "Transfer reads both references, computes sum, writes sum to p and 0 to q. Each operation is handled by xapp."
+    },
+    "triple_transfer_aliased": {
+      "solution": "Lemma triple_transfer_aliased : forall (p:loc) (n:int),\n  triple (transfer p p)\n    (p ~~> n)\n    (fun _ => p ~~> 0).\nProof using.\n  xwp. xapp. xapp. xapp. xapp. xapp. xsimpl.\nQed.",
+      "explanation": "When p and q alias, transfer reads n twice, writes n+n to p, then writes 0 to p. Final state is p ~~> 0."
+    },
+    "triple_ref_greater_abstract": {
+      "solution": "Lemma triple_ref_greater_abstract : forall (p:loc) (n:int),\n  triple (ref_greater p)\n    (p ~~> n)\n    (funloc q => p ~~> n \\* q ~~> (n+1) \\* \\[n+1 > n]).\nProof using.\n  intros. applys triple_conseq triple_ref_greater.\n  { xsimpl. }\n  { intros r. xsimpl. math. }\nQed.\n\nLemma triple_ref_greater_abstract' : forall (p:loc) (n:int),\n  triple (ref_greater p)\n    (p ~~> n)\n    (funloc q => \\exists m, p ~~> n \\* q ~~> m \\* \\[m > n]).\nProof using.\n  intros. applys triple_conseq triple_ref_greater.\n  { xsimpl. }\n  { intros r. xsimpl. math. }\nQed.",
+      "explanation": "Derive an abstract spec from triple_ref_greater by using triple_conseq to weaken the postcondition, introducing an existential m with m > n."
+    },
+    "triple_get_and_free": {
+      "solution": "Lemma triple_get_and_free : forall p v,\n  triple (get_and_free p)\n    (p ~~> v)\n    (fun r => \\[r = v]).\nProof using.\n  xwp. xapp. xapp. xval. xsimpl. auto.\nQed.",
+      "explanation": "get_and_free reads from p, frees p, then returns the read value. xapp handles read and free, xval handles the return."
+    },
+    "triple_two_dice": {
+      "solution": "Lemma triple_two_dice :\n  triple <{ two_dice () }>\n    \\[]\n    (fun r => \\exists n, \\[r = val_int n] \\* \\[2 <= n <= 12]).\nProof using.\n  xwp. xapp triple_rand. { math. } intros m1 Hm1.\n  xapp triple_rand. { math. } intros m2 Hm2.\n  xapp. xapp. xsimpl. math.\nQed.",
+      "explanation": "Two dice rolls each return values in [0,6), then we add them and add 2. The result is in [2,12]."
+    },
+    "triple_repeat_incr": {
+      "solution": "Lemma triple_repeat_incr : forall (m n:int) (p:loc),\n  m >= 0 ->\n  triple (repeat_incr p m)\n    (p ~~> n)\n    (fun _ => p ~~> (n + m)).\nProof using.\n  introv Hm. gen n. induction_wf IH: (downto 0) m. intros.\n  xwp. xapp. xif; intros C.\n  { xapp. xapp. xapp. { math. } { math. }\n    xsimpl. math. }\n  { xval. xsimpl. math. }\nQed.",
+      "explanation": "Prove by well-founded induction on m. If m>0, incr p and recurse with m-1. If m<=0, return. Final state has p ~~> (n+m)."
+    },
+    "triple_repeat_incr'": {
+      "solution": "Lemma triple_repeat_incr' : forall (p:loc) (n m:int),\n  m >= 0 ->\n  triple (repeat_incr p m)\n    (p ~~> n)\n    (fun _ => p ~~> (n + m)).\nProof using.\n  introv Hm. gen n. induction_wf IH: (downto 0) m. intros.\n  xwp. xapp. xif; intros C.\n  { xapp. xapp. xapp. { math. } { math. }\n    xsimpl. math. }\n  { xval. xsimpl. math. }\nQed.",
+      "explanation": "Same proof as triple_repeat_incr with reordered universally quantified variables."
+    },
+    "triple_step_transfer": {
+      "solution": "Lemma triple_step_transfer : forall p q n m,\n  p <> q ->\n  triple (step_transfer p q)\n    (p ~~> n \\* q ~~> m)\n    (fun _ => p ~~> (n + 1) \\* q ~~> (m + n + 1)).\nProof using.\n  introv Hpq. xwp. xapp. xapp. xapp. xapp. xapp. xsimpl. math.\nQed.",
+      "explanation": "step_transfer increments p then transfers from p to q. After incr, p has n+1. Then transfer adds p's value to q."
+    },
+    "triple_factoimp_aux": {
+      "solution": "Lemma triple_factoimp_aux : forall (r:loc) (i n:int),\n  0 <= i ->\n  triple (factoimp_aux r i)\n    (r ~~> n)\n    (fun _ => r ~~> (n * facto i)).\nProof using.\n  introv Hi. gen n. induction_wf IH: (downto 0) i. intros.\n  xwp. xapp. xif; intros C.\n  { xapp. xapp. xapp. { math. } { math. }\n    xsimpl. rewrite facto_succ; try math. ring. }\n  { xval. xsimpl. assert (i = 0) by math. subst.\n    simpl. ring. }\nQed.",
+      "explanation": "Prove by well-founded induction on i. When i>0, multiply r by i and recurse. When i<=0, r already holds n*facto(0)=n*1=n."
+    },
+    "triple_factoimp": {
+      "solution": "Lemma triple_factoimp : forall n,\n  n >= 0 ->\n  triple (factoimp n)\n    \\[]\n    (fun r => \\[r = facto n]).\nProof using.\n  introv Hn. xwp. xapp. intros r.\n  xapp triple_factoimp_aux. { math. }\n  xapp. xsimpl. math.\nQed.",
+      "explanation": "factoimp allocates r:=1, calls factoimp_aux which multiplies r by facto(n), then reads and returns r."
+    },
+    "triple_factoimp_aux'": {
+      "solution": "Lemma triple_factoimp_aux' : forall (r:loc) (i n:int),\n  n = facto i ->\n  0 <= i ->\n  triple (factoimp_aux r i)\n    (r ~~> n)\n    (fun _ => r ~~> (facto i)).\nProof using.\n  introv Hn Hi. gen n. induction_wf IH: (downto 0) i. intros.\n  xwp. xapp. xif; intros C.\n  { xapp. xapp. xapp. { math. } { math. rewrite facto_succ; try math. ring. }\n    xsimpl. }\n  { xval. xsimpl. assert (i = 0) by math. subst. simpl. math. }\nQed.",
+      "explanation": "Alternative factoimp_aux spec where precondition asserts n = facto i, so the loop invariant is more explicit."
+    },
+    "triple_factoimp'": {
+      "solution": "Lemma triple_factoimp' : forall n,\n  n >= 0 ->\n  triple (factoimp n)\n    \\[]\n    (fun r => \\[r = facto n]).\nProof using.\n  introv Hn. xwp. xapp. intros r.\n  xapp triple_factoimp_aux'. { math. } { math. }\n  xapp. xsimpl. auto.\nQed.",
+      "explanation": "Alternative proof of factoimp using triple_factoimp_aux' with the stronger loop invariant."
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "chapter": "Norm",
+  "volume": "plf",
+  "exercises": {
+    "norm_fail": {
+      "solution": "(* Manual grade exercise.\n   A straightforward induction on the size of a well-typed term fails because\n   beta-reduction can INCREASE the size of a term. When we substitute a value\n   v for a variable x in a term t, if x occurs multiple times in t, the result\n   [x:=v]t can be larger than the original application (\\x:T. t) v.\n   For example, (\\x:T. x x) v --> v v, and if v is itself a large term,\n   the result has duplicated it. So the size of the term does not decrease\n   monotonically under reduction, and a naive induction on size fails. *)",
+      "explanation": "Naive induction on term size fails because beta-reduction can duplicate the argument, increasing the term size."
+    },
+    "norm": {
+      "solution": "(* 5-star exercise: complete the normalization proof.\n   The proof uses a logical relation R_T(t) defined by:\n   - R_Bool(t) = t halts (reaches a value)\n   - R_(T1->T2)(t) = t halts AND for all t' such that R_T1(t'), R_T2(t t')\n   - R_(T1*T2)(t) = t halts AND R_T1(fst t) AND R_T2(snd t)\n   \n   Key lemma: msubst_R - if all free variables of t are mapped to values\n   in the logical relation, then t is in the logical relation.\n   \n   The cases for products and conditionals follow the same pattern:\n   - For pairs: if R_T1(t1) and R_T2(t2), then R_(T1*T2)((t1,t2))\n   - For fst: if R_(T1*T2)(t), then R_T1(fst t)\n   - For snd: if R_(T1*T2)(t), then R_T2(snd t)\n   - For if: if R_Bool(t1) and R_T(t2) and R_T(t3), then R_T(if t1 then t2 else t3)\n   \n   The missing proofs involve:\n   1. Showing the logical relation is closed under expansion (if t-->t' and R_T(t'), then R_T(t))\n   2. Showing pairs satisfy the logical relation\n   3. Showing projections satisfy the logical relation\n   4. Showing conditionals satisfy the logical relation *)",
+      "explanation": "Complete the normalization proof by filling in the product type and conditional cases in the logical relations argument."
+    }
+  }
+}

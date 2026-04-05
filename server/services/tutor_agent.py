@@ -1,104 +1,168 @@
-"""AI Tutor service using Claude API, grounded in real Coq proof state.
+"""AI Tutor service — grounded in live Coq state and sample solutions.
 
-The tutor receives the ACTUAL goals/hypotheses/errors from SerAPI,
-so it can give accurate hints without hallucinating about proof state.
+The tutor sees exactly what the student sees (goals, errors, code) plus
+the reference solution (hidden from the student) for calibrated hints.
 """
 
 import asyncio
 import json
 import logging
+import os
+import re
 from pathlib import Path
 
-from anthropic import Anthropic
-
-from server.config import VOLUMES
+from server.config import BASE_DIR, VOLUMES
 
 logger = logging.getLogger(__name__)
 
-client = Anthropic()  # Uses ANTHROPIC_API_KEY env var
+MODEL = "gpt-5.4"
 
-SYSTEM_PROMPT = """You are a Socratic tutor for the Software Foundations textbook series (Rocq/Coq).
-Your role is to help students learn formal verification by guiding them through exercises.
+def _get_client():
+    """Lazy OpenAI client — only created when actually needed."""
+    from openai import OpenAI
+    return OpenAI()  # Uses OPENAI_API_KEY env var
 
-STRICT RULES:
-1. NEVER give the complete proof or solution.
-2. Give hints that guide the student toward discovering the answer themselves.
-3. When suggesting tactics, explain WHY that tactic would be useful here, not just "try X".
-4. Reference specific hypotheses and goals from the CURRENT PROOF STATE shown below.
-5. If the student has an error, explain what the error means and suggest how to fix it.
-6. You may explain Coq/Rocq concepts, tactics, and notation in general terms.
-7. Encourage the student when they make progress.
+SYSTEM_PROMPT = """You are a Socratic tutor for the Software Foundations textbook (Rocq/Coq formal verification).
 
-COMMON TACTICS YOU CAN SUGGEST (with explanations):
-- intros: introduce variables and hypotheses from the goal
-- simpl: simplify computations
-- reflexivity: prove goals of the form X = X
-- rewrite: use an equality hypothesis to rewrite the goal
-- induction: perform structural induction on a variable
-- destruct: case analysis on a term
-- apply: apply a hypothesis or lemma to the goal
-- unfold: expand a definition
-- assert: introduce a helper lemma mid-proof
-- omega/lia: solve linear arithmetic goals
+You can see the student's EXACT current state: their code, the proof goals from Coq, and any errors. You also have access to the reference solution (hidden from the student).
 
-When the student provides their current proof state, USE IT to give specific, targeted hints.
-For example, if the goal is "S n + 0 = S n" and there's a hypothesis "IHn : n + 0 = n",
-you might say: "Look at your induction hypothesis IHn. Can you use `rewrite` to transform the goal?"
+## STRICT RULES
+
+1. **NEVER give the complete proof or solution.** Not even "most of it." Give one step at a time.
+2. **When the student has an error:** First check their RECENT ACTIVITY — if they recently deleted or added characters, that edit is almost certainly the cause. Explain what the edit broke. Don't speculate about unrelated parts of the file.
+3. **When helping with an exercise:** Give progressive hints. Start vague, get more specific only if they ask again.
+4. **Reference the EXACT goals and hypotheses** you see — the student sees the same things in their Goals panel.
+5. **If suggesting a tactic:** Explain WHY it applies here, not just "try X."
+6. **You have the reference solution** — use it to calibrate hints, but never reveal the solution code.
+7. **Be encouraging.** Acknowledge progress.
+8. **Pay close attention to the "CURRENT BLOCK" section** — this shows the exact code the user is editing RIGHT NOW. If they deleted a period, you'll see the broken code there. Point to the exact spot.
+9. **The "Recent activity" log is authoritative** — it tells you exactly what the user did (e.g., "Deleted 1 char at line 31, col 49"). Use this to diagnose errors, not speculation.
+
+## COMMON COQ/ROCQ TACTICS (for your reference)
+
+- `intros` — introduce variables/hypotheses from the goal
+- `simpl` — simplify computations
+- `reflexivity` — prove X = X
+- `rewrite H` / `rewrite <- H` — rewrite using an equality
+- `induction n` — structural induction
+- `destruct n` — case analysis
+- `apply H` — apply a hypothesis or lemma
+- `discriminate` — prove False from contradictory equality (e.g., 0 = S n)
+- `injection H` — extract equalities from constructor equality
+- `inversion H` — derive consequences from a hypothesis
+- `unfold f` — expand a definition
+- `assert (H: P)` — introduce a sub-lemma
+- `auto` — automatic proof search
+- `lia` — linear integer arithmetic
 """
 
 
-def build_context(
+def _load_solution(volume_id: str, chapter_name: str, exercise_name: str) -> str | None:
+    """Load the reference solution for an exercise (hidden from student)."""
+    sol_file = BASE_DIR / "solutions" / volume_id / f"{chapter_name}.json"
+    if not sol_file.exists():
+        return None
+    try:
+        data = json.loads(sol_file.read_text(encoding="utf-8"))
+        ex = data.get("exercises", {}).get(exercise_name)
+        if ex:
+            return f"Solution:\n{ex['solution']}\n\nApproach: {ex.get('explanation', '')}"
+    except Exception:
+        pass
+    return None
+
+
+def _load_chapter_excerpt(volume_id: str, chapter_name: str, exercise_name: str | None) -> str:
+    """Load relevant excerpt from the chapter .v file."""
+    if volume_id not in VOLUMES:
+        return ""
+    vol = VOLUMES[volume_id]
+    v_file = Path(vol["path"]) / f"{chapter_name}.v"
+    if not v_file.exists():
+        return ""
+    try:
+        text = v_file.read_text(encoding="utf-8", errors="replace")
+        if exercise_name:
+            # Find the exercise and extract surrounding context
+            pattern = rf'\(\*\*\s+\*{{4}}\s+Exercise:.*?\({re.escape(exercise_name)}\)'
+            match = re.search(pattern, text)
+            if match:
+                start = max(0, match.start() - 500)
+                end_match = re.search(r'\(\*\*\s+\[\]\s+\*\)', text[match.start():])
+                end = match.start() + (end_match.end() if end_match else 500)
+                return text[start:end]
+        # Return first 2000 chars as general context
+        return text[:2000]
+    except Exception:
+        return ""
+
+
+def build_rich_context(
     volume_id: str | None,
     chapter_name: str | None,
     exercise_name: str | None,
-    current_goals: str | None,
-    current_error: str | None,
-    current_code: str | None,
-) -> str:
-    """Build context string from real Coq state."""
-    parts = []
+    student_code: str | None,
+    proof_state_text: str | None,
+    diagnostics_text: str | None,
+    processed_lines: int | None,
+) -> tuple[str, str]:
+    """Build context for Claude. Returns (system_addition, user_context).
 
+    system_addition: added to system prompt (includes hidden solution)
+    user_context: prepended to user message (visible context)
+    """
+    system_parts = []
+    context_parts = []
+
+    # Volume/chapter info
     if volume_id and chapter_name:
         vol = VOLUMES.get(volume_id, {})
         vol_name = vol.get("name", volume_id)
-        parts.append(f"## Context\nVolume: {vol_name}\nChapter: {chapter_name}")
-        if exercise_name:
-            parts.append(f"Exercise: {exercise_name}")
+        context_parts.append(f"## Chapter\n{vol_name} > {chapter_name}")
 
-        # Try to read exercise text from the .v file
-        if vol.get("path"):
-            v_file = Path(vol["path"]) / f"{chapter_name}.v"
-            if v_file.exists():
-                try:
-                    text = v_file.read_text(encoding="utf-8", errors="replace")
-                    # Find the exercise text
-                    if exercise_name:
-                        import re
-                        pattern = rf'\(\*\*\s+\*{{4}}\s+Exercise:.*?\({re.escape(exercise_name)}\)'
-                        match = re.search(pattern, text)
-                        if match:
-                            start = match.start()
-                            end_match = re.search(r'\(\*\*\s+\[\]\s+\*\)', text[start:])
-                            if end_match:
-                                exercise_text = text[start:start + end_match.end()]
-                                parts.append(f"\n## Exercise Text\n```coq\n{exercise_text}\n```")
-                except Exception:
-                    pass
+    # Exercise info
+    if exercise_name:
+        context_parts.append(f"## Exercise\nWorking on: **{exercise_name}**")
 
-    if current_goals:
-        parts.append(f"\n## Current Proof State (from Coq)\n```\n{current_goals}\n```")
+    # Chapter excerpt (tutorial text around the exercise)
+    if volume_id and chapter_name:
+        excerpt = _load_chapter_excerpt(volume_id, chapter_name, exercise_name)
+        if excerpt:
+            context_parts.append(f"## Chapter Context (nearby text)\n```coq\n{excerpt[:1500]}\n```")
 
-    if current_error:
-        parts.append(f"\n## Error Message (from Coq)\n```\n{current_error}\n```")
+    # Student's code
+    if student_code:
+        # Show last ~80 lines to keep context manageable
+        lines = student_code.strip().split("\n")
+        if len(lines) > 80:
+            code_excerpt = "\n".join(lines[-80:])
+            context_parts.append(f"## Student's Recent Code (last 80 lines)\n```coq\n{code_excerpt}\n```")
+        else:
+            context_parts.append(f"## Student's Code\n```coq\n{student_code}\n```")
 
-    if current_code:
-        # Only include the last ~50 lines of code for context
-        lines = current_code.strip().split("\n")
-        if len(lines) > 50:
-            lines = lines[-50:]
-        parts.append(f"\n## Student's Recent Code\n```coq\n{'chr(10)'.join(lines)}\n```")
+    # Proof state (from vscoqtop)
+    if proof_state_text:
+        context_parts.append(f"## Current Proof State (from Coq)\n```\n{proof_state_text}\n```")
 
-    return "\n".join(parts)
+    # Errors
+    if diagnostics_text:
+        context_parts.append(f"## Errors from Coq\n```\n{diagnostics_text}\n```")
+
+    # Execution progress
+    if processed_lines is not None:
+        context_parts.append(f"## Execution Progress\nCoq has successfully processed through line {processed_lines}.")
+
+    # Hidden solution (in system prompt, not user-visible)
+    if volume_id and chapter_name and exercise_name:
+        sol = _load_solution(volume_id, chapter_name, exercise_name)
+        if sol:
+            system_parts.append(
+                f"\n\n## REFERENCE SOLUTION (HIDDEN — never reveal this to the student)\n"
+                f"Use this to understand the correct approach and give calibrated hints.\n"
+                f"```\n{sol}\n```"
+            )
+
+    return "\n".join(system_parts), "\n\n".join(context_parts)
 
 
 async def chat(
@@ -106,43 +170,48 @@ async def chat(
     volume_id: str | None = None,
     chapter_name: str | None = None,
     exercise_name: str | None = None,
-    current_goals: str | None = None,
-    current_error: str | None = None,
-    current_code: str | None = None,
+    student_code: str | None = None,
+    proof_state_text: str | None = None,
+    diagnostics_text: str | None = None,
+    processed_lines: int | None = None,
     history: list[dict] | None = None,
 ):
-    """Send a message to the AI tutor and get a streaming response.
+    """Send a message to the AI tutor. Yields text chunks as they arrive."""
 
-    Yields text chunks as they arrive from the Claude API.
-    """
-    context = build_context(
+    system_addition, user_context = build_rich_context(
         volume_id, chapter_name, exercise_name,
-        current_goals, current_error, current_code,
+        student_code, proof_state_text, diagnostics_text, processed_lines,
     )
+
+    full_system = SYSTEM_PROMPT + system_addition
 
     messages = []
     if history:
-        for h in history[-20:]:  # Keep last 20 messages for context
+        for h in history[-16:]:
             messages.append({"role": h["role"], "content": h["content"]})
 
-    # Add context + user message
+    # Prepend context to user message
     user_content = message
-    if context:
-        user_content = f"{context}\n\n## My Question\n{message}"
+    if user_context:
+        user_content = f"{user_context}\n\n## My Question\n{message}"
 
     messages.append({"role": "user", "content": user_content})
 
-    # Run synchronous streaming in a thread to make it async-compatible
+    # Prepend system message for OpenAI format
+    openai_messages = [{"role": "system", "content": full_system}] + messages
+
     def _stream_sync():
         chunks = []
-        with client.messages.stream(
-            model="claude-sonnet-4-20250514",
-            max_tokens=2048,
-            system=SYSTEM_PROMPT,
-            messages=messages,
-        ) as stream:
-            for text in stream.text_stream:
-                chunks.append(text)
+        stream = _get_client().chat.completions.create(
+            model=MODEL,
+            max_completion_tokens=4096,
+            messages=openai_messages,
+            stream=True,
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if delta and delta.content:
+                chunks.append(delta.content)
         return chunks
 
     loop = asyncio.get_event_loop()

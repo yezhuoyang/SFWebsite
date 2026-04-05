@@ -1,0 +1,54 @@
+{
+  "chapter": "BagPerm",
+  "volume": "vfa",
+  "exercises": {
+    "bag_eqv_refl": {
+      "solution": "Proof.\n  unfold bag_eqv. intros. reflexivity.\nQed.",
+      "explanation": "Reflexivity of bag equivalence follows from reflexivity of nat equality."
+    },
+    "bag_eqv_sym": {
+      "solution": "Proof.\n  unfold bag_eqv. intros b1 b2 H n.\n  symmetry. apply H.\nQed.",
+      "explanation": "Symmetry of bag equivalence follows from symmetry of equality."
+    },
+    "bag_eqv_trans": {
+      "solution": "Proof.\n  unfold bag_eqv. intros b1 b2 b3 H1 H2 n.\n  rewrite H1. apply H2.\nQed.",
+      "explanation": "Transitivity of bag equivalence follows from transitivity of equality."
+    },
+    "bag_eqv_cons": {
+      "solution": "Proof.\n  unfold bag_eqv. intros x b1 b2 H n.\n  simpl. rewrite H. reflexivity.\nQed.",
+      "explanation": "Adding the same element x to both bags preserves equivalence since count adds the same amount to both sides."
+    },
+    "insert_bag": {
+      "solution": "Proof.\n  induction l as [| h t IH].\n  - simpl. apply bag_eqv_refl.\n  - simpl. bdestruct (x <=? h).\n    + apply bag_eqv_refl.\n    + unfold bag_eqv. intros n. simpl.\n      bdestruct (h =? n).\n      * specialize (IH n). simpl in IH.\n        bdestruct (x =? n); bdestruct (h =? n); lia.\n      * specialize (IH n). simpl in IH.\n        bdestruct (x =? n); bdestruct (h =? n); lia.\nQed.",
+      "explanation": "By induction on l. When x > h, we unfold bag_eqv and reason about counts using bdestruct and lia."
+    },
+    "sort_bag": {
+      "solution": "Proof.\n  induction l as [| h t IH].\n  - simpl. apply bag_eqv_refl.\n  - simpl. apply bag_eqv_trans with (h :: sort t).\n    + apply bag_eqv_cons. apply IH.\n    + apply insert_bag.\nQed.",
+      "explanation": "By induction on l. Use transitivity: first apply bag_eqv_cons with IH, then insert_bag."
+    },
+    "permutations_vs_multiset": {
+      "solution": "(* Manual grade exercise - no code solution needed *)",
+      "explanation": "This is a manually graded exercise comparing proof approaches for permutations vs multisets."
+    },
+    "perm_bag": {
+      "solution": "Proof.\n  intros al bl Hperm.\n  induction Hperm.\n  - apply bag_eqv_refl.\n  - apply bag_eqv_cons. assumption.\n  - unfold bag_eqv. intros n. simpl.\n    bdestruct (x =? n); bdestruct (y =? n); lia.\n  - apply bag_eqv_trans with l'; assumption.\nQed.",
+      "explanation": "By induction on the Permutation evidence. The swap case uses count arithmetic; the trans case chains equivalences."
+    },
+    "bag_nil_inv": {
+      "solution": "Proof.\n  intros b H. destruct b as [| h t].\n  - reflexivity.\n  - specialize (H h). simpl in H.\n    bdestruct (h =? h). lia. lia.\nQed.",
+      "explanation": "If b is non-empty with head h, then count h b >= 1, contradicting bag_eqv with the empty list."
+    },
+    "bag_cons_inv": {
+      "solution": "Proof.\n  induction l as [| h t IH]; intros.\n  - simpl in H. discriminate.\n  - simpl in H. bdestruct (h =? x).\n    + subst. exists [], t. simpl. split; auto. lia.\n    + assert (S n = count x t).\n      { lia. }\n      destruct (IH x n H0) as [l1 [l2 [Heq Hcount]]].\n      exists (h :: l1), l2. split.\n      * simpl. rewrite Heq. reflexivity.\n      * simpl. bdestruct (h =? x). lia. lia.\nQed.",
+      "explanation": "By induction on l. If the head equals x, split there; otherwise use IH on the tail and prepend the head."
+    },
+    "count_insert_other": {
+      "solution": "Proof.\n  induction l1 as [| h l1' IH]; intros.\n  - simpl. bdestruct (x =? y). lia. reflexivity.\n  - simpl. bdestruct (h =? y).\n    + rewrite IH by auto. simpl. bdestruct (h =? y); lia.\n    + rewrite IH by auto. simpl. bdestruct (h =? y); lia.\nQed.",
+      "explanation": "By induction on l1. Since y <> x, the count of y is unaffected by the presence of x."
+    },
+    "bag_perm": {
+      "solution": "Proof.\n  intros al bl H.\n  generalize dependent bl.\n  induction al as [| a al' IH]; intros.\n  - apply bag_nil_inv in H. subst. constructor.\n  - assert (Ha: S (count a al') = count a bl).\n    { specialize (H a). simpl in H. bdestruct (a =? a). lia. lia. }\n    destruct (bag_cons_inv bl a (count a al') Ha) as [l1 [l2 [Heq Hcount]]].\n    subst.\n    apply Permutation_cons_app.\n    apply IH.\n    intro n. specialize (H n). simpl in H.\n    bdestruct (a =? n).\n    + subst. rewrite count_insert_other in H by auto. lia.\n      Fail idtac.\n    Restart.\n  intros al bl H.\n  generalize dependent bl.\n  induction al as [| a al' IH]; intros.\n  - apply bag_nil_inv in H. subst. constructor.\n  - assert (Ha: S (count a al') = count a bl).\n    { specialize (H a). simpl in H. bdestruct (a =? a); lia. }\n    destruct (bag_cons_inv bl a (count a al') Ha) as [l1 [l2 [Heq Hcount]]].\n    subst.\n    apply Permutation_cons_app.\n    apply IH.\n    intro n. specialize (H n). simpl in H.\n    bdestruct (a =? n).\n    + subst. rewrite count_insert_other with (y := n) (x := n) in H.\n      all: try lia.\n      Restart.\n  intros al. induction al as [| a al' IH]; intros.\n  - apply bag_nil_inv in H. subst. constructor.\n  - assert (Ha: S (count a al') = count a bl).\n    { specialize (H a). simpl in H. bdestruct (a =? a); lia. }\n    destruct (bag_cons_inv bl a (count a al') Ha) as [l1 [l2 [Heq Hcount]]].\n    subst bl.\n    apply Permutation_cons_app.\n    apply IH. intro n.\n    specialize (H n). simpl in H.\n    bdestruct (a =? n).\n    + subst. rewrite count_insert_other by auto. lia.\n    + rewrite count_insert_other by auto. lia.\nQed.",
+      "explanation": "By induction on al. For non-empty al with head a, find a in bl using bag_cons_inv, then apply Permutation_cons_app and use IH on the remainders."
+    }
+  }
+}

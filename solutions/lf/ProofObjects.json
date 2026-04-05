@@ -1,0 +1,78 @@
+{
+  "chapter": "ProofObjects",
+  "volume": "lf",
+  "exercises": {
+    "eight_is_even": {
+      "solution": "Theorem ev_8 : ev 8.\nProof.\n  apply ev_SS. apply ev_SS. apply ev_SS. apply ev_SS. apply ev_0.\nQed.\n\nDefinition ev_8' : ev 8 :=\n  ev_SS 6 (ev_SS 4 (ev_SS 2 (ev_SS 0 ev_0))).",
+      "explanation": "ev 8 is proved by applying ev_SS four times and then ev_0. The proof object chains the constructor applications."
+    },
+    "conj_fact": {
+      "solution": "Definition conj_fact : forall P Q R, P /\\ Q -> Q /\\ R -> P /\\ R :=\n  fun P Q R HPQ HQR =>\n    match HPQ with\n    | conj HP _ =>\n      match HQR with\n      | conj _ HR => conj HP HR\n      end\n    end.",
+      "explanation": "Extract P from the first conjunction and R from the second, then combine them."
+    },
+    "or_commut'": {
+      "solution": "Definition or_commut' : forall P Q, P \\/ Q -> Q \\/ P :=\n  fun P Q HPQ =>\n    match HPQ with\n    | or_introl HP => or_intror HP\n    | or_intror HQ => or_introl HQ\n    end.",
+      "explanation": "Pattern match on the disjunction and swap the sides using or_introl and or_intror."
+    },
+    "ex_ev_Sn": {
+      "solution": "Definition ex_ev_Sn : ex (fun n => ev (S n)) :=\n  ex_intro (fun n => ev (S n)) 1 (ev_SS 0 ev_0).",
+      "explanation": "Witness n=1, then ev (S 1) = ev 2 = ev_SS 0 ev_0."
+    },
+    "ex_match": {
+      "solution": "Definition ex_match : forall (A : Type) (P Q : A -> Prop),\n  (forall x, P x -> Q x) ->\n  (exists x, P x) -> (exists x, Q x) :=\n  fun A P Q HPQ Hex =>\n    match Hex with\n    | ex_intro _ x HPx => ex_intro Q x (HPQ x HPx)\n    end.",
+      "explanation": "Destructure the existential to get witness x and proof of P x, then apply the implication to get Q x."
+    },
+    "p_implies_true": {
+      "solution": "Definition p_implies_true : forall P, P -> True :=\n  fun P _ => I.",
+      "explanation": "Ignore the proof of P and return I, the constructor of True."
+    },
+    "ex_falso_quodlibet'": {
+      "solution": "Definition ex_falso_quodlibet' : forall P, False -> P :=\n  fun P contra => match contra with end.",
+      "explanation": "Pattern match on False, which has no constructors, so the match is vacuously valid for any return type."
+    },
+    "eq_cons": {
+      "solution": "Definition eq_cons : forall (X : Type) (h1 h2 : X) (t1 t2 : list X),\n    h1 == h2 -> t1 == t2 -> h1 :: t1 == h2 :: t2 :=\n  fun X h1 h2 t1 t2 Hh Ht =>\n    match Hh with\n    | eq_refl h =>\n      match Ht with\n      | eq_refl t => eq_refl (h :: t)\n      end\n    end.",
+      "explanation": "Pattern match on both equality proofs to unify h1=h2 and t1=t2, then use eq_refl on the cons."
+    },
+    "equality__leibniz_equality": {
+      "solution": "Lemma equality__leibniz_equality : forall (X : Type) (x y: X),\n  x == y -> forall (P : X -> Prop), P x -> P y.\nProof.\n  intros X x y Heq P HPx.\n  destruct Heq as [a]. apply HPx.\nQed.",
+      "explanation": "Destruct the equality proof to unify x and y, then the goal P y becomes P x which is exactly our hypothesis."
+    },
+    "equality__leibniz_equality_term": {
+      "solution": "Definition equality__leibniz_equality_term : forall (X : Type) (x y: X),\n    x == y -> forall P : (X -> Prop), P x -> P y :=\n  fun X x y Heq =>\n    match Heq with\n    | eq_refl a => fun P HPa => HPa\n    end.",
+      "explanation": "Pattern match on the equality proof immediately, unifying x and y to a, then the identity function suffices."
+    },
+    "leibniz_equality__equality": {
+      "solution": "Lemma leibniz_equality__equality : forall (X : Type) (x y: X),\n  (forall P:X->Prop, P x -> P y) -> x == y.\nProof.\n  intros X x y H.\n  apply H. apply eq_refl.\nQed.",
+      "explanation": "Instantiate P with (fun z => x == z). Then P x is x == x which is eq_refl, and P y is x == y which is our goal."
+    },
+    "and_assoc": {
+      "solution": "Definition and_assoc : forall P Q R : Prop,\n    P /\\ (Q /\\ R) -> (P /\\ Q) /\\ R :=\n  fun P Q R H =>\n    match H with\n    | conj HP HQR =>\n      match HQR with\n      | conj HQ HR => conj (conj HP HQ) HR\n      end\n    end.",
+      "explanation": "Destructure the nested conjunction, then reassociate the components."
+    },
+    "or_distributes_over_and": {
+      "solution": "Definition or_distributes_over_and : forall P Q R : Prop,\n    P \\/ (Q /\\ R) <-> (P \\/ Q) /\\ (P \\/ R) :=\n  fun P Q R => conj\n    (fun H => match H with\n              | or_introl HP => conj (or_introl HP) (or_introl HP)\n              | or_intror HQR =>\n                match HQR with\n                | conj HQ HR => conj (or_intror HQ) (or_intror HR)\n                end\n              end)\n    (fun H => match H with\n              | conj HPQ HPR =>\n                match HPQ with\n                | or_introl HP => or_introl HP\n                | or_intror HQ =>\n                  match HPR with\n                  | or_introl HP => or_introl HP\n                  | or_intror HR => or_intror (conj HQ HR)\n                  end\n                end\n              end).",
+      "explanation": "Both directions are proved by pattern matching on disjunctions and conjunctions, distributing or collecting as needed."
+    },
+    "negations": {
+      "solution": "Definition double_neg : forall P : Prop,\n    P -> ~~P :=\n  fun P HP HNP => HNP HP.\n\nDefinition contradiction_implies_anything : forall P Q : Prop,\n    (P /\\ ~P) -> Q :=\n  fun P Q H =>\n    match H with\n    | conj HP HNP => match HNP HP with end\n    end.\n\nDefinition de_morgan_not_or : forall P Q : Prop,\n    ~ (P \\/ Q) -> ~P /\\ ~Q :=\n  fun P Q H => conj\n    (fun HP => H (or_introl HP))\n    (fun HQ => H (or_intror HQ)).",
+      "explanation": "double_neg: apply the negation to the proof. contradiction: extract False from P and ~P. de_morgan: construct each negation by showing P or Q leads to a contradiction."
+    },
+    "currying": {
+      "solution": "Definition curry : forall P Q R : Prop,\n    ((P /\\ Q) -> R) -> (P -> (Q -> R)) :=\n  fun P Q R H HP HQ => H (conj HP HQ).\n\nDefinition uncurry : forall P Q R : Prop,\n    (P -> (Q -> R)) -> ((P /\\ Q) -> R) :=\n  fun P Q R H HPQ =>\n    match HPQ with\n    | conj HP HQ => H HP HQ\n    end.",
+      "explanation": "curry: given P and Q separately, construct the pair and apply H. uncurry: destructure the pair and apply H to each component."
+    },
+    "pe_implies_or_eq": {
+      "solution": "Theorem pe_implies_or_eq :\n  propositional_extensionality ->\n  forall (P Q : Prop), (P \\/ Q) = (Q \\/ P).\nProof.\n  intros PE P Q. apply PE.\n  split.\n  - intros [HP | HQ]. right. apply HP. left. apply HQ.\n  - intros [HQ | HP]. right. apply HQ. left. apply HP.\nQed.",
+      "explanation": "Apply propositional extensionality, then prove both directions of the biconditional by swapping the disjunction."
+    },
+    "pe_implies_true_eq": {
+      "solution": "Lemma pe_implies_true_eq :\n  propositional_extensionality ->\n  forall (P : Prop), P -> True = P.\nProof.\n  intros PE P HP. apply PE.\n  split.\n  - intros _. apply HP.\n  - intros _. apply I.\nQed.",
+      "explanation": "Apply propositional extensionality. True -> P uses the given proof HP. P -> True is trivial."
+    },
+    "pe_implies_pi": {
+      "solution": "Theorem pe_implies_pi :\n  propositional_extensionality -> proof_irrelevance.\nProof.\n  unfold proof_irrelevance.\n  intros PE P pf1 pf2.\n  assert (H : True = P). { apply pe_implies_true_eq. apply PE. apply pf1. }\n  subst P.\n  destruct pf1. destruct pf2. reflexivity.\nQed.",
+      "explanation": "Use pe_implies_true_eq to show True = P, then substitute to make pf1, pf2 : True, and both must be I."
+    }
+  }
+}

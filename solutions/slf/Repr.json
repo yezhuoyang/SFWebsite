@@ -1,0 +1,82 @@
+{
+  "chapter": "Repr",
+  "volume": "slf",
+  "exercises": {
+    "MList_if": {
+      "solution": "Lemma MList_if : forall (p:loc) (L:list val),\n  MList L p =\n  (if p = null then \\[L = nil] else\n   \\exists x L' q, \\[L = x :: L'] \\* (p`.head ~~> x) \\* (p`.tail ~~> q) \\* MList L' q).\nProof using.\n  intros. destruct L as [|x L'].\n  { simpl. rewrite MList_nil. xsimpl. { auto. } { intros. subst. auto. } }\n  { simpl. rewrite MList_cons. xsimpl. { intros. false. } { auto. } }\nQed.",
+      "explanation": "MList_if reformulates MList by case analysis on whether p is null. When null, L must be nil; otherwise decompose into head and tail."
+    },
+    "triple_mlength": {
+      "solution": "Lemma triple_mlength : forall L p,\n  triple (mlength p)\n    (MList L p)\n    (fun r => \\[r = length L] \\* MList L p).\nProof using.\n  intros L. induction_wf IH: list_sub L. intros.\n  xwp. xchange MList_if. xif; intros C; case_if; xpull.\n  { intros ->. xval. xchange <- MList_nil. xsimpl. auto. }\n  { intros x L' q ->. xapp. xapp. xapp. { auto. }\n    xchange <- MList_cons. xsimpl. { auto. }\n    rew_list. math. }\nQed.",
+      "explanation": "Prove by structural induction on the list using well-founded induction on list_sub. Base case: null pointer means empty list. Recursive case: read tail, recurse, add 1."
+    },
+    "triple_mlength'": {
+      "solution": "Lemma triple_acclength : forall L p n,\n  triple (acclength n p)\n    (MList L p)\n    (fun r => \\[r = n + length L] \\* MList L p).\nProof using.\n  intros L. induction_wf IH: list_sub L. intros.\n  xwp. xchange MList_if. xif; intros C; case_if; xpull.\n  { intros ->. xval. xchange <- MList_nil. xsimpl. rew_list. math. }\n  { intros x L' q ->. xapp. xapp. { auto. }\n    xchange <- MList_cons. xsimpl. rew_list. math. }\nQed.\n\nLemma triple_mlength' : forall L p,\n  triple (mlength' p)\n    (MList L p)\n    (fun r => \\[r = length L] \\* MList L p).\nProof using.\n  intros. xwp. xapp triple_acclength. xsimpl. math.\nQed.",
+      "explanation": "First prove triple_acclength for the accumulator version, then derive triple_mlength' by calling acclength with initial accumulator 0."
+    },
+    "Triple_mfree": {
+      "solution": "Lemma triple_mfree : forall L p,\n  triple (mfree p)\n    (MList L p)\n    (fun _ => \\[]).\nProof using.\n  intros L. induction_wf IH: list_sub L. intros.\n  xwp. xchange MList_if. xif; intros C; case_if; xpull.\n  { intros ->. xval. xsimpl. }\n  { intros x L' q ->. xapp. xapp. xapp. xapp. { auto. } xsimpl. }\nQed.",
+      "explanation": "Free all nodes of the mutable list by recursion. Read tail, free head and tail fields, then recurse on the rest."
+    },
+    "triple_mrev": {
+      "solution": "Lemma triple_mrev_aux : forall L1 L2 p1 p2,\n  triple (mrev_aux p1 p2)\n    (MList L1 p1 \\* MList L2 p2)\n    (fun r => MList (rev L1 ++ L2) r).\nProof using.\n  intros L1. induction_wf IH: list_sub L1. intros.\n  xwp. xchange (MList_if p1). xif; intros C; case_if; xpull.\n  { intros ->. xval. rew_list. xsimpl. auto. }\n  { intros x L1' q ->. xapp. xapp. xapp. { auto. }\n    xsimpl. rew_list. rewrite <- app_assoc. auto. }\nQed.\n\nLemma triple_mrev : forall L p,\n  triple (mrev p)\n    (MList L p)\n    (fun r => MList (rev L) r).\nProof using.\n  intros. xwp. xapp triple_mrev_aux. rew_list. xsimpl.\nQed.",
+      "explanation": "mrev_aux reverses L1 while prepending to L2. Prove the auxiliary lemma first, then derive mrev by starting with empty accumulator."
+    },
+    "triple_push": {
+      "solution": "Lemma triple_push : forall L s x,\n  triple (push s x)\n    (Stack L s)\n    (fun _ => Stack (x :: L) s).\nProof using.\n  intros. unfold Stack. xwp.\n  xapp. xapp. xapp triple_mcons'. xapp. xapp.\n  xsimpl. rew_list. math.\nQed.",
+      "explanation": "Push reads the list pointer and size from the stack record, conses x onto the list, and updates the stack fields."
+    },
+    "triple_pop": {
+      "solution": "Lemma triple_pop : forall L s,\n  L <> nil ->\n  triple (pop s)\n    (Stack L s)\n    (fun r => \\exists x L', \\[L = x :: L'] \\* \\[r = x] \\* Stack L' s).\nProof using.\n  introv HL. unfold Stack. xwp.\n  xapp. xchange MList_if. case_if.\n  { xpull. intros ->. false. }\n  { xpull. intros x L' q ->. xapp. xapp. xapp. xapp. xapp.\n    xchange <- (MList_cons q). xsimpl. rew_list. math. }\nQed.",
+      "explanation": "Pop reads the list from the stack, extracts head and tail, updates the stack's list pointer and decrements size."
+    },
+    "triple_top": {
+      "solution": "Lemma triple_top : forall L s,\n  L <> nil ->\n  triple (top s)\n    (Stack L s)\n    (fun r => \\exists x L', \\[L = x :: L'] \\* \\[r = x] \\* Stack L s).\nProof using.\n  introv HL. unfold Stack. xwp.\n  xapp. xchange MList_if. case_if.\n  { xpull. intros ->. false. }\n  { xpull. intros x L' q ->. xapp.\n    xchange <- (MList_cons q). xsimpl. auto. }\nQed.",
+      "explanation": "Top reads the list from the stack and returns the head without modifying the stack."
+    },
+    "triple_mnode'": {
+      "solution": "Lemma triple_mnode' : forall T1 T2 n p1 p2,\n  triple (mnode n p1 p2)\n    (MTree T1 p1 \\* MTree T2 p2)\n    (funloc p => MTree (Node n T1 T2) p).\nProof using.\n  intros. xwp. xapp triple_mnode. intros p.\n  xchange <- MTree_Node. xsimpl.\nQed.",
+      "explanation": "Derive triple_mnode' from triple_mnode by folding the MTree representation."
+    },
+    "triple_tree_copy": {
+      "solution": "Lemma triple_tree_copy : forall p T,\n  triple (tree_copy p)\n    (MTree T p)\n    (fun r => MTree T p \\* \\exists T', \\[T' = T] \\* MTree T' r).\nProof using.\n  intros p T. gen p. induction_wf IH: tree_sub T. intros.\n  xwp. xchange MTree_if. xif; intros C; case_if; xpull.\n  { intros ->. xval. xchange <- MTree_Leaf. xsimpl. auto. }\n  { intros n T1 T2 p1 p2 ->.\n    xapp. xapp. xapp. { auto. } xapp. { auto. }\n    xapp triple_mnode'. intros q.\n    xchange <- MTree_Node. xsimpl. auto. }\nQed.",
+      "explanation": "Copy a tree by structural recursion. Leaf case returns null. Node case copies left and right subtrees, then allocates a new node."
+    },
+    "triple_mtreesum": {
+      "solution": "Lemma triple_treeacc : forall T p n,\n  triple (treeacc n p)\n    (MTree T p)\n    (fun r => \\[r = n + treesum T] \\* MTree T p).\nProof using.\n  intros T. induction_wf IH: tree_sub T. intros.\n  xwp. xchange MTree_if. xif; intros C; case_if; xpull.\n  { intros ->. xval. xchange <- MTree_Leaf. xsimpl. simpl. math. }\n  { intros v T1 T2 p1 p2 ->.\n    xapp. xapp. xapp. { auto. }\n    xapp. { auto. }\n    xchange <- MTree_Node. xsimpl. simpl. math. }\nQed.\n\nLemma triple_mtreesum : forall T p,\n  triple (mtreesum p)\n    (MTree T p)\n    (fun r => \\[r = treesum T] \\* MTree T p).\nProof using.\n  intros. xwp. xapp triple_treeacc. xsimpl. math.\nQed.",
+      "explanation": "First prove the accumulator version treeacc, then derive mtreesum by calling treeacc with accumulator 0."
+    },
+    "triple_apply_counter_abstract": {
+      "solution": "Lemma triple_apply_counter_abstract : forall f n,\n  triple (f ())\n    (IsCounter f n)\n    (fun r => \\[r = n] \\* IsCounter f (n+1)).\nProof using.\n  intros. unfold IsCounter. xpull. intros p.\n  xapp. xsimpl.\nQed.",
+      "explanation": "Unfold IsCounter to get the concrete counter state, apply the counter function spec, then refold IsCounter."
+    },
+    "triple_test_counter": {
+      "solution": "Lemma triple_test_counter :\n  triple (test_counter ())\n    \\[]\n    (fun r => \\[r = 2]).\nProof using.\n  xwp. xapp triple_create_counter_abstract. intros f.\n  xapp triple_apply_counter_abstract.\n  xapp triple_apply_counter_abstract.\n  xapp triple_apply_counter_abstract.\n  xval. xsimpl. math.\nQed.",
+      "explanation": "Create a counter, apply it 3 times (returning 0, 1, 2), and return the last result."
+    },
+    "triple_miter": {
+      "solution": "Lemma triple_miter : forall (I:list val->hprop) L (f:val) p,\n  (forall x L1 L2, L = L1 ++ x :: L2 ->\n    triple (f x)\n      (I L1)\n      (fun _ => I (L1 ++ x :: nil))) ->\n  triple (miter f p)\n    (MList L p \\* I nil)\n    (fun _ => MList L p \\* I L).\nProof using.\n  intros I L. gen I. induction_wf IH: list_sub L. intros.\n  xwp. xchange MList_if. xif; intros C; case_if; xpull.\n  { intros ->. xval. xchange <- MList_nil. xsimpl. }\n  { intros x L' q ->.\n    xapp. xapp. { applys H. rewrite app_nil_l. auto. }\n    xapp. { auto. } { intros x' L1' L2' HE.\n      applys H. rewrite <- app_assoc. simpl. rewrite HE. auto. }\n    xchange <- MList_cons. xsimpl. rewrite <- app_assoc. simpl. auto. }\nQed.",
+      "explanation": "Prove miter by induction on the list. The invariant I tracks processed elements. Each iteration applies f to the current element."
+    },
+    "triple_mlength_using_miter": {
+      "solution": "Lemma triple_mlength_using_miter : forall p L,\n  triple (mlength_using_miter p)\n    (MList L p)\n    (fun r => \\[r = length L] \\* MList L p).\nProof using.\n  intros. xwp. xapp. intros c.\n  xapp (triple_miter (fun L1 => c ~~> length L1)).\n  { intros x L1 L2 ->. xwp. xapp. xapp. xapp. xsimpl.\n    rew_list. math. }\n  xapp. xapp. xsimpl. auto.\nQed.",
+      "explanation": "Use miter with a counter reference as the iteration state. The invariant tracks that counter = length of processed prefix."
+    },
+    "triple_cps_facto_aux": {
+      "solution": "Lemma triple_cps_facto_aux : forall (n:int) (k:val) (F:int->int),\n  n >= 0 ->\n  (forall (m:int), triple (k m) \\[] (fun r => \\[r = F m])) ->\n  triple (cps_facto_aux n k)\n    \\[]\n    (fun r => \\[r = F (facto n)]).\nProof using.\n  introv Hn. gen k F. induction_wf IH: (downto 0) n. intros.\n  xwp. xapp. xif; intros C.\n  { xapp. xapp. { math. } { math. }\n    { intros m. xwp. xapp. xapp. xsimpl. rewrite facto_succ; math. }\n    xsimpl. auto. }\n  { assert (n = 0) by math. subst. xapp. xsimpl. auto. }\nQed.",
+      "explanation": "CPS factorial: when n>0, recurse with continuation that multiplies result by n. When n=0, call k with 1."
+    },
+    "triple_cps_facto": {
+      "solution": "Lemma triple_cps_facto : forall n,\n  n >= 0 ->\n  triple (cps_facto n)\n    \\[]\n    (fun r => \\[r = facto n]).\nProof using.\n  intros. xwp. xapp triple_cps_facto_aux. { math. }\n  { intros m. xwp. xval. xsimpl. auto. }\n  xsimpl. auto.\nQed.",
+      "explanation": "cps_facto calls cps_facto_aux with the identity continuation (fun x => x)."
+    },
+    "triple_cps_append_aux": {
+      "solution": "Lemma triple_cps_append_aux : forall H Q (L1 L2:list val) (p1 p2:loc) (k:val),\n  (forall (p:loc), triple (k p) (MList (L1 ++ L2) p \\* H) Q) ->\n  triple (cps_append_aux p1 p2 k)\n    (MList L1 p1 \\* MList L2 p2 \\* H)\n    Q.\nProof using.\n  intros H Q L1. gen H Q. induction_wf IH: list_sub L1. intros.\n  xwp. xchange (MList_if p1). xif; intros C; case_if; xpull.\n  { intros ->. xapp. xsimpl. rewrite app_nil_l. auto. }\n  { intros x L1' q ->.\n    xapp. xapp. { auto. }\n    { intros p. xwp. xapp. xapp. rewrite <- app_assoc. simpl.\n      xchange <- MList_cons. auto. }\n    auto. }\nQed.",
+      "explanation": "CPS append traverses L1, then in the continuation rewires the last tail pointer to p2. Proven by induction on L1."
+    },
+    "triple_cps_append": {
+      "solution": "Lemma triple_cps_append : forall (L1 L2:list val) (p1 p2:loc),\n  triple (cps_append p1 p2)\n    (MList L1 p1 \\* MList L2 p2)\n    (fun r => MList (L1 ++ L2) r).\nProof using.\n  intros. xwp. xapp triple_cps_append_aux.\n  { intros p. xwp. xval. xsimpl. auto. }\n  xsimpl.\nQed.",
+      "explanation": "cps_append calls cps_append_aux with identity continuation, then returns the result pointer."
+    }
+  }
+}

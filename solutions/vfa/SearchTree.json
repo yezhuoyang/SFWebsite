@@ -1,0 +1,174 @@
+{
+  "chapter": "SearchTree",
+  "volume": "vfa",
+  "exercises": {
+    "empty_tree_BST": {
+      "solution": "Proof.\n  intros. constructor.\nQed.",
+      "explanation": "The empty tree is a BST by the BST_E constructor."
+    },
+    "ForallT_insert": {
+      "solution": "Proof.\n  intros V P t. induction t; intros.\n  - simpl. repeat split; auto.\n  - simpl in *. destruct H as [Hkv [Hl Hr]].\n    bdestruct (k0 <? k); simpl; repeat split; auto.\n    bdestruct (k0 >? k); simpl; repeat split; auto.\nQed.",
+      "explanation": "By induction on t. At each node, bdestruct on comparisons and rebuild the ForallT property using the IH."
+    },
+    "insert_BST": {
+      "solution": "Proof.\n  intros V k v t Hbst.\n  induction Hbst.\n  - simpl. constructor; auto; simpl; auto.\n  - simpl. bdestruct (k <? x).\n    + constructor; auto. apply ForallT_insert; auto. simpl. lia.\n    + bdestruct (k >? x).\n      * constructor; auto. apply ForallT_insert; auto. simpl. lia.\n      * constructor; auto.\nQed.",
+      "explanation": "By induction on the BST evidence. Use ForallT_insert to maintain the ForallT predicates and bdestruct for comparisons."
+    },
+    "bound_correct": {
+      "solution": "(* This is a manually graded optional exercise.\n   Three theorems:\n   Theorem bound_empty: forall k, bound k empty_tree = false.\n   Proof. reflexivity. Qed.\n   Theorem bound_insert_eq: forall (V:Type) (t:tree V) k v, bound k (insert k v t) = true.\n   Proof. induction t; intros; bdall. Qed.\n   Theorem bound_insert_neq: forall (V:Type) (t:tree V) k k' v, k<>k' -> bound k' (insert k v t) = bound k' t.\n   Proof. induction t; intros; bdall. Qed.\n*)",
+      "explanation": "Three theorems for bound correctness: bound on empty returns false, bound after inserting the same key returns true, bound after inserting a different key is unchanged."
+    },
+    "bound_default": {
+      "solution": "Proof.\n  induction t; intros; simpl in *.\n  - reflexivity.\n  - bdestruct (k <? k0).\n    + apply IHt1. assumption.\n    + bdestruct (k >? k0).\n      * apply IHt2. assumption.\n      * discriminate.\nQed.",
+      "explanation": "By induction on t. At each node, bdestruct the comparisons. If bound returns false, the key is not at this node."
+    },
+    "lookup_insert_shadow": {
+      "solution": "Proof.\n  intros. bdestruct (k =? k').\n  - subst. rewrite lookup_insert_eq. rewrite lookup_insert_eq. reflexivity.\n  - rewrite lookup_insert_neq by auto. rewrite lookup_insert_neq by auto.\n    rewrite lookup_insert_neq by auto. reflexivity.\nQed.",
+      "explanation": "Case split on whether k = k'. If equal, both sides reduce to v via lookup_insert_eq. If not, use lookup_insert_neq."
+    },
+    "lookup_insert_same": {
+      "solution": "Proof.\n  intros. bdestruct (k =? k').\n  - subst. rewrite lookup_insert_eq. reflexivity.\n  - rewrite lookup_insert_neq by auto. reflexivity.\nQed.",
+      "explanation": "If k = k', inserting lookup d k t at k and looking up k gives lookup d k t. If k <> k', the insert is transparent."
+    },
+    "lookup_insert_permute": {
+      "solution": "Proof.\n  intros. bdestruct (k' =? k1).\n  - subst. rewrite lookup_insert_eq. rewrite lookup_insert_neq by auto.\n    rewrite lookup_insert_eq. reflexivity.\n  - bdestruct (k' =? k2).\n    + subst. rewrite lookup_insert_neq by auto. rewrite lookup_insert_eq.\n      rewrite lookup_insert_eq. reflexivity.\n    + rewrite lookup_insert_neq by auto. rewrite lookup_insert_neq by auto.\n      rewrite lookup_insert_neq by auto. rewrite lookup_insert_neq by auto.\n      reflexivity.\nQed.",
+      "explanation": "Three cases based on whether k' equals k1, k2, or neither. Each case uses lookup_insert_eq and lookup_insert_neq."
+    },
+    "insert_same_equality_breaks": {
+      "solution": "Proof.\n  exists nat, 0, (T E 0 0 E), 1.\n  simpl. intro. discriminate.\nQed.",
+      "explanation": "Counterexample: insert 1 (lookup 0 1 (T E 0 0 E)) into the tree. The tree structure changes even though the value is the default."
+    },
+    "insert_permute_equality_breaks": {
+      "solution": "Proof.\n  exists nat, 0, 1, 1, 2, E.\n  simpl. split.\n  - lia.\n  - intro. discriminate.\nQed.",
+      "explanation": "Counterexample: inserting keys 1 then 2 vs 2 then 1 into the empty tree produces structurally different trees."
+    },
+    "elements_complete": {
+      "solution": "Proof.\n  unfold elements_complete_spec.\n  intros V k v d t.\n  induction t; intros.\n  - simpl in H. discriminate.\n  - simpl in *.\n    bdestruct (k <? k0).\n    + apply in_or_app. left. apply IHt1; assumption.\n    + bdestruct (k >? k0).\n      * apply in_or_app. right. right. apply IHt2; assumption.\n      * assert (k = k0) by lia. subst.\n        apply in_or_app. right. left. rewrite H0. reflexivity.\nQed.",
+      "explanation": "By induction on t. Use bdestruct on comparisons to determine which subtree the key is in."
+    },
+    "elements_preserves_forall": {
+      "solution": "Proof.\n  intros V P t. induction t; intros.\n  - simpl. constructor.\n  - simpl in *. destruct H as [Hkv [Hl Hr]].\n    apply Forall_app. split.\n    + apply IHt1. assumption.\n    + constructor.\n      * unfold uncurry. assumption.\n      * apply IHt2. assumption.\nQed.",
+      "explanation": "By induction on t. Use Forall_app to handle the concatenation of left elements, the node, and right elements."
+    },
+    "elements_preserves_relation": {
+      "solution": "Proof.\n  intros.\n  assert (HF: Forall (uncurry (fun y _ => R y k')) (elements t)).\n  { apply elements_preserves_forall. assumption. }\n  rewrite Forall_forall in HF.\n  apply HF. assumption.\nQed.",
+      "explanation": "Apply elements_preserves_forall to get a Forall over elements, then extract the specific instance using Forall_forall."
+    },
+    "elements_correct": {
+      "solution": "Proof.\n  unfold elements_correct_spec.\n  intros V k v d t Hbst Hin.\n  induction Hbst.\n  - simpl in Hin. destruct Hin.\n  - simpl in Hin. apply in_app_or in Hin.\n    destruct Hin as [Hin | [Hin | Hin]].\n    + assert (k < x).\n      { eapply elements_preserves_relation; eauto. }\n      split; simpl; bdestruct (k <? x); try lia; try bdestruct (k >? x); try lia.\n      * apply IHHbst1. assumption.\n      * apply IHHbst1. assumption.\n    + inv Hin. split; simpl.\n      * bdestruct (k <? k); try lia. bdestruct (k >? k); try lia. reflexivity.\n      * bdestruct (k <? k); try lia. bdestruct (k >? k); try lia. reflexivity.\n    + assert (k > x).\n      { eapply elements_preserves_relation; eauto. }\n      split; simpl; bdestruct (k <? x); try lia; bdestruct (k >? x); try lia.\n      * apply IHHbst2. assumption.\n      * apply IHHbst2. assumption.\nQed.",
+      "explanation": "By induction on BST evidence. Use elements_preserves_relation to determine which subtree contains the key."
+    },
+    "elements_complete_inverse": {
+      "solution": "Proof.\n  intros V k v t Hbst Hbound.\n  intro Hin.\n  apply elements_correct in Hin; auto.\n  destruct Hin as [Hb _]. rewrite Hb in Hbound. discriminate.\nQed.",
+      "explanation": "If (k,v) were in elements, elements_correct would say bound k t = true, contradicting bound k t = false."
+    },
+    "bound_value": {
+      "solution": "Proof.\n  induction t; intros.\n  - simpl in H. discriminate.\n  - simpl in H. bdestruct (k0 <? k).\n    + apply IHt1. assumption.\n    + bdestruct (k0 >? k).\n      * apply IHt2. assumption.\n      * exists v. intros. simpl. bdestruct (k0 <? k); try lia.\n        bdestruct (k0 >? k); try lia. reflexivity.\nQed.",
+      "explanation": "By induction on t. When bound returns true, we find the value at the matching node."
+    },
+    "elements_correct_inverse": {
+      "solution": "Proof.\n  intros V k t Hnotin.\n  destruct (bound k t) eqn:E.\n  - apply bound_value in E. destruct E as [v Hv].\n    exfalso. apply (Hnotin v).\n    apply elements_complete; auto.\n  - reflexivity.\nQed.",
+      "explanation": "If bound k t were true, we could find a value v and show (k,v) is in elements, contradicting the hypothesis."
+    },
+    "sorted_app": {
+      "solution": "Proof.\n  intros l1 l2 x Hs1 Hs2 Hlt Hgt.\n  induction Hs1.\n  - simpl. destruct l2; auto.\n    constructor.\n    + inv Hgt. assumption.\n    + inv Hgt. auto.\n  - simpl. destruct l2.\n    + simpl. rewrite app_nil_r. constructor; auto. inv Hlt. lia.\n    + constructor.\n      * inv Hlt. lia.\n      * apply IHSs1. inv Hlt. auto.\n  - simpl. constructor.\n    + assumption.\n    + apply IHSs1. inv Hlt. auto.\nQed.",
+      "explanation": "By induction on the evidence that l1 is sorted. Uses Forall to connect the last element of l1 to x."
+    },
+    "sorted_elements": {
+      "solution": "Proof.\n  intros V t Hbst. induction Hbst.\n  - simpl. constructor.\n  - simpl. unfold list_keys. rewrite map_app. simpl.\n    apply sorted_app.\n    + apply IHHbst1.\n    + apply IHHbst2.\n    + apply elements_preserves_forall in H.\n      rewrite Forall_map. eapply Forall_impl. 2: apply H.\n      intros. destruct a. simpl. unfold uncurry in H1. lia.\n    + apply elements_preserves_forall in H0.\n      rewrite Forall_map. eapply Forall_impl. 2: apply H0.\n      intros. destruct a. simpl. unfold uncurry in H1. lia.\nQed.",
+      "explanation": "By induction on BST evidence. Uses sorted_app and elements_preserves_forall to show the keys are sorted."
+    },
+    "NoDup_append": {
+      "solution": "Proof.\n  intros X l1 l2 Hnd1 Hnd2 Hdisj.\n  induction l1.\n  - simpl. assumption.\n  - simpl. inv Hnd1. constructor.\n    + intro Hin. apply in_app_or in Hin. destruct Hin.\n      * contradiction.\n      * apply (Hdisj a). left. reflexivity. assumption.\n    + apply IHl1; auto.\n      unfold disjoint in *. intros. apply Hdisj. right. assumption.\nQed.",
+      "explanation": "By induction on l1. Uses disjointness to show each element of l1 is not in l2."
+    },
+    "elements_nodup_keys": {
+      "solution": "Proof.\n  intros V t Hbst. induction Hbst.\n  - simpl. constructor.\n  - simpl. unfold list_keys. rewrite map_app. simpl.\n    apply NoDup_append.\n    + apply IHHbst1.\n    + constructor.\n      * intro. apply in_map_iff in H1. destruct H1 as [[k' v'] [Hfst Hin]].\n        simpl in Hfst. subst.\n        assert (k' > x) by (eapply elements_preserves_relation; eauto).\n        lia.\n      * apply IHHbst2.\n    + unfold disjoint. intros k Hinl Hinr.\n      apply in_map_iff in Hinl. destruct Hinl as [[k1 v1] [Hf1 Hi1]]. simpl in Hf1. subst.\n      simpl in Hinr. destruct Hinr as [Heq | Hinr].\n      * subst. assert (k < x) by (eapply elements_preserves_relation; eauto). lia.\n      * apply in_map_iff in Hinr. destruct Hinr as [[k2 v2] [Hf2 Hi2]]. simpl in Hf2. subst.\n        assert (k < x) by (eapply elements_preserves_relation; eauto).\n        assert (k > x) by (eapply elements_preserves_relation; eauto). lia.\nQed.",
+      "explanation": "By induction on BST evidence. Uses NoDup_append and elements_preserves_relation to show no duplicates across left, root, and right."
+    },
+    "fast_elements_tr_helper": {
+      "solution": "Proof.\n  intros V t. induction t; intros.\n  - simpl. reflexivity.\n  - simpl. rewrite IHt1. rewrite IHt2.\n    rewrite app_assoc. reflexivity.\nQed.",
+      "explanation": "By induction on t. The key step uses associativity of list append."
+    },
+    "fast_elements_eq_elements": {
+      "solution": "Proof.\n  intros. unfold fast_elements.\n  rewrite fast_elements_tr_helper.\n  rewrite app_nil_r.\n  reflexivity.\nQed.",
+      "explanation": "Unfold fast_elements, apply the helper lemma, and simplify with app_nil_r."
+    },
+    "kvs_insert_split": {
+      "solution": "Proof.\n  induction e1; intros.\n  - simpl. bdestruct (k <? k0).\n    + reflexivity.\n    + bdestruct (k >? k0).\n      * reflexivity.\n      * reflexivity.\n  - destruct a as [k' v']. simpl. inv H.\n    bdestruct (k <? k').\n    + bdestruct (k <? k0). reflexivity.\n      bdestruct (k >? k0). lia. lia.\n    + bdestruct (k >? k').\n      * rewrite IHe1 by auto.\n        bdestruct (k <? k0).\n        -- reflexivity.\n        -- bdestruct (k >? k0).\n           ++ reflexivity.\n           ++ reflexivity.\n      * assert (k = k') by lia. subst.\n        bdestruct (k' <? k0). lia. lia.\nQed.",
+      "explanation": "By induction on e1 with careful case analysis using bdestruct on all comparisons."
+    },
+    "kvs_insert_elements": {
+      "solution": "Proof.\n  intros V t Hbst. induction Hbst; intros.\n  - simpl. bdestruct (k <? k); try lia. bdestruct (k >? k); try lia. reflexivity.\n  - simpl. bdestruct (k <? x).\n    + simpl. rewrite IHHbst1. rewrite kvs_insert_split.\n      * bdestruct (k <? x). reflexivity. lia.\n      * apply elements_preserves_forall in H.\n        eapply Forall_impl. 2: apply H.\n        intros. destruct a. simpl in *. unfold uncurry in H3. lia.\n      * apply elements_preserves_forall in H0.\n        eapply Forall_impl. 2: apply H0.\n        intros. destruct a. simpl in *. unfold uncurry in H3. lia.\n    + bdestruct (k >? x).\n      * simpl. rewrite IHHbst2. rewrite kvs_insert_split.\n        -- bdestruct (k <? x). lia. bdestruct (k >? x). reflexivity. lia.\n        -- apply elements_preserves_forall in H.\n           eapply Forall_impl. 2: apply H.\n           intros. destruct a. simpl in *. unfold uncurry in H5. lia.\n        -- apply elements_preserves_forall in H0.\n           eapply Forall_impl. 2: apply H0.\n           intros. destruct a. simpl in *. unfold uncurry in H5. lia.\n      * assert (k = x) by lia. subst. simpl.\n        bdestruct (x <? x). lia. bdestruct (x >? x). lia. reflexivity.\nQed.",
+      "explanation": "By induction on BST evidence, using kvs_insert_split and elements_preserves_forall."
+    },
+    "in_fst": {
+      "solution": "Proof.\n  intros X Y lst x y Hin.\n  induction lst.\n  - simpl in Hin. destruct Hin.\n  - simpl in *. destruct Hin.\n    + subst. left. reflexivity.\n    + right. auto.\nQed.",
+      "explanation": "By induction on lst. If (x,y) is the head, then x is the head of map fst; otherwise use IH."
+    },
+    "in_map_of_list": {
+      "solution": "Proof.\n  induction el; intros.\n  - simpl in H0. destruct H0.\n  - destruct a as [k' v']. simpl in *.\n    inv H. destruct H0 as [Heq | Hin].\n    + inv Heq. unfold update, t_update. bdestruct (k =? k). reflexivity. lia.\n    + assert (k <> k').\n      { intro. subst. apply H2. eapply in_fst; eauto. }\n      unfold update, t_update. bdestruct (k' =? k). lia.\n      apply IHel; auto.\nQed.",
+      "explanation": "By induction on el. The NoDup condition ensures that earlier bindings don't shadow the one we're looking for."
+    },
+    "not_in_map_of_list": {
+      "solution": "Proof.\n  induction el; intros.\n  - simpl. unfold empty, t_empty. reflexivity.\n  - destruct a as [k' v']. simpl in *.\n    unfold update, t_update.\n    bdestruct (k' =? k).\n    + exfalso. apply H. left. auto.\n    + apply IHel. intro. apply H. right. assumption.\nQed.",
+      "explanation": "By induction on el. Since k is not in the domain, it's not k' and not in the tail."
+    },
+    "bound_relate": {
+      "solution": "Proof.\n  intros V t k Hbst.\n  unfold map_bound, Abs.\n  destruct (bound k t) eqn:E.\n  - apply bound_value in E. destruct E as [v Hv].\n    assert (In (k, v) (elements t)).\n    { apply elements_complete. apply Hv. }\n    assert (NoDup (map fst (elements t))).\n    { apply elements_nodup_keys. assumption. }\n    rewrite (in_map_of_list _ _ k v H0 H). reflexivity.\n  - assert (~ In k (map fst (elements t))).\n    { apply elements_correct_inverse. intros v Hin.\n      apply elements_correct in Hin; auto. destruct Hin as [Hb _].\n      rewrite Hb in E. discriminate. }\n    rewrite not_in_map_of_list by assumption. reflexivity.\nQed.",
+      "explanation": "Uses bound_value and elements_complete/in_map_of_list for the true case, and elements_correct_inverse/not_in_map_of_list for the false case."
+    },
+    "lookup_relate": {
+      "solution": "Proof.\n  intros V t d k Hbst.\n  unfold find, Abs.\n  destruct (bound k t) eqn:E.\n  - apply bound_value in E. destruct E as [v Hv].\n    assert (Hin: In (k, v) (elements t)).\n    { apply elements_complete. apply Hv. }\n    assert (Hnd: NoDup (map fst (elements t))).\n    { apply elements_nodup_keys. assumption. }\n    rewrite (in_map_of_list _ _ k v Hnd Hin). symmetry. apply Hv.\n  - assert (Hni: ~ In k (map fst (elements t))).\n    { apply elements_correct_inverse. intros v Hin.\n      apply elements_correct in Hin; auto. destruct Hin as [Hb _].\n      rewrite Hb in E. discriminate. }\n    rewrite not_in_map_of_list by assumption.\n    symmetry. apply bound_default. assumption.\nQed.",
+      "explanation": "Uses bound_value and in_map_of_list for the bound=true case, and not_in_map_of_list with bound_default for the bound=false case."
+    },
+    "insert_relate": {
+      "solution": "Proof.\n  unfold Abs.\n  intros.\n  rewrite kvs_insert_elements; auto.\n  remember (elements t) as l.\n  clear -l.\n  induction l.\n  - simpl. reflexivity.\n  - destruct a as [k' v']. simpl.\n    bdestruct (k <? k').\n    + simpl. reflexivity.\n    + bdestruct (k >? k').\n      * simpl. rewrite IHl. reflexivity.\n      * assert (k = k') by lia. subst. simpl.\n        unfold update, t_update. extensionality x.\n        bdestruct (k' =? x); reflexivity.\nQed.",
+      "explanation": "Uses kvs_insert_elements then proceeds by induction on the elements list."
+    },
+    "union_left": {
+      "solution": "Proof.\n  intros. unfold union. rewrite H. destruct (m1 k); reflexivity.\nQed.",
+      "explanation": "Unfold union and use the hypothesis that m2 k = None."
+    },
+    "union_right": {
+      "solution": "Proof.\n  intros. unfold union. rewrite H. reflexivity.\nQed.",
+      "explanation": "Unfold union and use the hypothesis that m1 k = None."
+    },
+    "union_both": {
+      "solution": "Proof.\n  intros. unfold union. rewrite H, H0. reflexivity.\nQed.",
+      "explanation": "Unfold union and rewrite with both hypotheses."
+    },
+    "union_update_right": {
+      "solution": "Proof.\n  intros. extensionality x.\n  unfold update, union, t_update.\n  bdestruct (k =? x).\n  - subst. rewrite H. reflexivity.\n  - reflexivity.\nQed.",
+      "explanation": "Use extensionality and case analysis on whether x equals k."
+    },
+    "union_update_left": {
+      "solution": "Proof.\n  intros. extensionality x.\n  unfold update, union, t_update.\n  bdestruct (k =? x).\n  - subst. rewrite H. destruct (m1 k); reflexivity.\n  - reflexivity.\nQed.",
+      "explanation": "Use extensionality and case analysis on whether x equals k."
+    },
+    "map_of_tree_prop": {
+      "solution": "Proof.\n  induction t; intros.\n  - simpl in H0. unfold empty, t_empty in H0. discriminate.\n  - simpl in *. destruct H as [Hkv [Hl Hr]].\n    unfold update, t_update in H0.\n    bdestruct (k0 =? k1).\n    + subst. inv H0. assumption.\n    + unfold union in H0.\n      destruct (map_of_tree t1 k1) eqn:E1; destruct (map_of_tree t2 k1) eqn:E2;\n      try discriminate.\n      * inv H0. eapply IHt1; eauto.\n      * inv H0. eapply IHt2; eauto.\nQed.",
+      "explanation": "By induction on t. Case analysis on whether the key matches the root, then on which subtree contains it."
+    },
+    "bound_relate'": {
+      "solution": "Proof.\n  intros V t k Hbst.\n  unfold map_bound, Abs'.\n  induction Hbst; simpl.\n  - unfold empty, t_empty. reflexivity.\n  - unfold update, t_update.\n    bdestruct (x =? k).\n    + subst. bdestruct (k <? k); try lia. bdestruct (k >? k); try lia. reflexivity.\n    + bdestruct (k <? x).\n      * assert (Hr: map_of_tree r k = None).\n        { destruct (map_of_tree r k) eqn:E; auto.\n          exfalso. eapply map_of_tree_prop in E; eauto. lia. }\n        rewrite union_left by assumption. apply IHHbst1.\n      * bdestruct (k >? x).\n        -- assert (Hl: map_of_tree l k = None).\n           { destruct (map_of_tree l k) eqn:E; auto.\n             exfalso. eapply map_of_tree_prop in E; eauto. lia. }\n           rewrite union_right by assumption. apply IHHbst2.\n        -- lia.\nQed.",
+      "explanation": "By induction on BST. At each node, use map_of_tree_prop to show that the key cannot be in the wrong subtree, then apply union_left or union_right to reduce to the IH."
+    },
+    "lookup_relate'": {
+      "solution": "Proof.\n  intros V d t k Hbst.\n  unfold find, Abs'.\n  induction Hbst; simpl.\n  - unfold empty, t_empty. reflexivity.\n  - unfold update, t_update.\n    bdestruct (x =? k).\n    + subst. bdestruct (k <? k); try lia. bdestruct (k >? k); try lia. reflexivity.\n    + bdestruct (k <? x).\n      * assert (Hr: map_of_tree r k = None).\n        { destruct (map_of_tree r k) eqn:E; auto.\n          exfalso. eapply map_of_tree_prop in E; eauto. lia. }\n        rewrite union_left by assumption. apply IHHbst1.\n      * bdestruct (k >? x).\n        -- assert (Hl: map_of_tree l k = None).\n           { destruct (map_of_tree l k) eqn:E; auto.\n             exfalso. eapply map_of_tree_prop in E; eauto. lia. }\n           rewrite union_right by assumption. apply IHHbst2.\n        -- lia.\nQed.",
+      "explanation": "Same structure as bound_relate': by induction on BST, using map_of_tree_prop and union_left/union_right to navigate to the correct subtree."
+    },
+    "insert_relate'": {
+      "solution": "Proof.\n  intros V k v t Hbst.\n  unfold Abs'.\n  induction Hbst; simpl.\n  - extensionality x. unfold update, union, t_update, empty, t_empty.\n    bdestruct (k =? x); reflexivity.\n  - bdestruct (k <? x).\n    + simpl. rewrite IHHbst1.\n      extensionality y. unfold update, union, t_update.\n      bdestruct (x =? y); bdestruct (k =? y); try lia;\n      try (destruct (map_of_tree l y); destruct (map_of_tree r y); reflexivity).\n      subst. destruct (map_of_tree r y); reflexivity.\n    + bdestruct (k >? x).\n      * simpl. rewrite IHHbst2.\n        extensionality y. unfold update, union, t_update.\n        bdestruct (x =? y); bdestruct (k =? y); try lia;\n        try (destruct (map_of_tree l y); destruct (map_of_tree r y); reflexivity).\n        subst. destruct (map_of_tree l y); reflexivity.\n      * assert (k = x) by lia. subst. simpl.\n        extensionality y. unfold update, t_update.\n        bdestruct (x =? y); reflexivity.\nQed.",
+      "explanation": "By induction on BST. Each case rewrites with the IH and then uses extensionality to show the maps are equal, reasoning about update and union pointwise."
+    },
+    "map_of_list_app": {
+      "solution": "Proof.\n  induction el1; intros.\n  - simpl. extensionality k. unfold union, empty, t_empty.\n    destruct (map_of_list el2 k); reflexivity.\n  - destruct a as [k' v']. simpl.\n    rewrite IHel1.\n    + extensionality k. unfold update, union, t_update.\n      bdestruct (k' =? k).\n      * subst. unfold union. destruct (map_of_list el1 k); reflexivity.\n      * reflexivity.\n    + unfold disjoint in *. intros. apply (H x). right. assumption. assumption.\nQed.",
+      "explanation": "By induction on el1 using the disjointness hypothesis."
+    },
+    "elements_relate'": {
+      "solution": "Proof.\n  intros V t Hbst.\n  unfold Abs'.\n  induction Hbst.\n  - simpl. reflexivity.\n  - simpl. rewrite map_of_list_app.\n    + simpl. rewrite IHHbst1. rewrite IHHbst2.\n      extensionality y. unfold update, union, t_update.\n      bdestruct (x =? y).\n      * subst. destruct (map_of_tree l y) eqn:El; destruct (map_of_tree r y) eqn:Er; auto.\n        -- exfalso. eapply map_of_tree_prop in El; eauto. lia.\n        -- exfalso. eapply map_of_tree_prop in El; eauto. lia.\n      * destruct (map_of_list (elements r) y) eqn:Er; auto.\n    + unfold disjoint. intros k Hinl Hinr.\n      apply in_map_iff in Hinl. destruct Hinl as [[k1 v1] [Hf1 Hi1]]. simpl in Hf1. subst.\n      simpl in Hinr. destruct Hinr as [Heq | Hinr].\n      * subst. assert (k < x) by (eapply elements_preserves_relation; eauto). lia.\n      * apply in_map_iff in Hinr. destruct Hinr as [[k2 v2] [Hf2 Hi2]]. simpl in Hf2. subst.\n        assert (k < x) by (eapply elements_preserves_relation; eauto).\n        assert (k > x) by (eapply elements_preserves_relation; eauto). lia.\nQed.",
+      "explanation": "By induction on BST. Uses map_of_list_app with a disjointness proof, then rewrites with the IH and shows the resulting maps are equal pointwise using extensionality."
+    }
+  }
+}

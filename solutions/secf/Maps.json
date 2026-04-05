@@ -1,0 +1,30 @@
+{
+  "chapter": "Maps",
+  "volume": "secf",
+  "exercises": {
+    "t_apply_empty": {
+      "solution": "Lemma t_apply_empty : forall (A : Type) (x : string) (v : A),\n  (_ !-> v) x = v.\nProof.\n  intros. unfold t_empty. reflexivity.\nQed.",
+      "explanation": "Applying the empty total map to any key returns the default value."
+    },
+    "t_update_eq": {
+      "solution": "Lemma t_update_eq : forall (A : Type) (m : total_map A) x v,\n  (x !-> v ; m) x = v.\nProof.\n  intros. unfold t_update. rewrite String.eqb_refl. reflexivity.\nQed.",
+      "explanation": "Looking up the key that was just updated returns the new value."
+    },
+    "t_update_neq": {
+      "solution": "Theorem t_update_neq : forall (A : Type) (m : total_map A) x1 x2 v,\n  x1 <> x2 ->\n  (x1 !-> v ; m) x2 = m x2.\nProof.\n  intros. unfold t_update.\n  destruct (String.eqb_spec x1 x2).\n  - contradiction.\n  - reflexivity.\nQed.",
+      "explanation": "Looking up a different key after an update returns the original value."
+    },
+    "t_update_shadow": {
+      "solution": "Lemma t_update_shadow : forall (A : Type) (m : total_map A) x v1 v2,\n  (x !-> v2 ; x !-> v1 ; m) = (x !-> v2 ; m).\nProof.\n  intros. apply functional_extensionality. intros y.\n  unfold t_update. destruct (String.eqb_spec x y); reflexivity.\nQed.",
+      "explanation": "A second update to the same key shadows the first update."
+    },
+    "t_update_same": {
+      "solution": "Theorem t_update_same : forall (A : Type) (m : total_map A) x,\n  (x !-> m x ; m) = m.\nProof.\n  intros. apply functional_extensionality. intros y.\n  unfold t_update. destruct (String.eqb_spec x y).\n  - subst. reflexivity.\n  - reflexivity.\nQed.",
+      "explanation": "Updating a key with its current value is a no-op."
+    },
+    "t_update_permute": {
+      "solution": "Theorem t_update_permute : forall (A : Type) (m : total_map A)\n                                 v1 v2 x1 x2,\n  x2 <> x1 ->\n  (x1 !-> v1 ; x2 !-> v2 ; m) = (x2 !-> v2 ; x1 !-> v1 ; m).\nProof.\n  intros. apply functional_extensionality. intros y.\n  unfold t_update.\n  destruct (String.eqb_spec x1 y); destruct (String.eqb_spec x2 y);\n  subst; try reflexivity.\n  contradiction.\nQed.",
+      "explanation": "Updates to different keys can be reordered."
+    }
+  }
+}

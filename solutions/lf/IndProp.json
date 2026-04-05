@@ -1,0 +1,298 @@
+{
+  "chapter": "IndProp",
+  "volume": "lf",
+  "exercises": {
+    "clos_refl_trans_sym": {
+      "solution": "(* To define reflexive, symmetric, and transitive closure, add a symmetry rule:\n\nInductive clos_refl_sym_trans {X: Type} (R: X->X->Prop) : X->X->Prop :=\n  | rst_step (x y : X) :\n      R x y ->\n      clos_refl_sym_trans R x y\n  | rst_refl (x : X) :\n      clos_refl_sym_trans R x x\n  | rst_sym (x y : X) :\n      clos_refl_sym_trans R x y ->\n      clos_refl_sym_trans R y x\n  | rst_trans (x y z : X) :\n      clos_refl_sym_trans R x y ->\n      clos_refl_sym_trans R y z ->\n      clos_refl_sym_trans R x z.\n*)",
+      "explanation": "Add an rst_sym constructor that flips the arguments of the closure relation."
+    },
+    "perm": {
+      "solution": "(* Yes, [1;2;3] is a permutation of itself.\n   We can derive it via: perm3_trans [1;2;3] [2;1;3] [1;2;3]\n   using perm3_swap12 twice (or perm3_swap12 then perm3_swap12). *)",
+      "explanation": "By applying perm3_swap12 twice (which swaps and swaps back), we get the identity permutation."
+    },
+    "ev_double": {
+      "solution": "intros n. induction n as [| n' IH].\n  - simpl. apply ev_0.\n  - simpl. apply ev_SS. apply IH.",
+      "explanation": "Induction on n. double 0 = 0 is even by ev_0. double (S n') = S (S (double n')) is even by ev_SS and IH."
+    },
+    "Perm3_ex1": {
+      "solution": "apply perm3_trans with (l2:=[2;1;3]).\n  - apply perm3_swap12.\n  - apply perm3_swap23.",
+      "explanation": "Swap positions 1,2 to get [2;1;3], then swap positions 2,3 to get [2;3;1]."
+    },
+    "Perm3_refl": {
+      "solution": "intros X a b c.\n  apply perm3_trans with (l2:=[b;a;c]).\n  - apply perm3_swap12.\n  - apply perm3_swap12.",
+      "explanation": "Swap first two elements twice to get back to the original list."
+    },
+    "le_inversion": {
+      "solution": "intros n m H. destruct H as [| n' m' H'].\n  - left. reflexivity.\n  - right. exists m'. split. reflexivity. apply H'.",
+      "explanation": "Destruct the le evidence: either le_n (n = m) or le_S (m = S m' and n <= m')."
+    },
+    "SSSSev__even": {
+      "solution": "intros n H. inversion H as [| n' H' Heq]. inversion H' as [| n'' H'' Heq']. apply H''.",
+      "explanation": "Invert ev (S (S (S (S n)))) twice to peel off two ev_SS constructors and get ev n."
+    },
+    "ev5_nonsense": {
+      "solution": "intros H. inversion H as [| n' H' Heq]. inversion H' as [| n'' H'' Heq']. inversion H''.",
+      "explanation": "Invert ev 5 to get ev 3, invert to get ev 1, and invert ev 1 which is impossible."
+    },
+    "ev_sum": {
+      "solution": "intros n m Hn Hm. induction Hn as [| n' Hn' IH].\n  - simpl. apply Hm.\n  - simpl. apply ev_SS. apply IH.",
+      "explanation": "Induction on the evidence for ev n. Base: 0 + m = m, which is even. Step: S(S n') + m = S(S(n'+m)), apply ev_SS."
+    },
+    "ev_ev__ev": {
+      "solution": "intros n m Hnm Hn. induction Hn as [| n' Hn' IH].\n  - simpl in Hnm. apply Hnm.\n  - apply IH. simpl in Hnm. inversion Hnm as [| k Hk Heq]. apply Hk.",
+      "explanation": "Induction on ev n. Base: n=0, so 0+m=m, done. Step: n=S(S n'), ev(S(S n')+m) inverts to ev(n'+m), apply IH."
+    },
+    "ev_plus_plus": {
+      "solution": "intros n m p Hnm Hnp.\n  assert (H: ev ((n + m) + (n + p))). { apply ev_sum. apply Hnm. apply Hnp. }\n  rewrite add_assoc in H. rewrite (add_comm n m) in H.\n  rewrite <- add_assoc in H. rewrite (add_assoc n n p) in H.\n  rewrite <- double_plus in H.\n  assert (Hdn : ev (double n)). { apply ev_double. }\n  apply (ev_ev__ev (double n) (m + p)).\n  - rewrite add_assoc. apply H.\n  - apply Hdn.",
+      "explanation": "Show ev((n+m)+(n+p)), rearrange to ev(double n + (m+p)), then use ev_ev__ev with ev(double n)."
+    },
+    "ev'_ev": {
+      "solution": "intros n. split.\n  - intros H. induction H as [| | n' m' Hn' IHn' Hm' IHm'].\n    + apply ev_0.\n    + apply ev_SS. apply ev_0.\n    + apply ev_sum. apply IHn'. apply IHm'.\n  - intros H. induction H as [| n' H' IH].\n    + apply ev'_0.\n    + apply (ev'_sum 2 n'). apply ev'_2. apply IH.",
+      "explanation": "Forward: induction on ev', using ev_sum for ev'_sum. Backward: induction on ev, using ev'_sum with 2."
+    },
+    "Perm3_In": {
+      "solution": "intros X x l1 l2 HP Hin.\n  induction HP as [a b c | a b c | l1' l2' l3' H12 IH12 H23 IH23].\n  - simpl in *. destruct Hin as [H | [H | [H | []]]]. \n    + right. left. apply H.\n    + left. apply H.\n    + right. right. apply H.\n  - simpl in *. destruct Hin as [H | [H | [H | []]]].\n    + left. apply H.\n    + right. right. left. apply H.\n    + right. left. apply H.\n  - apply IH23. apply IH12. apply Hin.",
+      "explanation": "Induction on the Perm3 evidence. For swap cases, rearrange the In disjuncts. For trans, compose."
+    },
+    "Perm3_NotIn": {
+      "solution": "intros X x l1 l2 HP Hnotin Hin.\n  apply Hnotin. apply (Perm3_In X x l2 l1). apply Perm3_symm. apply HP. apply Hin.",
+      "explanation": "Use Perm3_symm and Perm3_In to show that if x is in l2 (a permutation of l1), then x is in l1, contradicting ~In x l1."
+    },
+    "NotPerm3": {
+      "solution": "intro H. assert (Hin : In 4 [1;2;3]). { apply (Perm3_In nat 4 [1;2;3] [1;2;4]). apply H. simpl. right. right. left. reflexivity. }\n  simpl in Hin. destruct Hin as [H1 | [H2 | [H3 | []]]].\n  - discriminate H1.\n  - discriminate H2.\n  - discriminate H3.",
+      "explanation": "If Perm3 [1;2;3] [1;2;4], then 4 In [1;2;3] by Perm3_In. But 4 is not in [1;2;3], contradiction."
+    },
+    "le_trans": {
+      "solution": "intros m n o Hmn Hno. induction Hno as [| o' Hno' IH].\n  - apply Hmn.\n  - apply le_S. apply IH.",
+      "explanation": "Induction on n <= o. Base: n = o, so m <= n. Step: o = S o', m <= o' by IH, then le_S gives m <= S o'."
+    },
+    "O_le_n": {
+      "solution": "intros n. induction n as [| n' IH].\n  - apply le_n.\n  - apply le_S. apply IH.",
+      "explanation": "Induction on n. 0 <= 0 by le_n. 0 <= S n' by le_S and IH."
+    },
+    "n_le_m__Sn_le_Sm": {
+      "solution": "intros n m H. induction H as [| m' H' IH].\n  - apply le_n.\n  - apply le_S. apply IH.",
+      "explanation": "Induction on n <= m. Base: S n <= S n by le_n. Step: S n <= S m' by IH, so S n <= S (S m') by le_S."
+    },
+    "Sn_le_Sm__n_le_m": {
+      "solution": "intros n m H. inversion H as [Heq | m' Hle Heq].\n  - apply le_n.\n  - apply le_trans with (n := S n).\n    + apply le_S. apply le_n.\n    + apply Hle.",
+      "explanation": "Inversion: either S n = S m (so n = m, le_n), or S n <= m' with m = S m'. In that case n < S n <= m' and m = S m'."
+    },
+    "le_plus_l": {
+      "solution": "intros a b. induction b as [| b' IH].\n  - rewrite add_comm. simpl. apply le_n.\n  - rewrite add_comm. simpl. apply le_S. rewrite add_comm. apply IH.",
+      "explanation": "Induction on b. a <= a + 0 = a by le_n. a <= a + S b' = S (a + b') by le_S and IH."
+    },
+    "plus_le": {
+      "solution": "intros n1 n2 m H. split.\n  - apply le_trans with (n := n1 + n2). apply le_plus_l. apply H.\n  - apply le_trans with (n := n1 + n2).\n    + rewrite add_comm. apply le_plus_l.\n    + apply H.",
+      "explanation": "n1 <= n1 + n2 <= m by le_plus_l and transitivity. Similarly n2 <= n1 + n2 <= m."
+    },
+    "plus_le_cases": {
+      "solution": "intros n m p q. revert m p q. induction n as [| n' IH].\n  - intros m p q H. right. simpl in H. apply le_trans with (n := m). apply le_plus_l. \n    apply le_trans with (n := p + q). apply H. rewrite add_comm. apply le_plus_l.\n  - intros m p q H. destruct p as [| p'].\n    + left. simpl in H. apply le_trans with (n := 0). apply O_le_n. apply le_n.\n    + simpl in H. apply Sn_le_Sm__n_le_m in H.\n      destruct (IH m p' q H) as [Hn | Hm].\n      * left. apply n_le_m__Sn_le_Sm. apply Hn.\n      * right. apply Hm.",
+      "explanation": "Induction on n. Base: 0 <= p trivially. Step: S n' + m <= S p' + q implies n' + m <= p' + q by Sn_le_Sm, then apply IH."
+    },
+    "plus_le_compat_l": {
+      "solution": "intros n m p H. induction p as [| p' IH].\n  - simpl. apply H.\n  - simpl. apply n_le_m__Sn_le_Sm. apply IH.",
+      "explanation": "Induction on p. Base: 0 + n <= 0 + m is n <= m. Step: S p' + n = S(p'+n) <= S(p'+m) by n_le_m__Sn_le_Sm."
+    },
+    "plus_le_compat_r": {
+      "solution": "intros n m p H. rewrite (add_comm n p). rewrite (add_comm m p). apply plus_le_compat_l. apply H.",
+      "explanation": "Rewrite n+p as p+n and m+p as p+m, then apply plus_le_compat_l."
+    },
+    "le_plus_trans": {
+      "solution": "intros n m p H. apply le_trans with (n := m). apply H. apply le_plus_l.",
+      "explanation": "n <= m by hypothesis, m <= m + p by le_plus_l, so n <= m + p by transitivity."
+    },
+    "lt_ge_cases": {
+      "solution": "intros n. induction n as [| n' IH].\n  - intros m. destruct m.\n    + right. apply le_n.\n    + left. unfold lt. apply n_le_m__Sn_le_Sm. apply O_le_n.\n  - intros m. destruct m.\n    + right. apply O_le_n.\n    + destruct (IH m) as [Hlt | Hge].\n      * left. unfold lt in *. apply n_le_m__Sn_le_Sm. apply Hlt.\n      * right. apply n_le_m__Sn_le_Sm. apply Hge.",
+      "explanation": "Induction on n with case analysis on m, using IH and Sn_le_Sm lemmas."
+    },
+    "n_lt_m__n_le_m": {
+      "solution": "intros n m H. unfold lt in H. apply le_trans with (n := S n). apply le_S. apply le_n. apply H.",
+      "explanation": "n < m means S n <= m. Since n <= S n (by le_S, le_n), transitivity gives n <= m."
+    },
+    "plus_lt": {
+      "solution": "intros n1 n2 m H. unfold lt in *. split.\n  - apply le_trans with (n := S n1 + n2). \n    + apply le_plus_l.\n    + simpl. apply H.\n  - apply le_trans with (n := n1 + S n2).\n    + rewrite add_comm. simpl. rewrite add_comm. apply le_plus_l.\n    + rewrite add_comm. simpl. rewrite add_comm. apply H.",
+      "explanation": "S(n1+n2) <= m gives S n1 <= S n1 + n2 <= n1 + n2 + 1 <= m and similarly for n2."
+    },
+    "leb_complete": {
+      "solution": "intros n. induction n as [| n' IH].\n  - intros m H. apply O_le_n.\n  - intros m H. destruct m as [| m'].\n    + discriminate H.\n    + simpl in H. apply n_le_m__Sn_le_Sm. apply IH. apply H.",
+      "explanation": "Induction on n. Base: 0 <= m. Step: S n' <=? S m' reduces to n' <=? m', apply IH."
+    },
+    "leb_correct": {
+      "solution": "intros n m H. induction H as [| m' H' IH].\n  - induction n as [| n' IH].\n    + reflexivity.\n    + simpl. apply IH.\n  - destruct n as [| n'].\n    + reflexivity.\n    + simpl. apply IH.",
+      "explanation": "Induction on n <= m. Base: n <=? n = true. Step: n <=? S m' is true since n <=? m' is true by IH."
+    },
+    "leb_iff": {
+      "solution": "intros n m. split.\n  - apply leb_complete.\n  - apply leb_correct.",
+      "explanation": "Combine leb_complete and leb_correct."
+    },
+    "leb_true_trans": {
+      "solution": "intros n m o Hnm Hmo. apply leb_correct. apply le_trans with (n := m).\n  - apply leb_complete. apply Hnm.\n  - apply leb_complete. apply Hmo.",
+      "explanation": "Convert both leb to le, use le_trans, convert back."
+    },
+    "R_provability": {
+      "solution": "(* R 1 1 2 is provable: apply c3 (apply c2 (apply c1)).\n   R 2 2 6 is NOT provable: R encodes addition (R m n o means m + n = o), and 2 + 2 = 4 <> 6.\n   Dropping c5: No change, because c5 just allows swapping m and n, and since addition is commutative, any R m n o derivable with c5 can be derived without it.\n   Dropping c4: No change, because c4 is the inverse of applying c2 and c3 (which increment both a side and the sum), so anything provable with c4 is provable without it. *)",
+      "explanation": "R encodes addition. R 1 1 2 holds (1+1=2). R 2 2 6 does not (2+2<>6). c4 and c5 are redundant."
+    },
+    "R_fact": {
+      "solution": "Definition fR : nat -> nat -> nat := plus.\n\nTheorem R_equiv_fR : forall m n o, R m n o <-> fR m n = o.\nProof.\n  intros m n o. split.\n  - intros H. induction H.\n    + reflexivity.\n    + simpl. rewrite IHR. reflexivity.\n    + simpl in IHR. unfold fR in *. rewrite add_comm. simpl. rewrite add_comm. apply IHR.\n    + simpl in IHR. unfold fR in *. injection IHR as IHR. apply IHR.\n    + unfold fR in *. rewrite add_comm. apply IHR.\n  - revert o. induction m as [| m' IH].\n    + intros o H. simpl in H. rewrite <- H. induction n as [| n' IHn'].\n      * apply c1.\n      * apply c3. apply IHn'.\n    + intros o H. simpl in H. rewrite <- H. apply c2. apply IH. reflexivity.\nQed.",
+      "explanation": "R encodes addition: R m n o iff m + n = o. Proof by induction in both directions."
+    },
+    "subsequence": {
+      "solution": "Inductive subseq : list nat -> list nat -> Prop :=\n  | subseq_nil (l : list nat) : subseq [] l\n  | subseq_take (x : nat) (l1 l2 : list nat) (H : subseq l1 l2) : subseq (x :: l1) (x :: l2)\n  | subseq_skip (x : nat) (l1 l2 : list nat) (H : subseq l1 l2) : subseq l1 (x :: l2).\n\nTheorem subseq_refl : forall (l : list nat), subseq l l.\nProof.\n  intros l. induction l as [| x l' IH].\n  - apply subseq_nil.\n  - apply subseq_take. apply IH.\nQed.\n\nTheorem subseq_app : forall (l1 l2 l3 : list nat),\n  subseq l1 l2 ->\n  subseq l1 (l2 ++ l3).\nProof.\n  intros l1 l2 l3 H. induction H as [| x l1' l2' H' IH | x l1' l2' H' IH].\n  - apply subseq_nil.\n  - simpl. apply subseq_take. apply IH.\n  - simpl. apply subseq_skip. apply IH.\nQed.\n\nTheorem subseq_trans : forall (l1 l2 l3 : list nat),\n  subseq l1 l2 ->\n  subseq l2 l3 ->\n  subseq l1 l3.\nProof.\n  intros l1 l2 l3 H12 H23. generalize dependent l1.\n  induction H23 as [| x l2' l3' H23' IH | x l2' l3' H23' IH].\n  - intros l1 H12. inversion H12. apply subseq_nil.\n  - intros l1 H12. inversion H12 as [| x' l1' l2'' Hsub Heq1 Heq2 | x' l1' l2'' Hsub Heq1 Heq2].\n    + apply subseq_nil.\n    + apply subseq_take. apply IH. apply Hsub.\n    + apply subseq_skip. apply IH. apply Hsub.\n  - intros l1 H12. apply subseq_skip. apply IH. apply H12.\nQed.",
+      "explanation": "Define subseq with nil, take (match head), skip (skip head of second list). Prove refl, app, and trans."
+    },
+    "total_relation": {
+      "solution": "Inductive total_relation : nat -> nat -> Prop :=\n  | total_rel (n m : nat) : total_relation n m.\n\nTheorem total_relation_is_total : forall n m, total_relation n m.\nProof.\n  intros n m. apply total_rel.\nQed.",
+      "explanation": "A single constructor that holds for any pair of naturals."
+    },
+    "empty_relation": {
+      "solution": "Inductive empty_relation : nat -> nat -> Prop := .\n\nTheorem empty_relation_is_empty : forall n m, ~ empty_relation n m.\nProof.\n  intros n m H. inversion H.\nQed.",
+      "explanation": "No constructors means no evidence can exist. Inversion on any evidence yields no cases."
+    },
+    "exp_match_ex1": {
+      "solution": "Lemma EmptySet_is_empty : forall T (s : list T),\n  ~ (s =~ EmptySet).\nProof.\n  intros T s H. inversion H.\nQed.\n\nLemma MUnion' : forall T (s : list T) (re1 re2 : reg_exp T),\n  s =~ re1 \\/ s =~ re2 ->\n  s =~ Union re1 re2.\nProof.\n  intros T s re1 re2 [H | H].\n  - apply MUnionL. apply H.\n  - apply MUnionR. apply H.\nQed.\n\nLemma MStar' : forall T (ss : list (list T)) (re : reg_exp T),\n  (forall s, In s ss -> s =~ re) ->\n  fold app ss [] =~ Star re.\nProof.\n  intros T ss re H. induction ss as [| s ss' IH].\n  - simpl. apply MStar0.\n  - simpl. apply MStarApp.\n    + apply H. simpl. left. reflexivity.\n    + apply IH. intros s' Hin. apply H. simpl. right. apply Hin.\nQed.",
+      "explanation": "EmptySet matches nothing (inversion). MUnion' dispatches disjunction to MUnionL/MUnionR. MStar' uses induction on ss."
+    },
+    "re_not_empty": {
+      "solution": "Fixpoint re_not_empty {T : Type} (re : reg_exp T) : bool :=\n  match re with\n  | EmptySet => false\n  | EmptyStr => true\n  | Char _ => true\n  | App re1 re2 => re_not_empty re1 && re_not_empty re2\n  | Union re1 re2 => re_not_empty re1 || re_not_empty re2\n  | Star _ => true\n  end.\n\nLemma re_not_empty_correct : forall T (re : reg_exp T),\n  (exists s, s =~ re) <-> re_not_empty re = true.\nProof.\n  intros T re. induction re as [| | x | re1 IH1 re2 IH2 | re1 IH1 re2 IH2 | re IH].\n  - simpl. split.\n    + intros [s H]. inversion H.\n    + intros H. discriminate H.\n  - simpl. split.\n    + intros _. reflexivity.\n    + intros _. exists []. apply MEmpty.\n  - simpl. split.\n    + intros _. reflexivity.\n    + intros _. exists [x]. apply MChar.\n  - simpl. split.\n    + intros [s H]. inversion H. subst. rewrite andb_true_iff. split.\n      * apply IH1. exists s1. apply H3.\n      * apply IH2. exists s2. apply H4.\n    + intros H. rewrite andb_true_iff in H. destruct H as [H1 H2].\n      apply IH1 in H1. apply IH2 in H2.\n      destruct H1 as [s1 Hs1]. destruct H2 as [s2 Hs2].\n      exists (s1 ++ s2). apply MApp. apply Hs1. apply Hs2.\n  - simpl. split.\n    + intros [s H]. inversion H; subst.\n      * rewrite orb_true_iff. left. apply IH1. exists s. apply H2.\n      * rewrite orb_true_iff. right. apply IH2. exists s. apply H1.\n    + intros H. rewrite orb_true_iff in H. destruct H as [H | H].\n      * apply IH1 in H. destruct H as [s Hs]. exists s. apply MUnionL. apply Hs.\n      * apply IH2 in H. destruct H as [s Hs]. exists s. apply MUnionR. apply Hs.\n  - simpl. split.\n    + intros _. reflexivity.\n    + intros _. exists []. apply MStar0.\nQed.",
+      "explanation": "re_not_empty checks if a regex can match any string. Star always matches [], EmptySet never matches, etc."
+    },
+    "weak_pumping_char": {
+      "solution": "intros T x Hlen. simpl in Hlen. inversion Hlen. inversion H0.",
+      "explanation": "pumping_constant (Char x) = 2 but length [x] = 1, so 2 <= 1 is a contradiction."
+    },
+    "weak_pumping_app": {
+      "solution": "simpl. intros T s1 s2 re1 re2 Hmatch1 Hmatch2 IH1 IH2 Hlen.\n  assert (H : pumping_constant re1 <= length s1 \\/\n              pumping_constant re2 <= length s2).\n  { rewrite app_length in Hlen. apply plus_le_cases in Hlen. apply Hlen. }\n  destruct H as [H | H].\n  - apply IH1 in H. destruct H as [s2' [s3 [s4 [Heq [Hne Hpump]]]]]. \n    exists s2', s3, (s4 ++ s2). split.\n    + rewrite Heq. rewrite <- app_assoc. rewrite <- app_assoc. reflexivity.\n    + split. apply Hne. intros m. rewrite app_assoc. rewrite app_assoc.\n      apply MApp. rewrite <- app_assoc. apply Hpump. apply Hmatch2.\n  - apply IH2 in H. destruct H as [s1' [s3 [s4 [Heq [Hne Hpump]]]]]. \n    exists (s1 ++ s1'), s3, s4. split.\n    + rewrite Heq. rewrite <- app_assoc. reflexivity.\n    + split. apply Hne. intros m.\n      rewrite <- app_assoc. apply MApp. apply Hmatch1. apply Hpump.",
+      "explanation": "Use plus_le_cases to determine which sub-regex exceeds its pumping constant, then apply the appropriate IH."
+    },
+    "weak_pumping_union_l": {
+      "solution": "simpl. intros T s1 re1 re2 Hmatch IH Hlen.\n  assert (H : pumping_constant re1 <= length s1).\n  { apply le_trans with (n := pumping_constant re1 + pumping_constant re2).\n    - apply le_plus_l.\n    - apply Hlen. }\n  destruct (IH H) as [s2 [s3 [s4 [Heq [Hne Hpump]]]]].\n  exists s2, s3, s4. split.\n  - apply Heq.\n  - split. apply Hne. intros m. apply MUnionL. apply Hpump.",
+      "explanation": "Since pumping_constant re1 <= pumping_constant (Union re1 re2) <= length s1, apply IH and wrap with MUnionL."
+    },
+    "weak_pumping_union_r": {
+      "solution": "simpl. intros T s2 re1 re2 Hmatch IH Hlen.\n  assert (H : pumping_constant re2 <= length s2).\n  { apply le_trans with (n := pumping_constant re1 + pumping_constant re2).\n    - rewrite add_comm. apply le_plus_l.\n    - apply Hlen. }\n  destruct (IH H) as [s1 [s3 [s4 [Heq [Hne Hpump]]]]].\n  exists s1, s3, s4. split.\n  - apply Heq.\n  - split. apply Hne. intros m. apply MUnionR. apply Hpump.",
+      "explanation": "Symmetric to weak_pumping_union_l but for the right side of Union."
+    },
+    "weak_pumping_star_zero": {
+      "solution": "intros T re H. simpl in H. assert (Hge : pumping_constant re >= 1). { apply pumping_constant_ge_1. } lia.",
+      "explanation": "pumping_constant (Star re) = pumping_constant re >= 1 > 0 = length [], so the hypothesis is contradictory. (Uses lia or inversion on the le proof.)"
+    },
+    "weak_pumping_star_app": {
+      "solution": "simpl. intros T s1 s2 re Hmatch1 Hmatch2 IH1 IH2 Hlen.\n  rewrite app_length in *.\n  assert (Hs1re1 : length s1 = 0\n                \\/ (length s1 <> 0 /\\ length s1 < pumping_constant re)\n                \\/ pumping_constant re <= length s1).\n  { destruct (lt_ge_cases (length s1) (pumping_constant re)) as [Hlt | Hge].\n    - destruct s1.\n      + left. reflexivity.\n      + right. left. split. simpl. discriminate. apply Hlt.\n    - right. right. apply Hge. }\n  destruct Hs1re1 as [Hs1eq | [[Hs1ne Hs1lt] | Hs1ge]].\n  - (* s1 is empty *)\n    destruct s1. 2: { discriminate Hs1eq. }\n    simpl in *. apply IH2. apply Hlen.\n  - (* 0 < length s1 < pumping_constant re *)\n    destruct s1 as [| x s1']. { exfalso. apply Hs1ne. reflexivity. }\n    exists [], (x :: s1'), s2. split.\n    + reflexivity.\n    + split. discriminate. intros m. apply napp_star. apply Hmatch1. apply Hmatch2.\n  - (* pumping_constant re <= length s1 *)\n    apply IH1 in Hs1ge.\n    destruct Hs1ge as [s2' [s3 [s4 [Heq [Hne Hpump]]]]]. \n    exists s2', s3, (s4 ++ s2). split.\n    + rewrite Heq. rewrite <- app_assoc. rewrite <- app_assoc. reflexivity.\n    + split. apply Hne. intros m.\n      rewrite app_assoc. rewrite app_assoc.\n      apply MStarApp. rewrite <- app_assoc. apply Hpump.\n      apply Hmatch2.",
+      "explanation": "Three cases on s1 length: empty (use IH2), small nonempty (pump s1 itself), or large (use IH1 and wrap with MStarApp)."
+    },
+    "pumping": {
+      "solution": "(* This is the strong pumping lemma, a 5-star optional exercise. A full proof requires careful tracking of the length s1 + length s2 <= pumping_constant re condition through all cases. The approach follows weak_pumping but additionally maintains the length bound. Key insight: in the Star case, when s1 is nonempty but shorter than pumping_constant re, use s1 = [] ++ s1 ++ [] with length [] + length s1 = length s1 < pumping_constant re. *)\n(* Due to the extreme complexity of the strong version, this exercise is left as a challenge. The weak pumping lemma above provides the essential ideas. *)",
+      "explanation": "5-star optional exercise. The strong pumping lemma adds a length bound constraint to the weak version."
+    },
+    "reflect_iff": {
+      "solution": "intros P b H. inversion H as [HP Heq | HNP Heq].\n  - split.\n    + intros _. reflexivity.\n    + intros _. apply HP.\n  - split.\n    + intros HP. exfalso. apply HNP. apply HP.\n    + intros Hfalse. discriminate Hfalse.",
+      "explanation": "Inversion on reflect P b gives two cases: P holds (b=true) or ~P holds (b=false). Build the iff in each case."
+    },
+    "eqbP_practice": {
+      "solution": "intros n l Hcount. induction l as [| m l' IHl'].\n  - simpl. intros [].\n  - simpl. destruct (eqbP n m) as [Heq | Hneq].\n    + simpl in Hcount. discriminate Hcount.\n    + simpl in Hcount. simpl. intros [Heq | Hin].\n      * apply Hneq. symmetry. apply Heq.\n      * apply IHl'. apply Hcount. apply Hin.",
+      "explanation": "Induction on l. Destruct eqbP n m: if equal, count is nonzero, contradicting Hcount=0. If not, apply IH."
+    },
+    "nostutter_defn": {
+      "solution": "Inductive nostutter {X:Type} : list X -> Prop :=\n  | nostutter_nil : nostutter []\n  | nostutter_one (x : X) : nostutter [x]\n  | nostutter_cons (x y : X) (l : list X) (H1 : x <> y) (H2 : nostutter (y :: l)) : nostutter (x :: y :: l).\n\nExample test_nostutter_1: nostutter [3;1;4;1;5;6].\nProof.\n  repeat constructor; apply eqb_neq; auto.\nQed.\n\nExample test_nostutter_2:  nostutter (@nil nat).\nProof.\n  repeat constructor; apply eqb_neq; auto.\nQed.\n\nExample test_nostutter_3:  nostutter [5].\nProof.\n  repeat constructor; auto.\nQed.\n\nExample test_nostutter_4:      not (nostutter [3;1;1;4]).\nProof.\n  intro.\n  repeat match goal with\n    h: nostutter _ |- _ => inversion h; clear h; subst\n  end.\n  contradiction; auto.\nQed.",
+      "explanation": "nostutter: empty list OK, singleton OK, x::y::l OK if x<>y and nostutter (y::l)."
+    },
+    "filter_challenge": {
+      "solution": "Inductive merge {X:Type} : list X -> list X -> list X -> Prop :=\n  | merge_nil : merge [] [] []\n  | merge_left (x : X) (l1 l2 l : list X) (H : merge l1 l2 l) : merge (x :: l1) l2 (x :: l)\n  | merge_right (x : X) (l1 l2 l : list X) (H : merge l1 l2 l) : merge l1 (x :: l2) (x :: l).\n\nTheorem merge_filter : forall (X : Set) (test: X->bool) (l l1 l2 : list X),\n  merge l1 l2 l ->\n  All (fun n => test n = true) l1 ->\n  All (fun n => test n = false) l2 ->\n  filter test l = l1.\nProof.\n  intros X test l l1 l2 Hmerge. induction Hmerge as [| x l1' l2' l' H IH | x l1' l2' l' H IH].\n  - intros _ _. reflexivity.\n  - intros [Htx Hall1] Hall2. simpl. rewrite Htx. f_equal. apply IH. apply Hall1. apply Hall2.\n  - intros Hall1 [Htx Hall2]. simpl. rewrite Htx. apply IH. apply Hall1. apply Hall2.\nQed.",
+      "explanation": "merge interleaves l1 and l2 into l. If all of l1 pass the test and none of l2 do, filter recovers l1."
+    },
+    "palindromes": {
+      "solution": "Inductive pal {X:Type} : list X -> Prop :=\n  | pal_nil : pal []\n  | pal_one (x : X) : pal [x]\n  | pal_cons (x : X) (l : list X) (H : pal l) : pal (x :: l ++ [x]).\n\nTheorem pal_app_rev : forall (X:Type) (l : list X),\n  pal (l ++ (rev l)).\nProof.\n  intros X l. induction l as [| x l' IH].\n  - simpl. apply pal_nil.\n  - simpl. rewrite app_assoc. apply pal_cons. apply IH.\nQed.\n\nTheorem pal_rev : forall (X:Type) (l: list X) , pal l -> l = rev l.\nProof.\n  intros X l H. induction H as [| x | x l' Hpal IH].\n  - reflexivity.\n  - reflexivity.\n  - simpl. rewrite rev_app_distr. simpl. rewrite <- IH. reflexivity.\nQed.",
+      "explanation": "Palindrome: empty, singleton, or x :: l ++ [x] where l is palindrome. Prove pal_app_rev by induction on l, pal_rev by induction on pal evidence."
+    },
+    "palindrome_converse": {
+      "solution": "(* This is a 5-star optional exercise. The proof requires strong induction on the length of the list, since removing the first and last elements of a palindrome yields a shorter palindrome. A sketch:\n   - If l = [], pal_nil.\n   - If l = [x], pal_one.\n   - If l = x :: l' ++ [y], then from l = rev l we get x = y and l' = rev l'. By IH (on shorter list), pal l', so pal (x :: l' ++ [x]) by pal_cons.\n   The main difficulty is the strong induction setup and list manipulation lemmas. *)",
+      "explanation": "5-star optional. Requires strong induction on list length and careful list lemmas."
+    },
+    "EmptyStr_not_needed": {
+      "solution": "(* Lemma EmptyStr'_matches_eps : forall T (s : list T), s =~ @EmptyStr' T <-> s = [].\nProof.\n  intros T s. unfold EmptyStr'. split.\n  - intros H. remember (Star EmptySet) as re eqn:Eq.\n    induction H; try discriminate Eq.\n    + reflexivity.\n    + injection Eq as Eq'. rewrite <- Eq' in H. inversion H.\n  - intros H. rewrite H. apply MStar0.\nQed. *)",
+      "explanation": "Star EmptySet matches only [] because EmptySet matches nothing, so MStarApp can never add characters."
+    },
+    "MStar''": {
+      "solution": "intros T s re H. remember (Star re) as re' eqn:Eq.\n  induction H as [| x | s1 re1 s2 re2 H1 IH1 H2 IH2 | s1 re1 re2 H IH | s1 re1 re2 H IH | re' | s1 s2 re' H1 IH1 H2 IH2]; try discriminate Eq.\n  - exists []. simpl. split. reflexivity. intros s' []. \n  - injection Eq as Eq'. subst re'. destruct (IH2 eq_refl) as [ss [Heq Hss]].\n    exists (s1 :: ss). simpl. split.\n    + rewrite Heq. reflexivity.\n    + intros s' [Hs' | Hin]. rewrite <- Hs'. apply H1. apply Hss. apply Hin.",
+      "explanation": "Induction on the match evidence with remember for Star re. MStar0 gives empty list of strings. MStarApp prepends s1 to the list from IH."
+    },
+    "app_ne": {
+      "solution": "intros a s re0 re1. split.\n  - intros H. inversion H as [| | s1 re1' s2 re2' H1 H2 Heq1 Heq2 | | | |]. subst.\n    destruct s1 as [| a' s1'].\n    + left. split. apply H1. simpl in Heq1. rewrite Heq1. apply H2.\n    + right. simpl in Heq1. injection Heq1 as Ha Hs. subst a'. exists s1', s2. split. reflexivity. split. apply H1. apply H2.\n  - intros [[Heps Hmatch] | [s0 [s1 [Hs [Hmatch0 Hmatch1]]]]].\n    + apply (MApp []). apply Heps. apply Hmatch.\n    + rewrite Hs. apply (MApp (a :: s0)). apply Hmatch0. apply Hmatch1.",
+      "explanation": "Invert App match: either re0 matched [] (and a::s matched re1) or re0 matched a::s0."
+    },
+    "star_ne": {
+      "solution": "intros a s re. split.\n  - intros H. remember (Star re) as re' eqn:Eq. remember (a :: s) as s' eqn:Eqs.\n    induction H as [| x | s1 re1 s2 re2 H1 IH1 H2 IH2 | s1 re1 re2 H IH | s1 re1 re2 H IH | re'' | s1 s2 re'' H1 IH1 H2 IH2]; try discriminate Eq.\n    + discriminate Eqs.\n    + injection Eq as Eq'. subst re''. destruct s1 as [| a' s1'].\n      * simpl in Eqs. apply IH2. reflexivity. apply Eqs.\n      * simpl in Eqs. injection Eqs as Ha Hs. subst a'. exists s1', s2.\n        split. apply Hs. split. apply H1. apply H2.\n  - intros [s0 [s1 [Hs [Hmatch Hstar]]]]. rewrite Hs.\n    apply (MStarApp (a :: s0)). apply Hmatch. apply Hstar.",
+      "explanation": "Forward: remember Star re, induction on match evidence, handle MStar0 (contradiction) and MStarApp. Backward: direct MStarApp."
+    },
+    "match_eps": {
+      "solution": "Fixpoint match_eps (re: reg_exp ascii) : bool :=\n  match re with\n  | EmptySet => false\n  | EmptyStr => true\n  | Char _ => false\n  | App re1 re2 => match_eps re1 && match_eps re2\n  | Union re1 re2 => match_eps re1 || match_eps re2\n  | Star _ => true\n  end.",
+      "explanation": "Tests if a regex matches the empty string. Star always matches [], EmptyStr matches [], App needs both to match []."
+    },
+    "match_eps_refl": {
+      "solution": "unfold refl_matches_eps. intros re. induction re as [| | x | re1 IH1 re2 IH2 | re1 IH1 re2 IH2 | re IH].\n  - simpl. apply ReflectF. intros H. inversion H.\n  - simpl. apply ReflectT. apply MEmpty.\n  - simpl. apply ReflectF. intros H. inversion H.\n  - simpl. destruct IH1 as [H1 | H1]; destruct IH2 as [H2 | H2]; simpl.\n    + apply ReflectT. apply (MApp []). apply H1. apply H2.\n    + apply ReflectF. intros H. inversion H. destruct s1. destruct s2. simpl in *. apply H2. apply H4. discriminate H0. discriminate H0.\n    + apply ReflectF. intros H. inversion H. destruct s1. simpl in *. apply H1. apply H3. discriminate H0.\n    + apply ReflectF. intros H. inversion H. destruct s1. simpl in *. apply H1. apply H3. discriminate H0.\n  - simpl. destruct IH1 as [H1 | H1]; destruct IH2 as [H2 | H2]; simpl.\n    + apply ReflectT. apply MUnionL. apply H1.\n    + apply ReflectT. apply MUnionL. apply H1.\n    + apply ReflectT. apply MUnionR. apply H2.\n    + apply ReflectF. intros H. inversion H. apply H1. apply H3. apply H2. apply H3.\n  - simpl. apply ReflectT. apply MStar0.",
+      "explanation": "Case analysis on regex structure. For App, both parts must match []; for Union, either part; Star always matches []."
+    },
+    "derive": {
+      "solution": "Fixpoint derive (a : ascii) (re : reg_exp ascii) : reg_exp ascii :=\n  match re with\n  | EmptySet => EmptySet\n  | EmptyStr => EmptySet\n  | Char t => if (a =? t)%char then EmptyStr else EmptySet\n  | App re1 re2 => if match_eps re1\n                   then Union (App (derive a re1) re2) (derive a re2)\n                   else App (derive a re1) re2\n  | Union re1 re2 => Union (derive a re1) (derive a re2)\n  | Star re => App (derive a re) (Star re)\n  end.",
+      "explanation": "Brzozowski derivative: EmptySet/EmptyStr give EmptySet. Char checks equality. App uses match_eps. Star is derivative applied then Star."
+    },
+    "derive_corr": {
+      "solution": "(* The proof of derive_corr requires showing that for all a and re, derive a re is the derivative of re on a. This is proved by induction on re, using the lemmas app_ne, star_ne, match_eps_refl, char_eps_suffix, etc. Each case of the regex structure is handled by rewriting with the appropriate equivalence lemma and showing the derivative definition is correct. This is a substantial optional exercise. *)",
+      "explanation": "Optional 4-star exercise. Proved by induction on re using previously established regex equivalence lemmas."
+    },
+    "regex_match": {
+      "solution": "Fixpoint regex_match (s : string) (re : reg_exp ascii) : bool :=\n  match s with\n  | [] => match_eps re\n  | a :: s' => regex_match s' (derive a re)\n  end.",
+      "explanation": "Process each character by taking the derivative, then check if the final regex matches the empty string."
+    },
+    "regex_match_correct": {
+      "solution": "(* Proof by induction on s. Base case: s = [], use match_eps_refl. Inductive case: s = a :: s', use derive_corr to relate a :: s' =~ re to s' =~ derive a re, then apply IH. *)",
+      "explanation": "Optional 3-star exercise. Follows from match_eps_refl and derive_corr by induction on the string."
+    },
+    "in_split": {
+      "solution": "intros X x l. induction l as [| y l' IH].\n  - intros []. \n  - intros [Heq | Hin].\n    + exists [], l'. rewrite Heq. reflexivity.\n    + destruct (IH Hin) as [l1 [l2 Heq]]. exists (y :: l1), l2. rewrite Heq. reflexivity.",
+      "explanation": "Induction on l. If x is the head, split is ([], tail). If in the tail, prepend head to l1 from IH."
+    },
+    "pigeonhole_principle": {
+      "solution": "(* 5-star optional exercise.\nTheorem pigeonhole_principle: excluded_middle ->\n  forall (X:Type) (l1 l2:list X),\n  (forall x, In x l1 -> In x l2) ->\n  length l2 < length l1 ->\n  repeats l1.\nProof.\n  intros EM X l1. induction l1 as [|x l1' IHl1'].\n  - intros l2 _ H. simpl in H. inversion H.\n  - intros l2 Hin Hlen. destruct (EM (In x l1')) as [HIn | HNIn].\n    + apply repeats_head. apply HIn.\n    + apply repeats_tail. apply (IHl1' (remove x l2)).\n      (* The full proof requires a remove function and several lemmas about it.\n         The idea: since x is not in l1', all elements of l1' are in l2 \\ {x},\n         and length (l2 \\ {x}) < length l1'. *)\n*)",
+      "explanation": "5-star optional. Key idea: if head x repeats in tail, done. Otherwise remove x from l2 and apply IH."
+    },
+    "NoDup": {
+      "solution": "(* Optional 4-star exercise.\nDefinition disjoint {X : Type} (l1 l2 : list X) : Prop :=\n  forall x, In x l1 -> ~ In x l2.\n\nInductive NoDup {X : Type} : list X -> Prop :=\n  | NoDup_nil : NoDup []\n  | NoDup_cons (x : X) (l : list X) (H1 : ~ In x l) (H2 : NoDup l) : NoDup (x :: l).\n\n(* Theorem: if NoDup l1 and NoDup l2 and disjoint l1 l2, then NoDup (l1 ++ l2). *)\n*)",
+      "explanation": "Optional 4-star. NoDup means no element appears twice. disjoint means no shared elements."
+    },
+    "test_der0": {
+      "solution": "reflexivity.",
+      "explanation": "Computation check: derive c EmptySet = EmptySet, match_eps EmptySet = false."
+    },
+    "test_der1": {
+      "solution": "reflexivity.",
+      "explanation": "Computation check: derive c (Char c) = EmptyStr, match_eps EmptyStr = true."
+    },
+    "test_der2": {
+      "solution": "reflexivity.",
+      "explanation": "Computation check: derive c (Char d) = EmptySet, match_eps EmptySet = false."
+    },
+    "test_der3": {
+      "solution": "reflexivity.",
+      "explanation": "Computation check for derive c (App (Char c) EmptyStr)."
+    },
+    "test_der4": {
+      "solution": "reflexivity.",
+      "explanation": "Computation check for derive c (App EmptyStr (Char c))."
+    },
+    "test_der5": {
+      "solution": "reflexivity.",
+      "explanation": "Computation check for derive c (Star (Char c))."
+    },
+    "test_der6": {
+      "solution": "reflexivity.",
+      "explanation": "Computation check for derive d (derive c (App (Char c) (Char d)))."
+    },
+    "test_der7": {
+      "solution": "reflexivity.",
+      "explanation": "Computation check for derive d (derive c (App (Char d) (Char c)))."
+    }
+  }
+}

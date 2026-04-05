@@ -1,0 +1,22 @@
+{
+  "chapter": "Extract",
+  "volume": "vfa",
+  "exercises": {
+    "sort_int_correct": {
+      "solution": "Proof.\n  induction al as [| h t IH].\n  - simpl. split. constructor. constructor.\n  - simpl. destruct IH as [IHperm IHsorted]. split.\n    + apply perm_trans with (h :: sort_int t).\n      * apply perm_skip. assumption.\n      * clear IHperm IHsorted. induction (sort_int t) as [| h' t' IH'].\n        -- simpl. apply Permutation_refl.\n        -- simpl. bdestruct (leb h h').\n           ++ apply Permutation_refl.\n           ++ apply perm_trans with (h' :: h :: t').\n              ** apply perm_swap.\n              ** apply perm_skip. apply IH'.\n    + clear IHperm. induction IHsorted.\n      * simpl. constructor.\n      * simpl. bdestruct (leb h (Abs x)).\n        -- constructor; auto. constructor.\n        -- constructor; auto. lia. constructor.\n      * simpl. bdestruct (leb h (Abs x)).\n        -- constructor; auto. simpl in IHIHsorted.\n           bdestruct (leb h (Abs y)).\n           ++ constructor; auto.\n           ++ constructor; auto. lia.\n        -- simpl in IHIHsorted. bdestruct (leb h (Abs y)).\n           ++ constructor; auto. lia.\n           ++ constructor; auto. lia.\nQed.",
+      "explanation": "Adapts the insertion sort correctness proof from Sort to work with int keys and Abs comparisons. Uses leb instead of <=?."
+    },
+    "lookup_insert_eq": {
+      "solution": "Proof.\n  induction t; intros; bdall.\nQed.",
+      "explanation": "By induction on t using the bdall tactic to handle all boolean destructions."
+    },
+    "lookup_insert_neq": {
+      "solution": "Proof.\n  induction t; intros; bdall.\n  all: try (apply Abs_inj in e; contradiction).\nQed.",
+      "explanation": "By induction on t using bdall. Uses Abs_inj to resolve contradictions when keys are claimed equal."
+    },
+    "int_elements": {
+      "solution": "(* Optional 4-star exercise - port BST definition and elements properties for int-keyed trees *)",
+      "explanation": "This optional exercise asks to port the BST definition and reprove elements properties for int-keyed trees."
+    }
+  }
+}

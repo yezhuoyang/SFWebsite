@@ -1,0 +1,30 @@
+{
+  "chapter": "Arrays",
+  "volume": "slf",
+  "exercises": {
+    "triple_quicksort_safety": {
+      "solution": "Lemma triple_quicksort_safety : forall p i n L,\n  n = length L ->\n  i >= 0 ->\n  triple (val_quicksort p i n)\n    (hseg L p i)\n    (fun _ => \\exists L', \\[length L' = length L] \\* hseg L' p i).\nProof using.\n  introv Hn Hi. gen i L. induction_wf IH: (downto 0) n. intros.\n  xwp. xapp. xif; intros C.\n  { xapp triple_pivot_safety. { math. } { math. }\n    intros j L1 x L2 (HL&HJ&HN).\n    xapp. xapp. { math. } { math. subst. rew_list. math. }\n    intros L1' HL1'. xapp. xapp. xapp.\n    { math. } { math. subst. rew_list. math. }\n    intros L2' HL2'. xsimpl (L1' ++ x :: L2').\n    { rew_list. rewrite HL1', HL2'. subst. rew_list. math. }\n    { xchange <- hseg_app. xchange <- hseg_cons. xsimpl. } }\n  { xval. xsimpl L. auto. }\nQed.",
+      "explanation": "Quicksort safety: by well-founded induction on n. Pivot partitions the segment, then recursively sort both halves. The lengths are preserved."
+    },
+    "triple_quicksort": {
+      "solution": "Lemma triple_quicksort : forall p i n L,\n  n = length L ->\n  i >= 0 ->\n  triple (val_quicksort p i n)\n    (hseg L p i)\n    (fun _ => \\exists L', \\[permut L L'] \\* \\[sorted L'] \\* hseg L' p i).\nProof using.\n  introv Hn Hi. gen i L. induction_wf IH: (downto 0) n. intros.\n  xwp. xapp. xif; intros C.\n  { xapp triple_pivot. { math. } { math. }\n    intros j L1 x L2 (HL&HJ&HN&HP&HB).\n    xapp. xapp. { math. } { math. subst. rew_list. math. }\n    intros L1' (HP1&HS1). xapp. xapp. xapp.\n    { math. } { math. subst. rew_list. math. }\n    intros L2' (HP2&HS2). xsimpl (L1' ++ x :: L2').\n    { applys permut_trans HP. applys permut_app. applys HP1.\n      applys permut_cons. applys HP2. }\n    { applys sorted_app. auto. auto. auto. }\n    { xchange <- hseg_app. xchange <- hseg_cons. xsimpl. } }\n  { xval. xsimpl L. { applys permut_refl. }\n    { destruct L as [|x [|y L']]; try (simpl in C; math).\n      { constructor. } { constructor. } } }\nQed.",
+      "explanation": "Full quicksort correctness: the result is a sorted permutation of the input. Uses pivot's full spec with bounds."
+    },
+    "triple_quicksort_full": {
+      "solution": "Lemma triple_quicksort_full : forall p i n L,\n  n = length L ->\n  i >= 0 ->\n  triple (val_quicksort p i n)\n    (hseg L p i)\n    (fun _ => \\exists L', \\[permut L L'] \\* \\[sorted L'] \\* hseg L' p i).\nProof using.\n  introv Hn Hi. applys triple_quicksort; auto.\nQed.",
+      "explanation": "Full quicksort specification is identical to triple_quicksort."
+    },
+    "hseg_app": {
+      "solution": "Lemma hseg_app : forall L1 L2 p j,\n    hseg (L1 ++ L2) p j\n  = hseg L1 p j \\* hseg L2 p (j + length L1).\nProof using.\n  intros L1. induction L1 as [|v L1' IH]; intros.\n  { rew_list. rewrite hseg_nil. xsimpl. math_rewrite (j + 0 = j). xsimpl. }\n  { rew_list. do 2 rewrite hseg_cons. rewrite IH. xsimpl.\n    math_rewrite (j + 1 + length L1' = j + (1 + length L1')). xsimpl. }\nQed.",
+      "explanation": "Splitting lemma for array segments: hseg of concatenated lists equals star of two hseg's with appropriate indices."
+    },
+    "hseg_focus_relative": {
+      "solution": "Lemma hseg_focus_relative : forall (k:nat) L p j,\n  0 <= k < length L ->\n      hseg L p j\n  ==> let v := LibList.nth k L in\n         hcell v p (j+k)\n      \\* (\\forall w, hcell w p (j+k) \\-* hseg (LibList.update k w L) p j).\nProof using.\n  introv Hk. lets (L1&x&L2&E&HK): LibList.list_middle_inv (A:=val) k L Hk.\n  subst L. rewrite LibList.nth_middle.\n  xchange hseg_app. xchange (hseg_cons x).\n  math_rewrite (j + length L1 = j + k).\n  xsimpl. intros w. rewrite LibList.update_middle.\n  xchange <- (hseg_cons w). xchange <- hseg_app.\n  math_rewrite (j + k = j + length L1). xsimpl.\nQed.",
+      "explanation": "Focus on element k of an array segment: split into prefix, target cell, and suffix, then package the wand for update."
+    },
+    "harray_focus_read": {
+      "solution": "Lemma harray_focus_read : forall i L p,\n  0 <= i < length L ->\n      harray L p\n  ==> let v := LibList.nth (abs i) L in\n      hcell v p i \\* (hcell v p i \\-* harray L p).\nProof using.\n  introv Hi. xchange (harray_focus i L p Hi).\n  lets v: (LibList.nth (abs i) L). xsimpl. intros w.\n  xchange (hforall_specialize v).\n  rewrite LibList.update_nth_same. { xsimpl. } { typeclass. }\nQed.",
+      "explanation": "Read-only focus: specialize the general focus lemma's universal quantifier with the original value, using update_nth_same."
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "chapter": "Maps",
+  "volume": "lf",
+  "exercises": {
+    "t_apply_empty": {
+      "solution": "Lemma t_apply_empty : forall (A : Type) (x : string) (v : A),\n  (__ !-> v) x = v.\nProof.\n  intros A x v. unfold t_empty. reflexivity.\nQed.",
+      "explanation": "The empty map is defined as a constant function returning v for any input, so applying it to any key x just gives v."
+    },
+    "t_update_eq": {
+      "solution": "Lemma t_update_eq : forall (A : Type) (m : total_map A) x v,\n  (x !-> v ; m) x = v.\nProof.\n  intros A m x v. unfold t_update. rewrite String.eqb_refl. reflexivity.\nQed.",
+      "explanation": "Looking up key x in the updated map checks if x = x, which is true by eqb_refl, so we get v."
+    },
+    "t_update_neq": {
+      "solution": "Theorem t_update_neq : forall (A : Type) (m : total_map A) x1 x2 v,\n  x1 <> x2 ->\n  (x1 !-> v ; m) x2 = m x2.\nProof.\n  intros A m x1 x2 v H. unfold t_update.\n  apply String.eqb_neq in H. rewrite H. reflexivity.\nQed.",
+      "explanation": "Since x1 <> x2, String.eqb x1 x2 = false by eqb_neq, so the update returns m x2."
+    },
+    "t_update_shadow": {
+      "solution": "Lemma t_update_shadow : forall (A : Type) (m : total_map A) x v1 v2,\n  (x !-> v2 ; x !-> v1 ; m) = (x !-> v2 ; m).\nProof.\n  intros A m x v1 v2. apply functional_extensionality.\n  intros x'. unfold t_update.\n  destruct (String.eqb x x').\n  - reflexivity.\n  - reflexivity.\nQed.",
+      "explanation": "By functional extensionality, we check each key x'. If x = x', both sides return v2. Otherwise, both look up m x'."
+    },
+    "t_update_same": {
+      "solution": "Theorem t_update_same : forall (A : Type) (m : total_map A) x,\n  (x !-> m x ; m) = m.\nProof.\n  intros A m x. apply functional_extensionality.\n  intros x'. unfold t_update.\n  destruct (String.eqb_spec x x') as [H | H].\n  - rewrite H. reflexivity.\n  - reflexivity.\nQed.",
+      "explanation": "Using functional extensionality and eqb_spec: if x = x', the update returns m x = m x'. If x <> x', it returns m x'."
+    },
+    "t_update_permute": {
+      "solution": "Theorem t_update_permute : forall (A : Type) (m : total_map A)\n                                  v1 v2 x1 x2,\n  x2 <> x1 ->\n  (x1 !-> v1 ; x2 !-> v2 ; m)\n  =\n  (x2 !-> v2 ; x1 !-> v1 ; m).\nProof.\n  intros A m v1 v2 x1 x2 H. apply functional_extensionality.\n  intros x'. unfold t_update.\n  destruct (String.eqb_spec x1 x') as [H1 | H1];\n  destruct (String.eqb_spec x2 x') as [H2 | H2].\n  - subst. exfalso. apply H. reflexivity.\n  - reflexivity.\n  - reflexivity.\n  - reflexivity.\nQed.",
+      "explanation": "By extensionality and case analysis on whether x' equals x1 or x2. The case x1 = x' and x2 = x' is impossible since x2 <> x1."
+    }
+  }
+}

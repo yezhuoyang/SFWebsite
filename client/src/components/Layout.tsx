@@ -2,13 +2,14 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { getVolumes } from '../api/client';
 import type { Volume } from '../types';
+import { SFLogo } from './VolumeIllustrations';
 
 const VOLUME_COLORS: Record<string, string> = {
   lf: 'bg-blue-500',
-  plf: 'bg-purple-500',
-  vfa: 'bg-green-500',
-  slf: 'bg-orange-500',
-  secf: 'bg-red-500',
+  plf: 'bg-violet-500',
+  vfa: 'bg-emerald-500',
+  slf: 'bg-amber-500',
+  secf: 'bg-rose-500',
 };
 
 export default function Layout() {
@@ -20,12 +21,15 @@ export default function Layout() {
   }, []);
 
   return (
-    <div className="flex h-screen bg-[#0f1117]">
+    <div className="flex h-screen bg-[#f8f7f4]">
       {/* Sidebar */}
-      <aside className="w-64 bg-[#13141c] border-r border-gray-800 flex flex-col shrink-0">
-        <Link to="/" className="p-4 border-b border-gray-800 hover:bg-gray-800/50">
-          <h1 className="text-lg font-bold text-gray-100">SF Learning</h1>
-          <p className="text-xs text-gray-500">Software Foundations</p>
+      <aside className="w-60 bg-white border-r border-gray-200/80 flex flex-col shrink-0 shadow-sm">
+        <Link to="/" className="flex items-center gap-3 p-5 border-b border-gray-100 hover:bg-gray-50/80 transition-colors">
+          <SFLogo size={36} />
+          <div>
+            <h1 className="text-base font-extrabold text-gray-900 tracking-tight">SF Learning</h1>
+            <p className="text-[11px] text-gray-400 mt-0.5 font-medium">Software Foundations</p>
+          </div>
         </Link>
 
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
@@ -39,41 +43,46 @@ export default function Layout() {
               <Link
                 key={v.id}
                 to={`/volume/${v.id}`}
-                className={`block p-3 rounded-lg transition-colors ${
-                  isActive ? 'bg-indigo-950/50 text-indigo-400' : 'hover:bg-gray-800/50'
+                className={`block p-3 rounded-xl transition-all ${
+                  isActive
+                    ? 'bg-indigo-50 ring-1 ring-indigo-200/60'
+                    : 'hover:bg-gray-50'
                 }`}
               >
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1.5">
                   <span className={`w-2 h-2 rounded-full ${VOLUME_COLORS[v.id] || 'bg-gray-400'}`} />
-                  <span className="text-sm font-medium text-gray-100">{v.namespace}</span>
-                  <span className="text-xs text-gray-500 ml-auto">{pct}%</span>
+                  <span className={`text-sm font-semibold ${isActive ? 'text-indigo-700' : 'text-gray-700'}`}>
+                    {v.name}
+                  </span>
+                  <span className="text-[11px] text-gray-400 ml-auto font-medium">{pct}%</span>
                 </div>
-                <div className="w-full bg-gray-800 rounded-full h-1.5">
+                <div className="w-full bg-gray-100 rounded-full h-1.5">
                   <div
                     className={`h-1.5 rounded-full ${VOLUME_COLORS[v.id] || 'bg-gray-400'}`}
                     style={{ width: `${pct}%` }}
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {v.completed_count}/{v.exercise_count} exercises
+                <p className="text-[11px] text-gray-400 mt-1">
+                  {v.completed_count}/{v.exercise_count}
                 </p>
               </Link>
             );
           })}
         </nav>
 
-        <div className="p-3 border-t border-gray-800 space-y-2">
+        <div className="p-3 border-t border-gray-100 space-y-1">
           <Link
             to="/tutor"
-            className={`block p-3 rounded-lg text-sm font-medium transition-colors ${
+            className={`flex items-center gap-2 p-3 rounded-xl text-sm font-semibold transition-all ${
               location.pathname === '/tutor'
-                ? 'bg-indigo-950/50 text-indigo-400'
-                : 'text-gray-400 hover:bg-gray-800/50'
+                ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200/60'
+                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
             }`}
           >
+            <span className="text-base">&#9672;</span>
             AI Tutor
           </Link>
-          <p className="text-xs text-gray-600 px-3">Powered by Coq 8.20 + SerAPI</p>
+          <p className="text-[10px] text-gray-300 px-3 pb-1 font-medium">Coq 8.20 + SerAPI</p>
         </div>
       </aside>
 

@@ -1,0 +1,38 @@
+{
+  "chapter": "Sort",
+  "volume": "vfa",
+  "exercises": {
+    "insert_sorted": {
+      "solution": "Proof.\n  intros a l S. induction S; simpl.\n  - constructor.\n  - bdestruct (a <=? x).\n    + constructor; auto. constructor.\n    + constructor; auto. lia. constructor.\n  - bdestruct (a <=? x).\n    + constructor; auto. constructor; auto.\n    + simpl in IHS. bdestruct (a <=? y).\n      * constructor; auto. lia.\n      * constructor; auto. lia.\nQed.",
+      "explanation": "By induction on the sortedness evidence. Each case uses bdestruct on the boolean comparison and lia for arithmetic."
+    },
+    "sort_sorted": {
+      "solution": "Proof.\n  induction l.\n  - constructor.\n  - simpl. apply insert_sorted. assumption.\nQed.",
+      "explanation": "By induction on the list. The empty case is immediate; the cons case applies insert_sorted to the inductively sorted tail."
+    },
+    "insert_perm": {
+      "solution": "Proof.\n  intros x l. induction l as [| h t IH].\n  - simpl. apply Permutation_refl.\n  - simpl. bdestruct (x <=? h).\n    + apply Permutation_refl.\n    + apply perm_trans with (h :: x :: t).\n      * apply perm_swap.\n      * apply perm_skip. apply IH.\nQed.",
+      "explanation": "By induction on l. If x <= h, the result is immediate. Otherwise, swap x and h at the front, then use the IH on the tail."
+    },
+    "sort_perm": {
+      "solution": "Proof.\n  induction l as [| h t IH].\n  - simpl. apply perm_nil.\n  - simpl. apply perm_trans with (h :: sort t).\n    + apply perm_skip. apply IH.\n    + apply insert_perm.\nQed.",
+      "explanation": "By induction on l. The key step uses transitivity: first permute the tail, then apply insert_perm to move h into its sorted position."
+    },
+    "insertion_sort_correct": {
+      "solution": "Proof.\n  unfold is_a_sorting_algorithm.\n  intros al. split.\n  - apply sort_perm.\n  - apply sort_sorted.\nQed.",
+      "explanation": "Direct combination of the permutation and sortedness proofs."
+    },
+    "sorted_sorted'": {
+      "solution": "Proof.\n  intros al Hsorted.\n  induction Hsorted.\n  - unfold sorted'. intros. destruct i; inv H0.\n  - unfold sorted'. intros. destruct i; inv H0.\n    + destruct j; inv H1. destruct j; inv H3.\n    + destruct j; inv H1.\n  - unfold sorted' in *.\n    intros i j iv jv Hij Hi Hj.\n    destruct i.\n    + simpl in Hi. inv Hi.\n      destruct j. lia.\n      simpl in Hj.\n      assert (Hle: x <= y) by lia.\n      assert (Hsorted'_sub: forall i0 j0 iv0 jv0, i0 < j0 -> nth_error (y :: l) i0 = Some iv0 -> nth_error (y :: l) j0 = Some jv0 -> iv0 <= jv0).\n      { apply IHHsorted. }\n      destruct j. simpl in Hj. inv Hj. lia.\n      simpl in Hj.\n      assert (0 < S j) by lia.\n      specialize (Hsorted'_sub 0 (S j) y jv H0 eq_refl Hj). lia.\n    + simpl in Hi.\n      destruct j. lia.\n      simpl in Hj.\n      assert (i < j) by lia.\n      apply (IHHsorted i j iv jv H0 Hi Hj).\nQed.",
+      "explanation": "By induction on the evidence that al is sorted. The key case (sorted_cons) reasons about indices: index 0 gives x, and we use the relationship x <= y and the IH for deeper indices."
+    },
+    "sorted'_sorted": {
+      "solution": "Proof.\n  intros al. induction al as [| a al' IH].\n  - intro. constructor.\n  - intro H. destruct al' as [| b al''].\n    + constructor.\n    + constructor.\n      * specialize (H 0 1 a b). simpl in H. apply H; auto. lia.\n      * apply IH. unfold sorted' in *. intros.\n        apply (H (S i) (S j) iv jv). lia.\n        simpl. assumption. simpl. assumption.\nQed.",
+      "explanation": "By induction on the list. For the cons case with at least two elements, we extract a<=b from sorted' at indices 0,1, and build sorted' for the tail by shifting indices."
+    },
+    "insert_sorted'": {
+      "solution": "Lemma nth_error_insert : forall l a i iv,\n    nth_error (insert a l) i = Some iv ->\n    a = iv \\/ exists i', nth_error l i' = Some iv.\nProof.\n  induction l; intros; simpl in *.\n  - destruct i; simpl in H.\n    + left. congruence.\n    + destruct i; simpl in H; discriminate.\n  - bdestruct (a0 <=? a).\n    + destruct i; simpl in H.\n      * left. congruence.\n      * right. exists i. assumption.\n    + destruct i; simpl in H.\n      * right. exists 0. simpl. assumption.\n      * apply IHl in H. destruct H as [Heq | [i' Hi']].\n        -- left. assumption.\n        -- right. exists (S i'). simpl. assumption.\nQed.\n\nLemma insert_sorted':\n  forall a l, sorted' l -> sorted' (insert a l).\nProof.\n  intros a l. revert a. induction l; intros a0 Hsorted'.\n  - unfold sorted'. intros i j iv jv Hij Hi Hj.\n    simpl in *. destruct i; simpl in Hi.\n    + inv Hi. destruct j. lia. simpl in Hj.\n      destruct j; simpl in Hj; discriminate.\n    + destruct i; simpl in Hi; discriminate.\n  - simpl. bdestruct (a0 <=? a).\n    + unfold sorted' in *. intros i j iv jv Hij Hi Hj.\n      destruct i; simpl in Hi.\n      * inv Hi. destruct j. lia. simpl in Hj.\n        assert (a0 <= jv).\n        { destruct j; simpl in Hj.\n          - inv Hj. assumption.\n          - assert (a <= jv). { apply (Hsorted' 0 j a jv). lia. simpl. reflexivity. simpl. assumption. } lia. }\n        assumption.\n      * destruct j. lia. simpl in Hj.\n        apply (Hsorted' i j iv jv). lia. simpl. assumption. simpl. assumption.\n    + assert (Hsorted_tl: sorted' l).\n      { unfold sorted' in *. intros. apply (Hsorted' (S i) (S j) iv jv). lia.\n        simpl. assumption. simpl. assumption. }\n      specialize (IHl a0 Hsorted_tl).\n      unfold sorted' in *. intros i j iv jv Hij Hi Hj.\n      destruct i; simpl in Hi.\n      * inv Hi. destruct j. lia. simpl in Hj.\n        apply nth_error_insert in Hj.\n        destruct Hj as [Heq | [j' Hj']].\n        -- subst. lia.\n        -- assert (a <= jv). { apply (Hsorted' 0 (S j') a jv). lia. simpl. reflexivity. simpl. assumption. } assumption.\n      * destruct j. lia. simpl in Hj.\n        apply (IHl i j iv jv). lia. assumption. assumption.\nQed.",
+      "explanation": "First prove nth_error_insert by induction on l. Then prove insert_sorted' by induction on l with bdestruct on the comparison. The key insight: when a0 <= a, elements at index 0 are a0, rest is original list. When a0 > a, index 0 is a, and tail is insert a0 l which is sorted by IH."
+    }
+  }
+}

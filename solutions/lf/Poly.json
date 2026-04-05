@@ -1,0 +1,78 @@
+{
+  "chapter": "Poly",
+  "volume": "lf",
+  "exercises": {
+    "mumble_grumble": {
+      "solution": "(* d (b a 5) - NO\n   d mumble (b a 5) - YES\n   d bool (b a 5) - YES\n   e bool true - YES\n   e mumble (b c 0) - YES\n   e bool (b c 0) - NO\n   c - NO (c is a mumble, not a grumble) *)",
+      "explanation": "Classify which expressions are well-typed grumble values. d requires a Type argument and a mumble; e requires a Type argument and a value of that type."
+    },
+    "poly_exercises": {
+      "solution": "Theorem app_nil_r : forall (X : Type), forall l : list X,\n  l ++ [] = l.\nProof.\n  intros X l. induction l as [| h t IHt].\n  - reflexivity.\n  - simpl. rewrite IHt. reflexivity.\nQed.\n\nTheorem app_assoc : forall A (l m n : list A),\n  l ++ m ++ n = (l ++ m) ++ n.\nProof.\n  intros A l m n. induction l as [| h t IHt].\n  - reflexivity.\n  - simpl. rewrite IHt. reflexivity.\nQed.\n\nLemma app_length : forall (X : Type) (l1 l2 : list X),\n  length (l1 ++ l2) = length l1 + length l2.\nProof.\n  intros X l1 l2. induction l1 as [| h t IHt].\n  - reflexivity.\n  - simpl. rewrite IHt. reflexivity.\nQed.",
+      "explanation": "Three basic polymorphic list lemmas proved by induction on the list: app_nil_r, app_assoc, and app_length."
+    },
+    "more_poly_exercises": {
+      "solution": "Theorem rev_app_distr: forall X (l1 l2 : list X),\n  rev (l1 ++ l2) = rev l2 ++ rev l1.\nProof.\n  intros X l1 l2. induction l1 as [| h t IHt].\n  - simpl. rewrite app_nil_r. reflexivity.\n  - simpl. rewrite IHt. rewrite app_assoc. reflexivity.\nQed.\n\nTheorem rev_involutive : forall X : Type, forall l : list X,\n  rev (rev l) = l.\nProof.\n  intros X l. induction l as [| h t IHt].\n  - reflexivity.\n  - simpl. rewrite rev_app_distr. simpl. rewrite IHt. reflexivity.\nQed.",
+      "explanation": "rev_app_distr shows rev distributes over append (reversing order), and rev_involutive shows rev is its own inverse."
+    },
+    "split": {
+      "solution": "Fixpoint split {X Y : Type} (l : list (X*Y)) : (list X) * (list Y) :=\n  match l with\n  | [] => ([], [])\n  | (x, y) :: t =>\n      match split t with\n      | (lx, ly) => (x :: lx, y :: ly)\n      end\n  end.\n\nExample test_split:\n  split [(1,false);(2,false)] = ([1;2],[false;false]).\nProof. reflexivity. Qed.",
+      "explanation": "split unzips a list of pairs into a pair of lists by recursively splitting the tail and consing each component."
+    },
+    "hd_error_poly": {
+      "solution": "Definition hd_error {X : Type} (l : list X) : option X :=\n  match l with\n  | [] => None\n  | h :: _ => Some h\n  end.\n\nExample test_hd_error1 : hd_error [1;2] = Some 1.\nProof. reflexivity. Qed.\nExample test_hd_error2 : hd_error  [[1];[2]]  = Some [1].\nProof. reflexivity. Qed.",
+      "explanation": "Polymorphic version of hd_error: returns Some of the head element or None for empty lists."
+    },
+    "filter_even_gt7": {
+      "solution": "Definition filter_even_gt7 (l : list nat) : list nat :=\n  filter (fun n => andb (even n) (7 <? n)) l.\n\nExample test_filter_even_gt7_1 :\n  filter_even_gt7 [1;2;6;9;10;3;12;8] = [10;12;8].\nProof. reflexivity. Qed.\n\nExample test_filter_even_gt7_2 :\n  filter_even_gt7 [5;2;6;19;129] = [].\nProof. reflexivity. Qed.",
+      "explanation": "Uses filter with a predicate that checks both evenness and being greater than 7 using ltb (less-than on bools)."
+    },
+    "partition": {
+      "solution": "Definition partition {X : Type}\n                     (test : X -> bool)\n                     (l : list X)\n                   : list X * list X :=\n  (filter test l, filter (fun x => negb (test x)) l).\n\nExample test_partition1: partition odd [1;2;3;4;5] = ([1;3;5], [2;4]).\nProof. reflexivity. Qed.\nExample test_partition2: partition (fun x => false) [5;9;0] = ([], [5;9;0]).\nProof. reflexivity. Qed.",
+      "explanation": "partition splits a list into elements satisfying the test and those that don't, using filter with the predicate and its negation."
+    },
+    "map_rev": {
+      "solution": "Lemma map_app : forall (X Y : Type) (f : X -> Y) (l1 l2 : list X),\n  map f (l1 ++ l2) = map f l1 ++ map f l2.\nProof.\n  intros X Y f l1 l2. induction l1 as [| h t IHt].\n  - reflexivity.\n  - simpl. rewrite IHt. reflexivity.\nQed.\n\nTheorem map_rev : forall (X Y : Type) (f : X -> Y) (l : list X),\n  map f (rev l) = rev (map f l).\nProof.\n  intros X Y f l. induction l as [| h t IHt].\n  - reflexivity.\n  - simpl. rewrite <- IHt. rewrite map_app. reflexivity.\nQed.",
+      "explanation": "First prove the auxiliary lemma that map distributes over app, then use it to show map commutes with rev by induction."
+    },
+    "flat_map": {
+      "solution": "Fixpoint flat_map {X Y: Type} (f: X -> list Y) (l: list X)\n                   : list Y :=\n  match l with\n  | [] => []\n  | h :: t => f h ++ flat_map f t\n  end.\n\nExample test_flat_map1:\n  flat_map (fun n => [n;n;n]) [1;5;4]\n  = [1; 1; 1; 5; 5; 5; 4; 4; 4].\nProof. reflexivity. Qed.",
+      "explanation": "flat_map applies f to each element (producing a list) and concatenates all the results."
+    },
+    "fold_length": {
+      "solution": "Theorem fold_length_correct : forall X (l : list X),\n  fold_length l = length l.\nProof.\n  intros X l. induction l as [| h t IHt].\n  - reflexivity.\n  - unfold fold_length. simpl. fold (fold_length t). rewrite IHt. reflexivity.\nQed.",
+      "explanation": "Prove fold_length equals length by induction. The key trick is to unfold fold_length, simplify, then fold it back to apply the IH."
+    },
+    "fold_map": {
+      "solution": "Definition fold_map {X Y: Type} (f: X -> Y) (l: list X) : list Y :=\n  fold (fun x acc => f x :: acc) l [].\n\nTheorem fold_map_correct : forall X Y (f : X -> Y) (l : list X),\n  fold_map f l = map f l.\nProof.\n  intros X Y f l. induction l as [| h t IHt].\n  - reflexivity.\n  - unfold fold_map. simpl. fold (fold_map f t). rewrite IHt. reflexivity.\nQed.",
+      "explanation": "fold_map uses fold to build a list by applying f to each element and consing onto the accumulator. The correctness theorem shows it equals map."
+    },
+    "currying": {
+      "solution": "Definition prod_uncurry {X Y Z : Type}\n  (f : X -> Y -> Z) (p : X * Y) : Z :=\n  f (fst p) (snd p).\n\nTheorem uncurry_curry : forall (X Y Z : Type)\n                        (f : X -> Y -> Z)\n                        x y,\n  prod_curry (prod_uncurry f) x y = f x y.\nProof.\n  intros X Y Z f x y. reflexivity.\nQed.\n\nTheorem curry_uncurry : forall (X Y Z : Type)\n                        (f : (X * Y) -> Z) (p : X * Y),\n  prod_uncurry (prod_curry f) p = f p.\nProof.\n  intros X Y Z f p. destruct p as [x y]. reflexivity.\nQed.",
+      "explanation": "prod_uncurry takes a curried function and a pair, applying the function to both components. The two theorems show curry and uncurry are inverses."
+    },
+    "church_scc": {
+      "solution": "Definition scc (n : cnat) : cnat :=\n  fun (X : Type) (f : X -> X) (x : X) => f (n X f x).\n\nExample scc_1 : scc zero = one.\nProof. reflexivity. Qed.\n\nExample scc_2 : scc one = two.\nProof. reflexivity. Qed.\n\nExample scc_3 : scc two = three.\nProof. reflexivity. Qed.",
+      "explanation": "Successor of Church numeral n: apply f one more time after applying n times. scc n = fun X f x => f (n X f x)."
+    },
+    "church_plus": {
+      "solution": "Definition plus (n m : cnat) : cnat :=\n  fun (X : Type) (f : X -> X) (x : X) => n X f (m X f x).\n\nExample plus_1 : plus zero one = one.\nProof. reflexivity. Qed.\n\nExample plus_2 : plus two three = plus three two.\nProof. reflexivity. Qed.\n\nExample plus_3 :\n  plus (plus two two) three = plus one (plus three three).\nProof. reflexivity. Qed.",
+      "explanation": "Addition of Church numerals: apply f m times starting from x, then apply f n more times. plus n m = fun X f x => n X f (m X f x)."
+    },
+    "church_mult": {
+      "solution": "Definition mult (n m : cnat) : cnat :=\n  fun (X : Type) (f : X -> X) => n X (m X f).\n\nExample mult_1 : mult one one = one.\nProof. reflexivity. Qed.\n\nExample mult_2 : mult zero (plus three three) = zero.\nProof. reflexivity. Qed.\n\nExample mult_3 : mult two three = plus three three.\nProof. reflexivity. Qed.",
+      "explanation": "Multiplication of Church numerals: apply (m X f) n times, which applies f (n*m) times. mult n m = fun X f => n X (m X f)."
+    },
+    "church_exp": {
+      "solution": "Definition exp (n m : cnat) : cnat :=\n  fun (X : Type) => m (X -> X) (n X).\n\nExample exp_1 : exp two two = plus two two.\nProof. reflexivity. Qed.\n\nExample exp_2 : exp three zero = one.\nProof. reflexivity. Qed.\n\nExample exp_3 : exp three two = plus (mult two (mult two two)) one.\nProof. reflexivity. Qed.",
+      "explanation": "Exponentiation of Church numerals: m iterates (n X) m times on (X->X), yielding n^m applications. exp n m = fun X => m (X->X) (n X)."
+    },
+    "nth_error_informal": {
+      "solution": "(* Theorem: For all types X, lists l, and natural numbers n,\n   if length l = n then nth_error l n = None.\n\n   Proof: By induction on l.\n\n   - Base case: l = []. Then length [] = 0 = n, so n = 0.\n     nth_error [] 0 = None by definition. Done.\n\n   - Inductive case: l = h :: t. Then length (h :: t) = S (length t) = n,\n     so n = S (length t). We need to show nth_error (h :: t) (S (length t)) = None.\n     By definition, nth_error (h :: t) (S (length t)) = nth_error t (length t).\n     By the induction hypothesis with length t = length t, we get\n     nth_error t (length t) = None. Done. Qed. *)",
+      "explanation": "Informal proof by induction on l showing that indexing past the end of a list returns None."
+    },
+    "combine_checks": {
+      "solution": "(* Check @combine prints:\n   forall X Y : Type, list X -> list Y -> list (X * Y)\n\n   Compute (combine [1;2] [false;false;true;true]) prints:\n   [(1, false); (2, false)] *)",
+      "explanation": "combine has type forall X Y : Type, list X -> list Y -> list (X * Y), and it zips lists stopping at the shorter one."
+    }
+  }
+}

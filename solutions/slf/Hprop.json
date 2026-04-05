@@ -1,0 +1,26 @@
+{
+  "chapter": "Hprop",
+  "volume": "slf",
+  "exercises": {
+    "hstar_hempty_l": {
+      "solution": "Lemma hstar_hempty_l : forall H,\n  \\[] \\* H = H.\nProof using.\n  intros. apply hprop_eq. intros h. split.\n  { intros (h1&h2&M1&M2&D&U). hnf in M1. subst.\n    rewrite Fmap.union_empty_l. auto. }\n  { intros M. exists Fmap.empty h. splits.\n    { hnf. auto. }\n    { auto. }\n    { auto. }\n    { rewrite Fmap.union_empty_l. auto. } }\nQed.",
+      "explanation": "The empty heap is neutral for star. Forward: decompose star, show h1 is empty, union with empty is identity. Backward: witness empty and h."
+    },
+    "hstar_assoc": {
+      "solution": "Lemma hstar_assoc : forall H1 H2 H3,\n  (H1 \\* H2) \\* H3 = H1 \\* (H2 \\* H3).\nProof using.\n  intros. apply hprop_eq. split.\n  { intros (h'&h3&M1&M2&D&U). destruct M1 as (h1&h2&M3&M4&D'&U').\n    subst h'. rewrite Fmap.disjoint_union_eq_l in D.\n    exists h1 (h2 \\u h3). splits.\n    { apply M3. }\n    { exists* h2 h3. }\n    { rewrite* @Fmap.disjoint_union_eq_r. }\n    { rewrite* @Fmap.union_assoc in U. } }\n  { intros (h1&h'&M1&M2&D&U). destruct M2 as (h2&h3&M3&M4&D'&U').\n    subst h'. rewrite Fmap.disjoint_union_eq_r in D.\n    exists (h1 \\u h2) h3. splits.\n    { exists* h1 h2. }\n    { apply M4. }\n    { rewrite* @Fmap.disjoint_union_eq_l. }\n    { rewrite* @Fmap.union_assoc. } }\nQed.",
+      "explanation": "Associativity of star. Both directions decompose the nested star, rearrange disjointness conditions using Fmap lemmas, and reassociate the union."
+    },
+    "hstar_comm_assoc": {
+      "solution": "Lemma hstar_comm_assoc : forall H1 H2 H3,\n  H1 \\* H2 \\* H3 = H2 \\* H1 \\* H3.\nProof using.\n  intros. rewrite (hstar_comm H1 H2). auto.\nQed.",
+      "explanation": "Combine commutativity on the first two conjuncts. Since star is right-associative, H1 * H2 * H3 = (H1 * H2) * H3, and we swap H1 and H2."
+    },
+    "hstar_hpure_l": {
+      "solution": "Lemma hstar_hpure_l : forall P H h,\n  (\\[P] \\* H) h = (P /\\ H h).\nProof using.\n  intros. apply propositional_extensionality. split.\n  { intros (h1&h2&(E1&HP)&M2&D&U). subst. rewrite Fmap.union_empty_l in U.\n    subst. split. { auto. } { auto. } }\n  { intros (HP&MH). exists Fmap.empty h. splits.\n    { hnf. auto. }\n    { auto. }\n    { auto. }\n    { rewrite Fmap.union_empty_l. auto. } }\nQed.",
+      "explanation": "A pure fact conjoined with H holds of h iff P is true and H holds of h. Uses propositional extensionality."
+    },
+    "predicate_extensionality_derived": {
+      "solution": "Lemma predicate_extensionality_derived : forall A (P Q:A->Prop),\n  (forall x, P x <-> Q x) ->\n  P = Q.\nProof using.\n  intros. apply functional_extensionality. intros x.\n  apply propositional_extensionality. apply H.\nQed.",
+      "explanation": "Derive predicate extensionality from functional extensionality (to handle the argument) and propositional extensionality (to handle the Prop values)."
+    }
+  }
+}

@@ -1,13 +1,51 @@
 """Volume, chapter, and exercise metadata endpoints."""
 
+import re
+from pathlib import Path
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from server.config import VOLUMES as VOLUME_CFG
 from server.database import get_session
 from server.models import Chapter, Exercise, Progress, Volume
 from server.schemas import ChapterOut, ExerciseOut, VolumeOut
+
+
+def _get_chapter_meta(volume_id: str, chapter_name: str) -> tuple[str, int]:
+    """Extract a one-line summary and line count from a .v file."""
+    vol = VOLUME_CFG.get(volume_id)
+    if not vol:
+        return "", 0
+    v_file = Path(vol["path"]) / f"{chapter_name}.v"
+    if not v_file.exists():
+        return "", 0
+    try:
+        text = v_file.read_text(encoding="utf-8", errors="replace")
+        line_count = text.count("\n") + 1
+        # Find doc comments — skip the title, take the first substantial paragraph
+        doc_matches = list(re.finditer(r'\(\*\*\s+(.*?)\s*\*\)', text, re.DOTALL))
+        summary = ""
+        for m in doc_matches[1:6]:
+            t = m.group(1).strip()
+            # Skip section markers, short comments, exercise headers
+            if t.startswith("*") or len(t) < 40 or "Exercise:" in t:
+                continue
+            # Clean up whitespace
+            t = re.sub(r'\s+', ' ', t)
+            # Remove [code] markers
+            t = re.sub(r'\[([^\]]+)\]', r'\1', t)
+            # Remove _emphasis_ markers
+            t = re.sub(r'_([^_]+)_', r'\1', t)
+            summary = t[:150]
+            if len(t) > 150:
+                summary = summary.rsplit(' ', 1)[0] + '...'
+            break
+        return summary, line_count
+    except Exception:
+        return "", 0
 
 router = APIRouter(tags=["volumes"])
 
@@ -73,6 +111,8 @@ async def list_chapters(volume_id: str, session: AsyncSession = Depends(get_sess
         )
         total_pts = pts.scalar() or 0.0
 
+        summary, line_count = _get_chapter_meta(volume_id, ch.name)
+
         out.append(ChapterOut(
             id=ch.id, volume_id=ch.volume_id, name=ch.name,
             display_order=ch.display_order, exercise_count=ch.exercise_count,
@@ -80,6 +120,7 @@ async def list_chapters(volume_id: str, session: AsyncSession = Depends(get_sess
             max_points_advanced=ch.max_points_advanced,
             has_test_file=ch.has_test_file,
             completed_count=completed_count, total_points_earned=total_pts,
+            summary=summary, line_count=line_count,
         ))
     return out
 

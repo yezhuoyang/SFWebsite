@@ -1,0 +1,46 @@
+{
+  "chapter": "RecordSub",
+  "volume": "plf",
+  "exercises": {
+    "subtyping_example_1": {
+      "solution": "Example subtyping_example_1 :\n  TRcd_kj <: TRcd_j.\nProof with eauto.\n  unfold TRcd_kj, TRcd_j.\n  apply S_RcdWidth.\nQed.",
+      "explanation": "A record with more fields is a subtype of one with fewer fields (width subtyping). {k:A->A, j:B->B} <: {j:B->B} by dropping the k field."
+    },
+    "subtyping_example_2": {
+      "solution": "Example subtyping_example_2 :\n  <{{ Top -> TRcd_kj }}> <:\n          <{{ (C -> C) -> TRcd_j }}>.\nProof with eauto.\n  apply S_Arrow.\n  - apply S_Top.\n  - apply subtyping_example_1.\nQed.",
+      "explanation": "Arrow subtyping: contravariant in argument (C->C <: Top by S_Top), covariant in return (TRcd_kj <: TRcd_j by width)."
+    },
+    "subtyping_example_3": {
+      "solution": "Example subtyping_example_3 :\n  <{{ nil -> (j : A :: nil) }}> <:\n          <{{ (k : B :: nil) -> nil }}>.\nProof with eauto.\n  apply S_Arrow.\n  - apply S_RcdWidth.\n  - apply S_RcdWidth.\nQed.",
+      "explanation": "Arrow subtyping with records: {} <: {k:B} (width subtyping, reversed for contravariance) and {j:A} <: {} (width subtyping)."
+    },
+    "subtyping_example_4": {
+      "solution": "Example subtyping_example_4 :\n  <{{ x : A :: y : B :: z : C :: nil }}> <:\n  <{{ z : C :: y : B :: x : A :: nil }}>.\nProof with eauto.\n  apply S_Trans with <{{ y : B :: x : A :: z : C :: nil }}>.\n  - apply S_RcdPerm; try auto. discriminate.\n  - apply S_Trans with <{{ y : B :: z : C :: x : A :: nil }}>.\n    + apply S_RcdDepth. apply S_Refl.\n      apply S_RcdPerm; try auto. discriminate.\n    + apply S_RcdPerm; try auto. discriminate.\nQed.",
+      "explanation": "Record permutation: fields can be reordered using S_RcdPerm. Multiple permutation steps get from one order to another."
+    },
+    "rcd_types_match_informal": {
+      "solution": "(* Manual grade exercise.\n   Informal proof of rcd_types_match:\n   If S <: T and Tlookup i T = Some Ti, then there exists Si such that\n   Tlookup i S = Some Si and Si <: Ti.\n   \n   Proof: By induction on the subtyping derivation S <: T.\n   - S_Refl: S = T, so Si = Ti and Si <: Ti by reflexivity.\n   - S_Trans: S <: U <: T. By IH on U <: T, get Ui with Tlookup i U = Some Ui and Ui <: Ti.\n     Then by IH on S <: U, get Si with Tlookup i S = Some Si and Si <: Ui.\n     By transitivity, Si <: Ti.\n   - S_RcdWidth: T has fewer fields than S. Since i is in T, it's also in S.\n   - S_RcdDepth: S and T have the same field names with S's types being subtypes.\n   - S_RcdPerm: Fields are permuted; lookup is by name so order doesn't matter. *)",
+      "explanation": "By induction on the subtyping derivation, showing that subtyping preserves field lookup."
+    },
+    "sub_inversion_arrow": {
+      "solution": "Lemma sub_inversion_arrow : forall U V1 V2,\n     U <: <{{ V1 -> V2 }}> ->\n     exists U1 U2,\n       (U= <{{ U1 -> U2 }}> ) /\\ (V1 <: U1) /\\ (U2 <: V2).\nProof with eauto.\n  intros U V1 V2 Hs.\n  remember <{{ V1 -> V2 }}> as V.\n  generalize dependent V2. generalize dependent V1.\n  induction Hs; intros; try discriminate.\n  - (* S_Refl *) injection HeqV as H1 H2. subst.\n    exists V1, V2. repeat split; apply S_Refl.\n  - (* S_Trans *)\n    destruct (IHHs2 V1 V2 HeqV) as [U1 [U2 [HeqU [HV1 HU2]]]].\n    destruct (IHHs1 U1 U2 HeqU) as [S1 [S2 [HeqS [HU1 HS2]]]].\n    exists S1, S2. repeat split.\n    + assumption.\n    + eapply S_Trans; eassumption.\n    + eapply S_Trans; eassumption.\n  - (* S_Arrow *) injection HeqV as H1 H2. subst.\n    exists S1, S2. repeat split; assumption.\nQed.",
+      "explanation": "If U is a subtype of an arrow type, then U must also be an arrow type with appropriate subtyping on the components."
+    },
+    "typing_example_0": {
+      "solution": "Example typing_example_0 :\n  empty |-- <{ (\\z:A, z) }> \\in <{ A -> A }>.\nProof.\n  apply T_Abs. apply T_Var. reflexivity.\nQed.",
+      "explanation": "The identity function on type A has type A -> A."
+    },
+    "typing_example_1": {
+      "solution": "Example typing_example_1 :\n  empty |-- <{ (\\x:(Top -> B -> B), x) (\\z:A, z) }> \\in <{ Top -> B -> B }>.\nProof.\n  eapply T_App.\n  - apply T_Abs. apply T_Var. reflexivity.\n  - eapply T_Sub.\n    + apply T_Abs. apply T_Var. reflexivity.\n    + apply S_Arrow. apply S_Top. apply S_Arrow. apply S_Refl. apply S_Refl.\nQed.",
+      "explanation": "Apply the identity function at type Top->B->B to (\\z:A.z), using subsumption to match the argument type."
+    },
+    "typing_example_2": {
+      "solution": "Example typing_example_2 :\n  empty |-- <{ (\\x:Top, x) ((\\z:A, z), (\\z:B, z)) }> \\in <{ Top }>.\nProof.\n  eapply T_App.\n  - apply T_Abs. apply T_Var. reflexivity.\n  - eapply T_Sub.\n    + eapply T_RCons; eauto.\n    + apply S_Top.\nQed.",
+      "explanation": "Apply the identity at Top to a record value, using subsumption to lift the record type to Top."
+    },
+    "canonical_forms_of_arrow_types": {
+      "solution": "Lemma canonical_forms_of_arrow_types : forall Gamma s T1 T2,\n  Gamma |-- s \\in <{{ T1 -> T2 }}> ->\n  value s ->\n  exists x S1 s2,\n    s = <{ \\x:S1, s2 }>.\nProof.\n  intros Gamma s T1 T2 Ht Hv.\n  remember <{{ T1 -> T2 }}> as T.\n  generalize dependent T2. generalize dependent T1.\n  induction Ht; intros; try solve [inversion Hv; discriminate].\n  - (* T_Abs *) exists x, T1, t1. reflexivity.\n  - (* T_Sub *) eapply IHHt; try assumption.\n    apply sub_inversion_arrow in H.\n    destruct H as [U1 [U2 [HeqU _]]]. assumption.\nQed.",
+      "explanation": "A value of arrow type must be an abstraction. The subsumption case uses sub_inversion_arrow."
+    }
+  }
+}

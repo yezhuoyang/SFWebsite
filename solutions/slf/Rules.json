@@ -1,0 +1,70 @@
+{
+  "chapter": "Rules",
+  "volume": "slf",
+  "exercises": {
+    "triple_seq": {
+      "solution": "Lemma triple_seq : forall t1 t2 H Q H1,\n  triple t1 H (fun v => H1) ->\n  triple t2 H1 Q ->\n  triple (trm_seq t1 t2) H Q.\nProof using.\n  introv M1 M2. intros h Hh.\n  lets (h1&v1&R1&HQ1): M1 Hh.\n  lets (h2&v2&R2&HQ2): M2 HQ1.\n  exists h2 v2. splits.\n  { applys eval_seq R1 R2. }\n  { auto. }\nQed.",
+      "explanation": "Sequence rule: evaluate t1 producing intermediate state satisfying H1, then evaluate t2 from H1 to Q."
+    },
+    "triple_if_case": {
+      "solution": "Lemma triple_if_case : forall b t1 t2 H Q,\n  (b = true -> triple t1 H Q) ->\n  (b = false -> triple t2 H Q) ->\n  triple (trm_if (val_bool b) t1 t2) H Q.\nProof using.\n  introv M1 M2. intros h Hh. destruct b.\n  { lets (h'&v&R&HQ): M1 __ Hh. exists h' v. splits.\n    { applys eval_if. auto. }\n    { auto. } }\n  { lets (h'&v&R&HQ): M2 __ Hh. exists h' v. splits.\n    { applys eval_if. auto. }\n    { auto. } }\nQed.",
+      "explanation": "If-case rule: case split on the boolean, apply the corresponding branch triple."
+    },
+    "triple_val_minimal": {
+      "solution": "Lemma triple_val_minimal : forall v,\n  triple (trm_val v) \\[] (fun r => \\[r = v]).\nProof using.\n  intros. applys triple_val. xsimpl. auto.\nQed.",
+      "explanation": "Minimal spec for values: evaluates to itself with empty pre and equality postcondition."
+    },
+    "triple_val'": {
+      "solution": "Lemma triple_val' : forall v H Q,\n  H ==> Q v ->\n  triple (trm_val v) H Q.\nProof using.\n  introv M. applys triple_conseq.\n  { applys triple_val. { xsimpl. } }\n  { xsimpl. applys M. }\n  { xsimpl. }\nQed.",
+      "explanation": "General value rule: a value v satisfies any triple where H implies Q v."
+    },
+    "triple_let_val": {
+      "solution": "Lemma triple_let_val : forall x v1 t2 H Q,\n  (forall v, v = v1 -> triple (subst x v t2) H Q) ->\n  triple (trm_let x (trm_val v1) t2) H Q.\nProof using.\n  introv M. applys triple_let.\n  { applys triple_val. xsimpl. auto. }\n  { intros v. xpull. intros ->. applys M. auto. }\nQed.",
+      "explanation": "Let-val rule: when the bound expression is a value v1, substitute directly and proceed."
+    },
+    "triple_rand": {
+      "solution": "Lemma triple_rand : forall n,\n  n > 0 ->\n  triple (val_rand n)\n    \\[]\n    (fun r => \\exists m, \\[r = val_int m] \\* \\[0 <= m < n]).\nProof using.\n  introv Hn. intros h Hh. lets E: hempty_inv Hh. subst.\n  lets (m&Hm&R): eval_rand Hn \\{}\n  exists (Fmap.empty) m. splits.\n  { applys R. }\n  { exists m. rewrite hstar_hpure_l. splits. { auto. }\n    rewrite hstar_hpure_l. auto. }\nQed.",
+      "explanation": "Random number generation returns some m in [0,n). Use eval_rand to get the evaluation step."
+    },
+    "triple_free'": {
+      "solution": "Lemma triple_free' : forall p v,\n  triple (val_free p)\n    (p ~~> v)\n    (fun _ => \\[]).\nProof using.\n  intros. intros h Hh.\n  lets E: hsingle_inv Hh. subst.\n  exists Fmap.empty val_unit. splits.\n  { applys eval_free. }\n  { hnf. auto. }\nQed.",
+      "explanation": "Derive triple_free' directly from the evaluation rule for free."
+    },
+    "triple_set": {
+      "solution": "Lemma triple_set : forall w p v,\n  triple (val_set p w)\n    (p ~~> v)\n    (fun _ => p ~~> w).\nProof using.\n  intros. intros h Hh.\n  lets E: hsingle_inv Hh. subst.\n  exists (Fmap.single p w) val_unit. splits.\n  { applys eval_set. }\n  { hnf. auto. }\nQed.",
+      "explanation": "Set operation updates the cell at p from v to w."
+    },
+    "triple_succ_using_incr": {
+      "solution": "Lemma triple_succ_using_incr : forall (n:int),\n  triple (succ_using_incr n)\n    \\[]\n    (fun r => \\[r = n + 1]).\nProof using.\n  intros. applys triple_let.\n  { applys triple_ref. }\n  { intros p. simpl. applys triple_let.\n    { applys triple_seq.\n      { applys triple_incr. }\n      { applys triple_get. } }\n    { intros v. simpl. applys triple_let.\n      { applys triple_free. }\n      { intros _. simpl. applys triple_val. xsimpl. math. } } }\nQed.",
+      "explanation": "Allocate ref with n, increment it, read the result (n+1), free the ref, and return."
+    },
+    "eval_like_eta_expansion": {
+      "solution": "Lemma eval_like_eta_reduction : forall (t:trm) (x:var),\n  trm_is_val t ->\n  eval_like (trm_fun x (trm_app t x)) t.\nProof using.\n  introv (v&->). intros s Q M.\n  applys eval_fun. intros vf. applys M.\nQed.\n\nLemma eval_like_eta_expansion : forall (t:trm) (x:var),\n  trm_is_val t ->\n  eval_like t (trm_fun x (trm_app t x)).\nProof using.\n  introv (v&->). intros s Q M.\n  applys eval_fun. intros vf. applys M.\nQed.",
+      "explanation": "Eta expansion: t and (fun x => t x) are evaluation-equivalent when t is a value."
+    },
+    "triple_eval_like": {
+      "solution": "Lemma triple_eval_like : forall t1 t2 H Q,\n  eval_like t1 t2 ->\n  triple t1 H Q ->\n  triple t2 H Q.\nProof using.\n  introv E M. intros h Hh. applys E. applys M Hh.\nQed.",
+      "explanation": "If t1 and t2 are evaluation-equivalent, triples transfer between them."
+    },
+    "eta_same_triples": {
+      "solution": "Lemma eta_same_triples : forall (t:trm) (x:var) H Q,\n  trm_is_val t ->\n  triple t H Q <-> triple (trm_fun x (trm_app t x)) H Q.\nProof using.\n  introv Hv. split.\n  { intros M. applys triple_eval_like M. applys eval_like_eta_expansion Hv. }\n  { intros M. applys triple_eval_like M. applys eval_like_eta_reduction Hv. }\nQed.",
+      "explanation": "Eta expansion/reduction preserves triples for value terms."
+    },
+    "triple_trm_seq_assoc": {
+      "solution": "Lemma triple_trm_seq_assoc : forall t1 t2 t3 H Q,\n  triple (trm_seq (trm_seq t1 t2) t3) H Q ->\n  triple (trm_seq t1 (trm_seq t2 t3)) H Q.\nProof using.\n  introv M. intros h Hh.\n  lets (h'&v&R&HQ): M Hh.\n  inverts R. inverts H0.\n  exists h' v. splits.\n  { applys eval_seq H5. applys eval_seq H6 H7. }\n  { auto. }\nQed.",
+      "explanation": "Sequence is associative: (t1;t2);t3 evaluates the same as t1;(t2;t3)."
+    },
+    "triple_let_frame": {
+      "solution": "Lemma triple_let_frame : forall x t1 t2 Q1 H H1 H2 Q,\n  triple t1 H1 Q1 ->\n  H ==> H1 \\* H2 ->\n  (forall v, triple (subst x v t2) (Q1 v \\* H2) Q) ->\n  triple (trm_let x t1 t2) H Q.\nProof using.\n  introv M1 WH M2. applys triple_let.\n  { applys triple_conseq_frame M1 WH. xsimpl. }\n  { intros v. applys M2. }\nQed.",
+      "explanation": "Let with frame: frame H2 around t1's triple, then use the framed postcondition in t2's triple."
+    },
+    "triple_div_from_triple_div'": {
+      "solution": "Lemma triple_div_from_triple_div' : forall n1 n2,\n  n2 <> 0 ->\n  triple (val_div n1 n2)\n    \\[]\n    (fun r => \\[r = val_int (Z.quot n1 n2)]).\nProof using.\n  introv Hn2. applys triple_conseq triple_div'.\n  { xsimpl. auto. }\n  { xsimpl. }\nQed.",
+      "explanation": "Derive triple_div from triple_div' by extracting the n2<>0 precondition via consequence."
+    },
+    "triple_factorec": {
+      "solution": "Lemma triple_factorec : forall n,\n  n >= 0 ->\n  triple (factorec n)\n    \\[]\n    (fun r => \\[r = facto n]).\nProof using.\n  introv Hn. gen Hn. induction_wf IH: (downto 0) n. intros.\n  applys triple_app_fix. simpl.\n  applys triple_if_case.\n  { intros ->. applys triple_val. xsimpl.\n    rewrite facto_init. math. }\n  { intros ->. applys triple_let.\n    { applys triple_add. }\n    { intros r. simpl. applys triple_let.\n      { applys IH. { math. } { math. } }\n      { intros r'. simpl. applys triple_let.\n        { applys triple_mul. }\n        { intros r''. simpl. applys triple_val. xsimpl.\n          rewrite facto_step. math. math. } } } }\nQed.",
+      "explanation": "Recursive factorial: base case returns 1, recursive case computes n * facto(n-1). Well-founded induction on n."
+    }
+  }
+}

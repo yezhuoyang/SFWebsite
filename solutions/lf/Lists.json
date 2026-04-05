@@ -1,0 +1,82 @@
+{
+  "chapter": "Lists",
+  "volume": "lf",
+  "exercises": {
+    "snd_fst_is_swap": {
+      "solution": "Theorem snd_fst_is_swap : forall (p : natprod),\n  (snd p, fst p) = swap_pair p.\nProof.\n  intros p. destruct p as [n m]. simpl. reflexivity. Qed.",
+      "explanation": "Destruct the pair p into its components (n, m), then simpl reduces both sides to (m, n)."
+    },
+    "fst_swap_is_snd": {
+      "solution": "Theorem fst_swap_is_snd : forall (p : natprod),\n  fst (swap_pair p) = snd p.\nProof.\n  intros p. destruct p as [n m]. simpl. reflexivity. Qed.",
+      "explanation": "Destruct the pair to expose its components, then both sides simplify to m."
+    },
+    "list_funs": {
+      "solution": "Fixpoint nonzeros (l:natlist) : natlist :=\n  match l with\n  | nil => nil\n  | 0 :: t => nonzeros t\n  | h :: t => h :: (nonzeros t)\n  end.\n\nExample test_nonzeros:\n  nonzeros [0;1;0;2;3;0;0] = [1;2;3].\nProof. reflexivity. Qed.\n\nFixpoint oddmembers (l:natlist) : natlist :=\n  match l with\n  | nil => nil\n  | h :: t => if odd h then h :: (oddmembers t) else oddmembers t\n  end.\n\nExample test_oddmembers:\n  oddmembers [0;1;0;2;3;0;0] = [1;3].\nProof. reflexivity. Qed.\n\nDefinition countoddmembers (l:natlist) : nat :=\n  length (oddmembers l).\n\nExample test_countoddmembers1:\n  countoddmembers [1;0;3;1;4;5] = 4.\nProof. reflexivity. Qed.\n\nExample test_countoddmembers2:\n  countoddmembers [0;2;4] = 0.\nProof. reflexivity. Qed.\n\nExample test_countoddmembers3:\n  countoddmembers nil = 0.\nProof. reflexivity. Qed.",
+      "explanation": "nonzeros filters out zeros by pattern matching on 0. oddmembers uses the odd function to keep only odd elements. countoddmembers reuses oddmembers and length."
+    },
+    "alternate": {
+      "solution": "Fixpoint alternate (l1 l2 : natlist) : natlist :=\n  match l1, l2 with\n  | nil, _ => l2\n  | _, nil => l1\n  | h1 :: t1, h2 :: t2 => h1 :: h2 :: (alternate t1 t2)\n  end.\n\nExample test_alternate1:\n  alternate [1;2;3] [4;5;6] = [1;4;2;5;3;6].\nProof. reflexivity. Qed.\n\nExample test_alternate2:\n  alternate [1] [4;5;6] = [1;4;5;6].\nProof. reflexivity. Qed.\n\nExample test_alternate3:\n  alternate [1;2;3] [4] = [1;4;2;3].\nProof. reflexivity. Qed.\n\nExample test_alternate4:\n  alternate [] [20;30] = [20;30].\nProof. reflexivity. Qed.",
+      "explanation": "Pattern match on both lists simultaneously. If either is nil, return the other. Otherwise interleave by taking one element from each and recursing."
+    },
+    "bag_functions": {
+      "solution": "Fixpoint count (v : nat) (s : bag) : nat :=\n  match s with\n  | nil => 0\n  | h :: t => if h =? v then S (count v t) else count v t\n  end.\n\nExample test_count1:              count 1 [1;2;3;1;4;1] = 3.\nProof. reflexivity. Qed.\nExample test_count2:              count 6 [1;2;3;1;4;1] = 0.\nProof. reflexivity. Qed.\n\nDefinition sum : bag -> bag -> bag := app.\n\nExample test_sum1:              count 1 (sum [1;2;3] [1;4;1]) = 3.\nProof. reflexivity. Qed.\n\nDefinition add (v : nat) (s : bag) : bag := v :: s.\n\nExample test_add1:                count 1 (add 1 [1;4;1]) = 3.\nProof. reflexivity. Qed.\nExample test_add2:                count 5 (add 1 [1;4;1]) = 0.\nProof. reflexivity. Qed.\n\nFixpoint member (v : nat) (s : bag) : bool :=\n  match s with\n  | nil => false\n  | h :: t => if h =? v then true else member v t\n  end.\n\nExample test_member1:             member 1 [1;4;1] = true.\nProof. reflexivity. Qed.\n\nExample test_member2:             member 2 [1;4;1] = false.\nProof. reflexivity. Qed.",
+      "explanation": "count recurses through the bag comparing each element with eqb. sum is just app (concatenation). add prepends the value. member checks if any element matches."
+    },
+    "bag_more_functions": {
+      "solution": "Fixpoint remove_one (v : nat) (s : bag) : bag :=\n  match s with\n  | nil => nil\n  | h :: t => if h =? v then t else h :: (remove_one v t)\n  end.\n\nExample test_remove_one1:\n  count 5 (remove_one 5 [2;1;5;4;1]) = 0.\nProof. reflexivity. Qed.\n\nExample test_remove_one2:\n  count 5 (remove_one 5 [2;1;4;1]) = 0.\nProof. reflexivity. Qed.\n\nExample test_remove_one3:\n  count 4 (remove_one 5 [2;1;4;5;1;4]) = 2.\nProof. reflexivity. Qed.\n\nExample test_remove_one4:\n  count 5 (remove_one 5 [2;1;5;4;5;1;4]) = 1.\nProof. reflexivity. Qed.\n\nFixpoint remove_all (v:nat) (s:bag) : bag :=\n  match s with\n  | nil => nil\n  | h :: t => if h =? v then remove_all v t else h :: (remove_all v t)\n  end.\n\nExample test_remove_all1:  count 5 (remove_all 5 [2;1;5;4;1]) = 0.\nProof. reflexivity. Qed.\nExample test_remove_all2:  count 5 (remove_all 5 [2;1;4;1]) = 0.\nProof. reflexivity. Qed.\nExample test_remove_all3:  count 4 (remove_all 5 [2;1;4;5;1;4]) = 2.\nProof. reflexivity. Qed.\nExample test_remove_all4:  count 5 (remove_all 5 [2;1;5;4;5;1;4;5;1;4]) = 0.\nProof. reflexivity. Qed.\n\nFixpoint included (s1 : bag) (s2 : bag) : bool :=\n  match s1 with\n  | nil => true\n  | h :: t => if member h s2 then included t (remove_one h s2) else false\n  end.\n\nExample test_included1:              included [1;2] [2;1;4;1] = true.\nProof. reflexivity. Qed.\nExample test_included2:              included [1;2;2] [2;1;4;1] = false.\nProof. reflexivity. Qed.",
+      "explanation": "remove_one removes the first occurrence of v. remove_all removes all occurrences. included checks if every element of s1 appears in s2, removing matched elements to handle multiplicity."
+    },
+    "add_inc_count": {
+      "solution": "Theorem add_inc_count : forall (v : nat) (s : bag),\n  count v (add v s) = S (count v s).\nProof.\n  intros v s. simpl. rewrite eqb_refl. reflexivity.\nQed.",
+      "explanation": "After simpl, the goal becomes: if v =? v then S (count v s) else count v s = S (count v s). Using eqb_refl (v =? v = true) completes the proof."
+    },
+    "list_exercises": {
+      "solution": "Theorem app_nil_r : forall l : natlist,\n  l ++ [] = l.\nProof.\n  intros l. induction l as [| h t IHt].\n  - reflexivity.\n  - simpl. rewrite IHt. reflexivity.\nQed.\n\nTheorem rev_app_distr: forall l1 l2 : natlist,\n  rev (l1 ++ l2) = rev l2 ++ rev l1.\nProof.\n  intros l1 l2. induction l1 as [| h t IHt].\n  - simpl. rewrite app_nil_r. reflexivity.\n  - simpl. rewrite IHt. rewrite app_assoc. reflexivity.\nQed.\n\nTheorem rev_involutive : forall l : natlist,\n  rev (rev l) = l.\nProof.\n  intros l. induction l as [| h t IHt].\n  - reflexivity.\n  - simpl. rewrite rev_app_distr. rewrite IHt. simpl. reflexivity.\nQed.\n\nTheorem app_assoc4 : forall l1 l2 l3 l4 : natlist,\n  l1 ++ (l2 ++ (l3 ++ l4)) = ((l1 ++ l2) ++ l3) ++ l4.\nProof.\n  intros l1 l2 l3 l4.\n  rewrite app_assoc. rewrite app_assoc. reflexivity.\nQed.\n\nLemma nonzeros_app : forall l1 l2 : natlist,\n  nonzeros (l1 ++ l2) = (nonzeros l1) ++ (nonzeros l2).\nProof.\n  intros l1 l2. induction l1 as [| h t IHt].\n  - reflexivity.\n  - destruct h as [| h'].\n    + simpl. rewrite IHt. reflexivity.\n    + simpl. rewrite IHt. reflexivity.\nQed.",
+      "explanation": "app_nil_r by induction on l. rev_app_distr by induction on l1 using app_nil_r and app_assoc. rev_involutive by induction using rev_app_distr. app_assoc4 by two applications of app_assoc. nonzeros_app by induction on l1 with case analysis on the head element."
+    },
+    "eqblist": {
+      "solution": "Fixpoint eqblist (l1 l2 : natlist) : bool :=\n  match l1, l2 with\n  | nil, nil => true\n  | nil, _ => false\n  | _, nil => false\n  | h1 :: t1, h2 :: t2 => if h1 =? h2 then eqblist t1 t2 else false\n  end.\n\nExample test_eqblist1 :\n  (eqblist nil nil = true).\nProof. reflexivity. Qed.\n\nExample test_eqblist2 :\n  eqblist [1;2;3] [1;2;3] = true.\nProof. reflexivity. Qed.\n\nExample test_eqblist3 :\n  eqblist [1;2;3] [1;2;4] = false.\nProof. reflexivity. Qed.\n\nTheorem eqblist_refl : forall l:natlist,\n  true = eqblist l l.\nProof.\n  intros l. induction l as [| h t IHt].\n  - reflexivity.\n  - simpl. rewrite eqb_refl. rewrite <- IHt. reflexivity.\nQed.",
+      "explanation": "eqblist compares lists element-wise using eqb. eqblist_refl is proved by induction on l, using eqb_refl (n =? n = true) in the inductive step."
+    },
+    "count_member_nonzero": {
+      "solution": "Theorem count_member_nonzero : forall (s : bag),\n  1 <=? (count 1 (1 :: s)) = true.\nProof.\n  intros s. simpl. reflexivity.\nQed.",
+      "explanation": "After simpl, count 1 (1 :: s) reduces to S (count 1 s), and 1 <=? S (count 1 s) reduces to 0 <=? count 1 s which is always true."
+    },
+    "remove_does_not_increase_count": {
+      "solution": "Theorem remove_does_not_increase_count: forall (s : bag),\n  (count 0 (remove_one 0 s)) <=? (count 0 s) = true.\nProof.\n  intros s. induction s as [| h t IHt].\n  - reflexivity.\n  - destruct h as [| h'].\n    + simpl. rewrite leb_n_Sn. reflexivity.\n    + simpl. destruct (h' =? 0).\n      * simpl. rewrite IHt. reflexivity.\n      * simpl. rewrite IHt. reflexivity.\nQed.",
+      "explanation": "Induction on s. Empty case is trivial. For cons, destruct the head: if 0, remove_one removes it so count decreases by 1 (use leb_n_Sn). If nonzero, the head is kept in both sides and we apply IH."
+    },
+    "bag_count_sum": {
+      "solution": "Theorem bag_count_sum : forall (v : nat) (s1 s2 : bag),\n  count v (sum s1 s2) = count v s1 + count v s2.\nProof.\n  intros v s1 s2. induction s1 as [| h t IHt].\n  - reflexivity.\n  - simpl. destruct (h =? v).\n    + simpl. rewrite IHt. reflexivity.\n    + rewrite IHt. reflexivity.\nQed.",
+      "explanation": "The count of v in the sum of two bags equals the sum of the counts. Proved by induction on s1, with case analysis on whether the head equals v."
+    },
+    "involution_injective": {
+      "solution": "Theorem involution_injective : forall (f : nat -> nat),\n    (forall n : nat, n = f (f n)) -> (forall n1 n2 : nat, f n1 = f n2 -> n1 = n2).\nProof.\n  intros f Hinv n1 n2 Hfeq.\n  rewrite (Hinv n1). rewrite (Hinv n2).\n  rewrite Hfeq. reflexivity.\nQed.",
+      "explanation": "Using the involution hypothesis, rewrite n1 to f(f(n1)) and n2 to f(f(n2)). Since f(n1) = f(n2), we get f(f(n1)) = f(f(n2))."
+    },
+    "rev_injective": {
+      "solution": "Theorem rev_injective : forall (l1 l2 : natlist),\n  rev l1 = rev l2 -> l1 = l2.\nProof.\n  intros l1 l2 Hrev.\n  rewrite <- (rev_involutive l1). rewrite <- (rev_involutive l2).\n  rewrite Hrev. reflexivity.\nQed.",
+      "explanation": "Since rev is an involution (rev_involutive), we rewrite l1 as rev(rev(l1)) and l2 as rev(rev(l2)). Then rev l1 = rev l2 gives us rev(rev(l1)) = rev(rev(l2))."
+    },
+    "hd_error": {
+      "solution": "Definition hd_error (l : natlist) : natoption :=\n  match l with\n  | nil => None\n  | h :: _ => Some h\n  end.\n\nExample test_hd_error1 : hd_error [] = None.\nProof. reflexivity. Qed.\n\nExample test_hd_error2 : hd_error [1] = Some 1.\nProof. reflexivity. Qed.\n\nExample test_hd_error3 : hd_error [5;6] = Some 5.\nProof. reflexivity. Qed.",
+      "explanation": "Return None for empty list, Some h for non-empty list where h is the head."
+    },
+    "option_elim_hd": {
+      "solution": "Theorem option_elim_hd : forall (l:natlist) (default:nat),\n  hd default l = option_elim default (hd_error l).\nProof.\n  intros l default. destruct l as [| h t].\n  - reflexivity.\n  - reflexivity.\nQed.",
+      "explanation": "Destruct l: for nil, both sides return default. For h :: t, both sides return h."
+    },
+    "eqb_id_refl": {
+      "solution": "Theorem eqb_id_refl : forall x, eqb_id x x = true.\nProof.\n  intros x. destruct x as [n]. simpl. rewrite eqb_refl. reflexivity.\nQed.",
+      "explanation": "Destruct x to expose the nat inside Id, then simpl reduces eqb_id (Id n) (Id n) to n =? n, which equals true by eqb_refl."
+    },
+    "update_eq": {
+      "solution": "Theorem update_eq :\n  forall (d : partial_map) (x : id) (v: nat),\n    find x (update d x v) = Some v.\nProof.\n  intros d x v. simpl. rewrite eqb_id_refl. reflexivity.\nQed.",
+      "explanation": "Unfold update and find. The lookup checks eqb_id x x which is true by eqb_id_refl, so it returns Some v."
+    },
+    "update_neq": {
+      "solution": "Theorem update_neq :\n  forall (d : partial_map) (x y : id) (o: nat),\n    eqb_id x y = false -> find x (update d y o) = find x d.\nProof.\n  intros d x y o H. simpl. rewrite H. reflexivity.\nQed.",
+      "explanation": "Unfold update and find. The lookup checks eqb_id x y which is false by hypothesis H, so it falls through to find x d."
+    }
+  }
+}

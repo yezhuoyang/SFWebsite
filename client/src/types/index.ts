@@ -21,6 +21,8 @@ export interface Chapter {
   has_test_file: boolean;
   completed_count: number;
   total_points_earned: number;
+  summary: string;
+  line_count: number;
 }
 
 export interface Exercise {

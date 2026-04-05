@@ -1,0 +1,18 @@
+{
+  "chapter": "ImpCEvalFun",
+  "volume": "lf",
+  "exercises": {
+    "pup_to_n": {
+      "solution": "Definition pup_to_n : com :=\n  <{ Y := 0;\n     while (1 <= X) do\n       Y := Y + X;\n       X := X - 1\n     end }>.\n\nExample pup_to_n_1 :\n  test_ceval (X !-> 5) pup_to_n\n  = Some (0, 15, 0).\nProof. reflexivity. Qed.",
+      "explanation": "Sums 1 to X by repeatedly adding X to Y and decrementing X until X = 0."
+    },
+    "ceval_step__ceval_inf": {
+      "solution": "Definition manual_grade_for_ceval_step__ceval_inf : option (nat*string) := None.",
+      "explanation": "This is an informal proof exercise. The key idea is: by induction on i. If i=0 the hypothesis is contradictory. For i = S i', case analysis on c and using the IH for i' on subcommands."
+    },
+    "ceval__ceval_step": {
+      "solution": "Theorem ceval__ceval_step: forall c st st',\n      st =[ c ]=> st' ->\n      exists i, ceval_step st c i = Some st'.\nProof.\n  intros c st st' Hce.\n  induction Hce.\n  - (* E_Skip *) exists 1. reflexivity.\n  - (* E_Asgn *) exists 1. simpl. subst. reflexivity.\n  - (* E_Seq *)\n    destruct IHHce1 as [i1 E1]. destruct IHHce2 as [i2 E2].\n    exists (S (i1 + i2)). simpl.\n    apply (ceval_step_more i1 (i1 + i2)) in E1; [| lia].\n    apply (ceval_step_more i2 (i1 + i2)) in E2; [| lia].\n    rewrite E1. apply E2.\n  - (* E_IfTrue *)\n    destruct IHHce as [i E]. exists (S i). simpl. rewrite H. apply E.\n  - (* E_IfFalse *)\n    destruct IHHce as [i E]. exists (S i). simpl. rewrite H. apply E.\n  - (* E_WhileFalse *)\n    exists 1. simpl. rewrite H. reflexivity.\n  - (* E_WhileTrue *)\n    destruct IHHce1 as [i1 E1]. destruct IHHce2 as [i2 E2].\n    exists (S (i1 + i2)). simpl. rewrite H.\n    apply (ceval_step_more i1 (i1 + i2)) in E1; [| lia].\n    apply (ceval_step_more i2 (i1 + i2)) in E2; [| lia].\n    rewrite E1. apply E2.\nQed.",
+      "explanation": "For each ceval constructor, combine the step indices from the IH using ceval_step_more to find a large enough i that works for all subcomputations."
+    }
+  }
+}

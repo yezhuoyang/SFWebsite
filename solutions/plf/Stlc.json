@@ -1,0 +1,26 @@
+{
+  "chapter": "Stlc",
+  "volume": "plf",
+  "exercises": {
+    "substi_correct": {
+      "solution": "Inductive substi (s : tm) (x : string) : tm -> tm -> Prop :=\n  | s_var1 :\n      substi s x (tm_var x) s\n  | s_var2 : forall y,\n      x <> y ->\n      substi s x (tm_var y) (tm_var y)\n  | s_abs1 : forall t1 T,\n      substi s x <{\\x:T, t1}> <{\\x:T, t1}>\n  | s_abs2 : forall y t1 t1' T,\n      x <> y ->\n      substi s x t1 t1' ->\n      substi s x <{\\y:T, t1}> <{\\y:T, t1'}>\n  | s_app : forall t1 t1' t2 t2',\n      substi s x t1 t1' ->\n      substi s x t2 t2' ->\n      substi s x <{t1 t2}> <{t1' t2'}>\n  | s_true :\n      substi s x <{true}> <{true}>\n  | s_false :\n      substi s x <{false}> <{false}>\n  | s_if : forall t1 t1' t2 t2' t3 t3',\n      substi s x t1 t1' ->\n      substi s x t2 t2' ->\n      substi s x t3 t3' ->\n      substi s x <{if t1 then t2 else t3}> <{if t1' then t2' else t3'}>.\n\nTheorem substi_correct : forall s x t t',\n  <{ [x:=s]t }> = t' <-> substi s x t t'.\nProof.\n  intros s x t. split.\n  - generalize dependent t'. induction t; intros t' H; simpl in H.\n    + (* var *) destruct (String.eqb_spec x s0); subst; auto.\n    + (* app *) subst. constructor; auto.\n    + (* abs *) destruct (String.eqb_spec x s0); subst; auto.\n      constructor; auto.\n    + (* true *) subst. constructor.\n    + (* false *) subst. constructor.\n    + (* if *) subst. constructor; auto.\n  - intros H. induction H; simpl;\n    try reflexivity;\n    try (rewrite String.eqb_refl; reflexivity);\n    try (apply String.eqb_neq in H; rewrite H; reflexivity);\n    try (rewrite IHsubsti; reflexivity);\n    try (rewrite IHsubsti1; rewrite IHsubsti2; reflexivity);\n    try (rewrite IHsubsti1; rewrite IHsubsti2; rewrite IHsubsti3; reflexivity);\n    try (apply String.eqb_neq in H; rewrite H; rewrite IHsubsti; reflexivity).\nQed.",
+      "explanation": "Define substitution as an inductive relation with constructors for each term form, then prove equivalence with the functional definition."
+    },
+    "step_example5": {
+      "solution": "Lemma step_example5 :\n       <{idBBBB idBB idB}>\n  -->* idB.\nProof.\n  eapply multi_step.\n  { apply ST_App1. apply ST_AppAbs. auto. }\n  simpl.\n  eapply multi_step.\n  { apply ST_AppAbs. auto. }\n  simpl.\n  apply multi_refl.\nQed.\n\nLemma step_example5_with_normalize :\n       <{idBBBB idBB idB}>\n  -->* idB.\nProof. normalize. Qed.",
+      "explanation": "idBBBB idBB idB reduces: first apply idBBBB to idBB (yielding idBB), then apply idBB to idB (yielding idB)."
+    },
+    "typing_example_2_full": {
+      "solution": "Example typing_example_2_full :\n <{ empty |--\n    \\x:Bool,\n       \\y:Bool->Bool,\n          (y (y x)) \\in\n    Bool -> (Bool -> Bool) -> Bool }>.\nProof.\n  apply T_Abs. apply T_Abs.\n  apply T_App with (T2 := <{ Bool }>).\n  - apply T_Var. rewrite update_neq; [| discriminate]. apply update_eq.\n  - apply T_App with (T2 := <{ Bool }>).\n    + apply T_Var. rewrite update_neq; [| discriminate]. apply update_eq.\n    + apply T_Var. rewrite update_neq; [| discriminate].\n      rewrite update_neq; [| discriminate]. apply update_eq.\nQed.",
+      "explanation": "Manually construct the typing derivation using T_Abs, T_App, and T_Var with explicit context lookups."
+    },
+    "typing_example_3": {
+      "solution": "Example typing_example_3 :\n  exists T,\n   <{ empty |--\n      \\x:Bool->Bool,\n         \\y:Bool->Bool,\n            \\z:Bool,\n               (y (x z)) \\in\n      T }>.\nProof.\n  exists <{ (Bool -> Bool) -> (Bool -> Bool) -> Bool -> Bool }>.\n  eauto 20.\nQed.",
+      "explanation": "The type is (Bool->Bool) -> (Bool->Bool) -> Bool -> Bool. eauto can find the derivation automatically."
+    },
+    "typing_nonexample_3": {
+      "solution": "Example typing_nonexample_3 :\n  ~ (exists S T,\n      <{ empty |--\n          \\x:S, x x \\in T }>).\nProof.\n  intros [S [T Hc]].\n  inversion Hc; subst; clear Hc.\n  inversion H4; subst; clear H4.\n  inversion H2; subst; clear H2.\n  inversion H5; subst; clear H5.\n  rewrite H1 in H3. injection H3 as H3.\n  (* S = S -> T2, which is impossible for finite types *)\n  induction S; discriminate.\nQed.",
+      "explanation": "Self-application \\x:S, x x requires x to have type S and also S -> T, making S = S -> T, which is impossible for finite types."
+    }
+  }
+}

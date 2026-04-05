@@ -1,0 +1,58 @@
+{
+  "chapter": "Wand",
+  "volume": "slf",
+  "exercises": {
+    "hor_eq_hor'": {
+      "solution": "Lemma hor_eq_hor' :\n  hor = hor'.\nProof using.\n  apply functional_extensionality. intros H1.\n  apply functional_extensionality. intros H2.\n  unfold hor, hor'. apply hprop_eq. intros h. split.\n  { intros (b&Hb). destruct b; auto. }\n  { intros [M|M]. { exists true. auto. } { exists false. auto. } }\nQed.",
+      "explanation": "Show the two definitions of hor are equivalent by case analysis on the boolean witness."
+    },
+    "hor_comm": {
+      "solution": "Lemma hor_comm : forall H1 H2,\n  hor H1 H2 = hor H2 H1.\nProof using.\n  intros. unfold hor. apply hprop_eq. intros h. split;\n  intros (b&Hb); exists (negb b); rewrite if_neg in *; auto.\nQed.",
+      "explanation": "Commutativity of hor: negate the boolean witness to swap H1 and H2."
+    },
+    "MList_using_hor": {
+      "solution": "Lemma MList_using_hor : forall L p,\n  MList L p =\n  hor (\\[L = nil] \\* \\[p = null])\n      (\\exists x L' q, \\[L = x :: L'] \\* \\[p <> null]\n        \\* (p`.head ~~> x) \\* (p`.tail ~~> q) \\* MList L' q).\nProof using.\n  intros. apply himpl_antisym.\n  { xchange MList_if. xif; intros C.\n    { xpull. intros ->. unfold hor. xsimpl. exists true. xsimpl. auto. }\n    { xpull. intros x L' q ->. unfold hor. xsimpl. exists false. xsimpl. auto. } }\n  { unfold hor. xpull. intros b. destruct b.\n    { xpull. intros -> ->. xchange <- MList_nil. }\n    { xpull. intros x L' q -> Hp. xchange <- MList_cons. } }\nQed.",
+      "explanation": "Express MList as a disjunction (hor) of the nil case and the cons case, using the boolean to distinguish."
+    },
+    "hand_eq_hand'": {
+      "solution": "Lemma hand_eq_hand' :\n  hand = hand'.\nProof using.\n  apply functional_extensionality. intros H1.\n  apply functional_extensionality. intros H2.\n  unfold hand, hand'. apply hprop_eq. intros h. split.\n  { intros M. split; [apply (M true) | apply (M false)]. }\n  { intros (M1&M2). intros b. destruct b; auto. }\nQed.",
+      "explanation": "Show the two definitions of hand are equivalent by relating universal quantification over bool to conjunction."
+    },
+    "hand_comm": {
+      "solution": "Lemma hand_comm : forall H1 H2,\n  hand H1 H2 = hand H2 H1.\nProof using.\n  intros. unfold hand. apply hprop_eq. intros h. split;\n  intros M b; specialize (M (negb b)); rewrite if_neg in *; auto.\nQed.",
+      "explanation": "Commutativity of hand: negate the boolean to swap H1 and H2 in the universal quantification."
+    },
+    "hwand_hpure_l": {
+      "solution": "Lemma hwand_hpure_l : forall P H,\n  P ->\n  (\\[P] \\-* H) = H.\nProof using.\n  introv HP. applys himpl_antisym.\n  { xchange (hwand_cancel \\[P] H). xsimpl. auto. }\n  { applys himpl_hwand_r. xsimpl. }\nQed.",
+      "explanation": "When P holds, the wand [P] -* H simplifies to H. Forward: cancel the wand with [P]. Backward: introduce the wand."
+    },
+    "himpl_hwand_hpure_lr": {
+      "solution": "Lemma himpl_hwand_hpure_lr : forall (P1 P2:Prop),\n  (P1 -> P2) ->\n  \\[P1] ==> (\\[P1] \\-* \\[P2]).\nProof using.\n  introv M. applys himpl_hwand_r. xsimpl. auto.\nQed.",
+      "explanation": "If P1 implies P2, then [P1] entails the wand [P1] -* [P2]."
+    },
+    "himpl_hwand_hstar_same_r": {
+      "solution": "Lemma himpl_hwand_hstar_same_r : forall H1 H2,\n  H1 ==> (H2 \\-* (H2 \\* H1)).\nProof using.\n  intros. applys himpl_hwand_r. xsimpl.\nQed.",
+      "explanation": "H1 entails the wand H2 -* (H2 * H1) because H1 * H2 trivially entails H2 * H1."
+    },
+    "hwand_cancel_part": {
+      "solution": "Lemma hwand_cancel_part : forall H1 H2 H3,\n  H1 \\* ((H1 \\* H2) \\-* H3) ==> (H2 \\-* H3).\nProof using.\n  intros. applys himpl_hwand_r. xchange (hwand_cancel (H1 \\* H2) H3). xsimpl.\nQed.",
+      "explanation": "Partial cancellation: H1 from the context partially satisfies the wand (H1*H2) -* H3, leaving H2 -* H3."
+    },
+    "hwand_frame": {
+      "solution": "Lemma hwand_frame : forall H1 H2 H3,\n  (H1 \\-* H2) \\* H3 ==> H1 \\-* (H2 \\* H3).\nProof using.\n  intros. applys himpl_hwand_r. xchange (hwand_cancel H1 H2). xsimpl.\nQed.",
+      "explanation": "Framing into a wand: (H1 -* H2) * H3 entails H1 -* (H2 * H3)."
+    },
+    "hwand_inv": {
+      "solution": "Lemma hwand_inv : forall h1 h2 H1 H2,\n  (H1 \\-* H2) h2 ->\n  H1 h1 ->\n  Fmap.disjoint h1 h2 ->\n  H2 (h1 \\u h2).\nProof using.\n  introv M1 M2 D. lets M: hwand_cancel H1 H2.\n  applys M. exists h1 h2. splits*.\nQed.",
+      "explanation": "Concrete heap-level elimination of the wand: if H1 holds of h1 and (H1-*H2) holds of h2 with disjoint heaps, then H2 holds of their union."
+    },
+    "himpl_qwand_hstar_same_r": {
+      "solution": "Lemma himpl_qwand_hstar_same_r : forall H Q,\n  H ==> Q \\--* (Q \\*+ H).\nProof using.\n  intros. applys qwand_equiv. xsimpl.\nQed.",
+      "explanation": "H entails the postcondition wand Q --* (Q *+ H) because H * Q v trivially entails Q v * H."
+    },
+    "qwand_cancel_part": {
+      "solution": "Lemma qwand_cancel_part : forall H Q1 Q2,\n  H \\* ((Q1 \\*+ H) \\--* Q2) ==> Q1 \\--* Q2.\nProof using.\n  intros. applys qwand_equiv. xchange (qwand_cancel (Q1 \\*+ H) Q2). xsimpl.\nQed.",
+      "explanation": "Partial cancellation for postcondition wands, analogous to hwand_cancel_part."
+    }
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "chapter": "Rel",
+  "volume": "lf",
+  "exercises": {
+    "total_relation_not_partial_function": {
+      "solution": "Inductive total_relation : nat -> nat -> Prop :=\n  | tot (n m : nat) : total_relation n m.\n\nTheorem total_relation_not_partial_function :\n  ~ (partial_function total_relation).\nProof.\n  unfold not. unfold partial_function. intros Hc.\n  assert (0 = 1) as Nonsense.\n  { apply Hc with (x := 0).\n    - apply tot.\n    - apply tot. }\n  discriminate Nonsense.\nQed.",
+      "explanation": "total_relation relates all pairs. So total_relation 0 0 and total_relation 0 1 both hold, but 0 <> 1, contradicting partial_function."
+    },
+    "empty_relation_partial_function": {
+      "solution": "Inductive empty_relation : nat -> nat -> Prop := .\n\nTheorem empty_relation_partial_function :\n  partial_function empty_relation.\nProof.\n  unfold partial_function. intros x y1 y2 H1 H2.\n  inversion H1.\nQed.",
+      "explanation": "empty_relation has no constructors, so any hypothesis of type empty_relation x y is contradictory (inversion solves it)."
+    },
+    "le_trans_hard_way": {
+      "solution": "Theorem lt_trans' :\n  transitive lt.\nProof.\n  unfold lt. unfold transitive.\n  intros n m o Hnm Hmo.\n  induction Hmo as [| m' Hm'o].\n  - apply le_S. apply Hnm.\n  - apply le_S. apply IHHm'o.\nQed.",
+      "explanation": "Induction on the evidence m <= o. Base case: m = o, so S n <= m implies S n <= S m by le_S. Step case: apply le_S to the IH."
+    },
+    "lt_trans''": {
+      "solution": "Theorem lt_trans'' :\n  transitive lt.\nProof.\n  unfold lt. unfold transitive.\n  intros n m o Hnm Hmo.\n  induction o as [| o'].\n  - inversion Hmo.\n  - inversion Hmo.\n    + subst. apply le_S. apply Hnm.\n    + subst. apply le_S. apply IHo'. apply H0.\nQed.",
+      "explanation": "Induction on o. Base: o = 0 contradicts S m <= 0. Step: inversion on S m <= S o' gives either m = o' (use Hnm) or S m <= o' (use IH)."
+    },
+    "le_S_n": {
+      "solution": "Theorem le_S_n : forall n m,\n  (S n <= S m) -> (n <= m).\nProof.\n  intros n m H. inversion H.\n  - apply le_n.\n  - apply le_Sn_le. apply H1.\nQed.",
+      "explanation": "Inversion on S n <= S m: either S n = S m (giving n <= m by le_n), or S n <= m (then n <= m by le_Sn_le)."
+    },
+    "le_Sn_n": {
+      "solution": "Theorem le_Sn_n : forall n,\n  ~ (S n <= n).\nProof.\n  induction n as [| n' IHn'].\n  - intros H. inversion H.\n  - intros H. apply IHn'. apply le_S_n. apply H.\nQed.",
+      "explanation": "By induction on n. Base: S 0 <= 0 is impossible. Step: S (S n') <= S n' implies S n' <= n' by le_S_n, contradicting the IH."
+    },
+    "le_not_symmetric": {
+      "solution": "Theorem le_not_symmetric :\n  ~ (symmetric le).\nProof.\n  unfold not. unfold symmetric. intros H.\n  assert (1 <= 0) as Nonsense.\n  { apply H. apply le_S. apply le_n. }\n  inversion Nonsense.\nQed.",
+      "explanation": "If le were symmetric, 0 <= 1 would imply 1 <= 0, which is impossible (inversion)."
+    },
+    "le_antisymmetric": {
+      "solution": "Theorem le_antisymmetric :\n  antisymmetric le.\nProof.\n  unfold antisymmetric. intros a b Hab Hba.\n  induction Hab.\n  - reflexivity.\n  - exfalso. apply (le_Sn_n m). apply (le_trans _ _ _ Hba (le_S _ _ Hab)).\nQed.",
+      "explanation": "Induction on a <= b. Base: a = b. Step: a <= m and S m <= a gives S m <= m via transitivity, contradicting le_Sn_n."
+    },
+    "le_step": {
+      "solution": "Theorem le_step : forall n m p,\n  n < m ->\n  m <= S p ->\n  n <= p.\nProof.\n  unfold lt. intros n m p Hnm Hmp.\n  apply le_S_n.\n  apply (le_trans _ m _).\n  - apply Hnm.\n  - apply Hmp.\nQed.",
+      "explanation": "S n <= m and m <= S p gives S n <= S p by transitivity, then n <= p by le_S_n."
+    },
+    "rsc_trans": {
+      "solution": "Lemma rsc_trans :\n  forall (X:Type) (R: relation X) (x y z : X),\n      clos_refl_trans_1n R x y  ->\n      clos_refl_trans_1n R y z ->\n      clos_refl_trans_1n R x z.\nProof.\n  intros X R x y z Hxy Hyz.\n  induction Hxy.\n  - apply Hyz.\n  - apply rt1n_trans with y0.\n    + apply Hxy.\n    + apply IHHxy. apply Hyz.\nQed.",
+      "explanation": "Induction on the first closure proof. Base: x = y, done. Step: x -R-> y0 then y0 ->* y ->* z, use IH for y0 ->* z."
+    },
+    "rtc_rsc_coincide": {
+      "solution": "Theorem rtc_rsc_coincide :\n  forall (X:Type) (R: relation X) (x y : X),\n    clos_refl_trans R x y <-> clos_refl_trans_1n R x y.\nProof.\n  intros X R x y. split.\n  - intros H. induction H.\n    + apply rsc_R. apply H.\n    + apply rt1n_refl.\n    + apply rsc_trans with y. apply IHclos_refl_trans1. apply IHclos_refl_trans2.\n  - intros H. induction H.\n    + apply rt_refl.\n    + apply rt_trans with y.\n      * apply rt_step. apply Hxy.\n      * apply IHclos_refl_trans_1n.\nQed.",
+      "explanation": "Forward direction: induction on clos_refl_trans, using rsc_R and rsc_trans. Backward: induction on clos_refl_trans_1n, using rt_step and rt_trans."
+    }
+  }
+}

@@ -57,12 +57,53 @@ export const getCoqGoals = (sessionId: string) =>
 export const getChapterFile = (volumeId: string, chapterName: string) =>
   fetchJSON<{ content: string; filename: string }>(`${BASE}/coq/file/${volumeId}/${chapterName}`);
 
+export interface SaveResult {
+  status: string;
+  graded: boolean;
+  completed: number;
+  total: number;
+  exercises: { name: string; status: string; points: number }[];
+}
+
 export const saveChapterFile = (volumeId: string, chapterName: string, content: string) =>
-  fetchJSON<{ status: string }>(`${BASE}/coq/file/${volumeId}/${chapterName}`, {
+  fetchJSON<SaveResult>(`${BASE}/coq/file/${volumeId}/${chapterName}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content }),
   });
+
+export const resetChapterFile = (volumeId: string, chapterName: string) =>
+  fetchJSON<{ status: string }>(`${BASE}/coq/file/${volumeId}/${chapterName}/reset`, {
+    method: 'POST',
+  });
+
+export interface ExplainRequest {
+  volume_id: string;
+  chapter_name: string;
+  exercise_name: string | null;
+  student_code: string;
+  proof_state_text: string;
+  diagnostics_text: string;
+  processed_lines: number | null;
+  message: string;
+}
+
+export const explainOutput = (req: ExplainRequest) =>
+  fetchJSON<{ explanation: string }>(`${BASE}/tutor/explain`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+
+// Solutions
+export interface SolutionData {
+  exercise_name: string;
+  solution: string;
+  explanation: string;
+}
+
+export const getExerciseSolution = (volumeId: string, chapterName: string, exerciseName: string) =>
+  fetchJSON<SolutionData>(`${BASE}/coq/solution/${volumeId}/${chapterName}/${exerciseName}`);
 
 // Block-based chapter view
 export interface BlockData {

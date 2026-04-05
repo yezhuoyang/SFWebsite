@@ -1,0 +1,10 @@
+{
+  "chapter": "WPsound",
+  "volume": "slf",
+  "exercises": {
+    "mkstruct_idempotent": {
+      "solution": "Lemma mkstruct_idempotent : forall F,\n  mkstruct (mkstruct F) = mkstruct F.\nProof using.\n  intros. apply functional_extensionality. intros Q.\n  apply himpl_antisym.\n  { unfold mkstruct. xpull. intros Q' H M.\n    xchange (mkstruct_erase F Q'). xsimpl (Q' \\*+ H). auto. xsimpl. }\n  { applys mkstruct_erase. }\nQed.",
+      "explanation": "mkstruct is idempotent: the second application of mkstruct collapses into the first because mkstruct already allows consequence and frame."
+    }
+  }
+}

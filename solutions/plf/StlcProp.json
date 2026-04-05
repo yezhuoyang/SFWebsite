@@ -1,0 +1,90 @@
+{
+  "chapter": "StlcProp",
+  "volume": "plf",
+  "exercises": {
+    "progress_from_term_ind": {
+      "solution": "Theorem progress' : forall t T,\n  empty |-- t \\in T ->\n  value t \\/ exists t', t --> t'.\nProof.\n  intros t.\n  induction t; intros T Ht; auto.\n  - (* var *) inversion Ht. subst. inversion H1.\n  - (* app *) right.\n    inversion Ht; subst.\n    destruct (IHt1 _ H2) as [Hv1 | [t1' Hs1]].\n    + destruct (IHt2 _ H4) as [Hv2 | [t2' Hs2]].\n      * inversion Ht; subst. inversion Hv1; subst.\n        -- exists <{ [x0 := t2] t0 }>. apply ST_AppAbs. assumption.\n        -- inversion H2.\n        -- inversion H2.\n      * exists <{ t1 t2' }>. apply ST_App2; assumption.\n    + exists <{ t1' t2 }>. apply ST_App1. assumption.\n  - (* if *) right.\n    inversion Ht; subst.\n    destruct (IHt1 _ H3) as [Hv1 | [t1' Hs1]].\n    + inversion Hv1; subst.\n      * exists t2. apply ST_IfTrue.\n      * exists t3. apply ST_IfFalse.\n      * inversion H3.\n    + exists <{ if t1' then t2 else t3 }>. apply ST_If. assumption.\nQed.",
+      "explanation": "Progress by induction on the term rather than the typing derivation. Variables in empty context are contradictory."
+    },
+    "substitution_preserves_typing_from_typing_ind": {
+      "solution": "Theorem substitution_preserves_typing' : forall Gamma x U t v T,\n  (x |-> U ; Gamma) |-- t \\in T ->\n  empty |-- v \\in U ->\n  Gamma |-- [x:=v]t \\in T.\nProof.\n  intros Gamma x U t v T Ht Hv.\n  generalize dependent Gamma. generalize dependent T.\n  induction t; intros T Gamma Ht;\n    inversion Ht; subst; simpl; eauto.\n  - (* var *) destruct (String.eqb_spec x s).\n    + subst. rewrite update_eq in H1. injection H1 as H1. subst.\n      apply weakening_empty. assumption.\n    + apply T_Var. rewrite update_neq in H1; assumption.\n  - (* abs *) destruct (String.eqb_spec x s).\n    + subst. apply T_Abs. rewrite update_shadow in H4. assumption.\n    + apply T_Abs. apply IHt. rewrite update_permute; auto.\nQed.",
+      "explanation": "Substitution preserves typing, proved by induction on the term. Key cases: variable lookup, and lambda where we handle shadowing."
+    },
+    "subject_expansion_stlc": {
+      "solution": "(* Subject expansion does NOT hold for STLC. *)\n(* Counterexample: (\\x:Bool. true) false --> true : Bool,\n   but (\\x:Bool. true) false is also well-typed.\n   A real counterexample: if true then (\\x:Bool.x) else true --> \\x:Bool.x\n   The result has type Bool->Bool but the original term would need both branches to agree.\n   Actually, consider: (\\x:Bool. true) (if true then true else (\\y:Bool.y))\n   This steps to (\\x:Bool. true) true (well-typed) but the original has an ill-typed if. *)",
+      "explanation": "Subject expansion fails in STLC because a well-typed reduct may have originated from an ill-typed term, especially with if-expressions having mismatched branch types."
+    },
+    "type_soundness": {
+      "solution": "Theorem type_soundness : forall t t' T,\n  empty |-- t \\in T ->\n  t -->* t' ->\n  ~(stuck t').\nProof.\n  intros t t' T HT P [Hnf Hnv].\n  induction P.\n  - apply progress in HT. destruct HT; auto.\n  - apply IHP.\n    + eapply preservation; eassumption.\n    + split; assumption.\nQed.",
+      "explanation": "Type soundness: well-typed terms never get stuck. Follows from progress and preservation by induction on multi-step."
+    },
+    "unique_types": {
+      "solution": "Theorem unique_types : forall Gamma e T T',\n  Gamma |-- e \\in T ->\n  Gamma |-- e \\in T' ->\n  T = T'.\nProof.\n  intros Gamma e T T' HT HT'.\n  generalize dependent T'.\n  induction HT; intros T' HT'; inversion HT'; subst.\n  - (* var *) rewrite H1 in H3. injection H3. auto.\n  - (* abs *) f_equal. apply IHHT. assumption.\n  - (* app *) apply IHHT1 in H2. injection H2. auto.\n  - (* true *) reflexivity.\n  - (* false *) reflexivity.\n  - (* if *) apply IHHT2. assumption.\nQed.",
+      "explanation": "Types are unique in STLC: by induction on the first typing derivation, inverting the second. Each case uses the IH to match types."
+    },
+    "afi": {
+      "solution": "(* Manual grade exercise: list all places where appears_free_in is used.\n   The afi constructors are:\n   - afi_var: appears_free_in x (tm_var x)\n   - afi_app1: appears_free_in x t1 -> appears_free_in x (t1 t2)\n   - afi_app2: appears_free_in x t2 -> appears_free_in x (t1 t2)\n   - afi_abs: x <> y -> appears_free_in x t -> appears_free_in x (\\y:T, t)\n   - afi_if1, afi_if2, afi_if3: for if branches *)",
+      "explanation": "The appears_free_in relation tracks where variables occur free: in the variable itself, either side of an application, under a lambda (if not shadowed), and in if branches."
+    },
+    "progress_preservation_statement": {
+      "solution": "(* Manual grade exercise.\n   Progress: forall t T, empty |-- t : T -> value t \\/ exists t', t --> t'.\n   Preservation: forall t t' T, empty |-- t : T -> t --> t' -> empty |-- t' : T.\n   These are the standard safety properties for STLC. *)",
+      "explanation": "State the progress and preservation theorems for STLC, showing that well-typed programs don't get stuck."
+    },
+    "free_in_context": {
+      "solution": "Lemma free_in_context : forall x t T Gamma,\n  appears_free_in x t ->\n  Gamma |-- t \\in T ->\n  exists T', Gamma x = Some T'.\nProof.\n  intros x t T Gamma Hafi Htyp.\n  induction Htyp; inversion Hafi; subst.\n  - (* T_Var *) exists T. assumption.\n  - (* T_Abs *) apply IHHtyp in H4. destruct H4 as [T' HT'].\n    exists T'. rewrite update_neq in HT'; assumption.\n  - (* T_App left *) apply IHHtyp1. assumption.\n  - (* T_App right *) apply IHHtyp2. assumption.\n  - (* T_If *) apply IHHtyp1. assumption.\n  - (* T_If *) apply IHHtyp2. assumption.\n  - (* T_If *) apply IHHtyp3. assumption.\nQed.",
+      "explanation": "If x appears free in t, and Gamma types t, then x must be in Gamma. By induction on the typing derivation, following the free occurrence."
+    },
+    "typable_empty__closed": {
+      "solution": "Corollary typable_empty__closed : forall t T,\n  empty |-- t \\in T ->\n  closed t.\nProof.\n  unfold closed, not. intros t T HT x Hfree.\n  apply free_in_context with (T := T) (Gamma := empty) in Hfree; [| assumption].\n  destruct Hfree as [T' HT']. discriminate.\nQed.",
+      "explanation": "If t is typable in the empty context, then t has no free variables, because any free variable would need to be in the empty context."
+    },
+    "context_invariance": {
+      "solution": "Lemma context_invariance : forall Gamma Gamma' t T,\n  Gamma |-- t \\in T ->\n  (forall x, appears_free_in x t -> Gamma x = Gamma' x) ->\n  Gamma' |-- t \\in T.\nProof.\n  intros Gamma Gamma' t T HT Heq.\n  generalize dependent Gamma'.\n  induction HT; intros Gamma' Heq.\n  - (* T_Var *) apply T_Var. rewrite <- Heq; [assumption | constructor].\n  - (* T_Abs *) apply T_Abs. apply IHHT. intros y Hy.\n    destruct (String.eqb_spec x y).\n    + subst. rewrite update_eq. rewrite update_eq. reflexivity.\n    + rewrite update_neq; [| assumption]. rewrite update_neq; [| assumption].\n      apply Heq. apply afi_abs; assumption.\n  - (* T_App *) eapply T_App.\n    + apply IHHT1. intros x Hx. apply Heq. apply afi_app1. assumption.\n    + apply IHHT2. intros x Hx. apply Heq. apply afi_app2. assumption.\n  - (* T_True *) apply T_True.\n  - (* T_False *) apply T_False.\n  - (* T_If *) apply T_If.\n    + apply IHHT1. intros x Hx. apply Heq. apply afi_if1. assumption.\n    + apply IHHT2. intros x Hx. apply Heq. apply afi_if2. assumption.\n    + apply IHHT3. intros x Hx. apply Heq. apply afi_if3. assumption.\nQed.",
+      "explanation": "If two contexts agree on all free variables of t, they assign the same type. By induction on the typing derivation."
+    },
+    "stlc_variation1": {
+      "solution": "(* Adding T_Var_Wrong: |-- true \\in Bool -> Bool *)\n(* Determinism: remains true (typing doesn't affect step) *)\n(* Progress: remains true *)\n(* Preservation: becomes false *)",
+      "explanation": "With T_Var_Wrong, we could type true as Bool->Bool, then true true would be well-typed but stuck."
+    },
+    "stlc_variation2": {
+      "solution": "(* Removing T_App rule *)\n(* Determinism: remains true *)\n(* Progress: remains true (vacuously - fewer typed terms) *)\n(* Preservation: remains true *)",
+      "explanation": "Without T_App, applications are never well-typed, so progress and preservation hold vacuously for applications."
+    },
+    "stlc_variation3": {
+      "solution": "(* Removing ST_App1 rule *)\n(* Determinism: remains true *)\n(* Progress: becomes false *)\n(* Preservation: remains true *)",
+      "explanation": "Without ST_App1, terms like (\\x.x) (\\x.x) true can't reduce the function position, breaking progress."
+    },
+    "stlc_variation4": {
+      "solution": "(* Removing the condition that t1 be a value in ST_App2 *)\n(* Determinism: becomes false *)\n(* Progress: remains true *)\n(* Preservation: remains true *)",
+      "explanation": "Without the value restriction on ST_App2, both ST_App1 and ST_App2 could apply, breaking determinism."
+    },
+    "stlc_variation5": {
+      "solution": "(* Adding call-by-name: (\\x:T,t) t2 --> [x:=t2]t without requiring t2 to be a value *)\n(* Determinism: becomes false *)\n(* Progress: remains true *)\n(* Preservation: remains true (if substitution lemma still holds for non-values) *)",
+      "explanation": "Call-by-name conflicts with call-by-value ST_App2, breaking determinism."
+    },
+    "stlc_variation6": {
+      "solution": "(* Adding evaluation under lambda: t1 --> t1' => \\x:T, t1 --> \\x:T, t1' *)\n(* Determinism: remains true *)\n(* Progress: remains true *)\n(* Preservation: remains true *)",
+      "explanation": "Evaluating under lambda doesn't conflict with other rules and preserves types."
+    },
+    "stlc_variation7": {
+      "solution": "(* Adding fix-point rule *)\n(* Determinism: remains true *)\n(* Progress: remains true *)\n(* Preservation: depends on typing of fix *)",
+      "explanation": "A fix-point combinator adds recursion. If properly typed, preservation holds."
+    },
+    "STLCArith_subst": {
+      "solution": "(* Extended STLC with arithmetic: define substitution for the additional cases *)\nFixpoint subst (x : string) (s : tm) (t : tm) : tm :=\n  match t with\n  | tm_var y => if String.eqb x y then s else t\n  | <{\\y:T, t1}> => if String.eqb x y then t else <{\\y:T, [x:=s] t1}>\n  | <{t1 t2}> => <{([x:=s] t1) ([x:=s] t2)}>\n  | <{true}> => <{true}>\n  | <{false}> => <{false}>\n  | <{if t1 then t2 else t3}> => <{if [x:=s]t1 then [x:=s]t2 else [x:=s]t3}>\n  | <{0}> => <{0}>\n  | <{succ t1}> => <{succ ([x:=s] t1)}>\n  | <{pred t1}> => <{pred ([x:=s] t1)}>\n  | <{t1 * t2}> => <{([x:=s] t1) * ([x:=s] t2)}>\n  | <{if0 t1 then t2 else t3}> => <{if0 [x:=s]t1 then [x:=s]t2 else [x:=s]t3}>\n  end.",
+      "explanation": "Extend substitution to handle nat constants, succ, pred, multiplication, and if0."
+    },
+    "STLCArith_weakening": {
+      "solution": "Lemma weakening : forall Gamma Gamma' t T,\n  includedin Gamma Gamma' ->\n  Gamma |-- t \\in T ->\n  Gamma' |-- t \\in T.\nProof.\n  intros Gamma Gamma' t T Hinc HT.\n  generalize dependent Gamma'.\n  induction HT; intros Gamma' Hinc; eauto.\n  - apply T_Var. apply Hinc. assumption.\n  - apply T_Abs. apply IHHT. apply includedin_update. assumption.\nQed.",
+      "explanation": "Weakening for STLCArith: if Gamma is included in Gamma', typing is preserved. By induction on the typing derivation."
+    },
+    "STLCArith_preservation": {
+      "solution": "Theorem preservation : forall t t' T,\n  empty |-- t \\in T ->\n  t --> t' ->\n  empty |-- t' \\in T.\nProof with eauto.\n  intros t t' T HT HE.\n  generalize dependent t'.\n  induction HT; intros t' HE; try solve_by_invert;\n    inversion HE; subst...\n  - (* ST_AppAbs *)\n    inversion HT1; subst.\n    eapply substitution_preserves_typing; eassumption.\nQed.",
+      "explanation": "Preservation for STLCArith: by induction on typing, inverting the step. Beta reduction uses the substitution lemma."
+    },
+    "STLCArith_progress": {
+      "solution": "Theorem progress : forall t T,\n  empty |-- t \\in T ->\n  value t \\/ (exists t', t --> t').\nProof with eauto.\n  intros t T Ht.\n  remember empty as Gamma.\n  induction Ht; subst...\n  - (* var *) inversion H.\n  - (* app *) right.\n    destruct IHHt1 as [Hv1 | [t1' Hs1]]...\n    destruct IHHt2 as [Hv2 | [t2' Hs2]]...\n    + inversion Hv1; subst; try solve_by_invert.\n      exists <{ [x0:=t2]t0 }>...\n    + exists <{ t1 t2' }>...\n  - (* if *) right.\n    destruct IHHt1 as [Hv1 | [t1' Hs1]]...\n    + inversion Hv1; subst; try solve_by_invert...\n    + exists <{ if t1' then t2 else t3 }>...\nQed.",
+      "explanation": "Progress for STLCArith: well-typed terms in the empty context are either values or can step."
+    }
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "chapter": "Affine",
+  "volume": "slf",
+  "exercises": {
+    "hgc_intro": {
+      "solution": "Lemma hgc_intro : forall h,\n  heap_affine h ->\n  \\GC h.\nProof using.\n  introv M. unfold hgc. exists (= h).\n  exists Fmap.empty h. splits.\n  { hnf. split. { auto. } { intros h' ->. auto. } }\n  { auto. }\n  { applys Fmap.disjoint_empty_l. }\n  { rewrite Fmap.union_empty_l. auto. }\nQed.",
+      "explanation": "Introduce GC by witnessing the exact heap predicate (= h) which is affine because h is heap_affine."
+    },
+    "hgc_inv": {
+      "solution": "Lemma hgc_inv : forall h,\n  \\GC h ->\n  heap_affine h.\nProof using.\n  introv M. unfold hgc in M. destruct M as (H&h1&h2&(E1&HA)&M2&D&U).\n  subst. rewrite Fmap.union_empty_l in U. subst.\n  applys HA M2.\nQed.",
+      "explanation": "Eliminate GC by extracting the affine witness H and applying haffine to the heap."
+    },
+    "himpl_hgc_absorb_r": {
+      "solution": "Lemma himpl_hgc_absorb_r : forall H,\n  haffine H ->\n  \\GC \\* H ==> \\GC.\nProof using.\n  introv M. xchange <- hstar_hgc_hgc. xsimpl. applys himpl_hgc_r M.\nQed.",
+      "explanation": "GC * H ==> GC when H is affine: convert H to GC, then merge two GCs into one using hstar_hgc_hgc."
+    },
+    "triple_hgc_post": {
+      "solution": "Lemma triple_hgc_post : forall t H Q,\n  triple t H (Q \\*+ \\GC) ->\n  triple t H Q.\nProof using.\n  introv M. intros h Hh.\n  lets (h'&v&R&HQ): M Hh.\n  exists h' v. splits. { auto. }\n  { xchange HQ. xchange hstar_hgc_hgc. xsimpl. }\nQed.",
+      "explanation": "Discard GC from postcondition: the triple definition already includes GC, so the extra GC merges via hstar_hgc_hgc."
+    },
+    "triple_haffine_post": {
+      "solution": "Lemma triple_haffine_post : forall t H H' Q,\n  haffine H' ->\n  triple t H (Q \\*+ H') ->\n  triple t H Q.\nProof using.\n  introv HA M. applys triple_hgc_post.\n  applys triple_conseq M. { xsimpl. }\n  { intros v. xchange (himpl_hgc_r HA). xsimpl. }\nQed.",
+      "explanation": "Discard affine H' from postcondition by first converting H' to GC, then applying triple_hgc_post."
+    },
+    "triple_hgc_post_from_triple_haffine_post": {
+      "solution": "Lemma triple_hgc_post_from_triple_haffine_post : forall t H Q,\n  triple t H (Q \\*+ \\GC) ->\n  triple t H Q.\nProof using.\n  introv M. applys triple_haffine_post haffine_hgc M.\nQed.",
+      "explanation": "Derive triple_hgc_post from triple_haffine_post by noting that GC itself is affine."
+    },
+    "triple_haffine_pre": {
+      "solution": "Lemma triple_haffine_pre : forall t H H' Q,\n  haffine H' ->\n  triple t H Q ->\n  triple t (H \\* H') Q.\nProof using.\n  introv HA M. applys triple_haffine_post HA.\n  applys triple_frame M.\nQed.",
+      "explanation": "Discard affine H' from precondition: frame H' into the triple, then discard it from the postcondition."
+    },
+    "triple_conseq_frame_hgc": {
+      "solution": "Lemma triple_conseq_frame_hgc : forall H2 H1 Q1 t H Q,\n  triple t H1 Q1 ->\n  H ==> H1 \\* H2 ->\n  Q1 \\*+ H2 ===> Q \\*+ \\GC ->\n  triple t H Q.\nProof using.\n  introv M WH WQ. applys triple_hgc_post.\n  applys triple_conseq_frame M WH WQ.\nQed.",
+      "explanation": "Combined consequence-frame-discard rule: use triple_conseq_frame, then discard the GC from the postcondition."
+    },
+    "triple_ramified_frame_hgc": {
+      "solution": "Lemma triple_ramified_frame_hgc : forall H1 Q1 t H Q,\n  triple t H1 Q1 ->\n  H ==> H1 \\* (Q1 \\--* (Q \\*+ \\GC)) ->\n  triple t H Q.\nProof using.\n  introv M WH. applys triple_hgc_post.\n  applys triple_ramified_frame M WH.\nQed.",
+      "explanation": "Ramified frame with GC: apply the ramified frame rule, then discard the GC from postcondition."
+    },
+    "wp_hgc_post": {
+      "solution": "Lemma wp_hgc_post : forall t Q,\n  wp t (Q \\*+ \\GC) ==> wp t Q.\nProof using.\n  intros. rewrite wp_equiv. applys triple_hgc_post. rewrite <- wp_equiv. xsimpl.\nQed.",
+      "explanation": "WP-style discard rule: convert to triple, apply triple_hgc_post, convert back."
+    },
+    "wp_haffine_pre": {
+      "solution": "Lemma wp_haffine_pre : forall t H Q,\n  haffine H ->\n  (wp t Q) \\* H ==> wp t Q.\nProof using.\n  introv HA. xchange wp_frame. applys wp_conseq.\n  intros v. xchange (himpl_hgc_r HA). xchange wp_hgc_post.\nQed.",
+      "explanation": "Discard affine H from wp precondition: frame H in, then discard it from the postcondition."
+    },
+    "wp_haffine_pre_alternative": {
+      "solution": "Lemma wp_haffine_pre' : forall t H Q,\n  haffine H ->\n  (wp t Q) \\* H ==> wp t Q.\nProof using.\n  introv HA. rewrite wp_equiv. applys triple_haffine_pre HA.\n  rewrite <- wp_equiv. xsimpl.\nQed.",
+      "explanation": "Alternative proof using triple_haffine_pre directly."
+    },
+    "mkstruct_haffine_post": {
+      "solution": "Lemma mkstruct_haffine_post : forall H' F Q,\n  haffine H' ->\n  mkstruct F (Q \\*+ H') ==> mkstruct F Q.\nProof using.\n  introv HA. unfold mkstruct. xpull. intros Q'. xsimpl Q'.\n  intros v. xchange (himpl_hgc_r HA). xchange hstar_hgc_hgc.\nQed.",
+      "explanation": "Discard affine predicates from mkstruct postconditions."
+    },
+    "mkstruct_haffine_pre": {
+      "solution": "Lemma mkstruct_haffine_pre : forall H' F Q,\n  haffine H' ->\n  (mkstruct F Q) \\* H' ==> mkstruct F Q.\nProof using.\n  introv HA. unfold mkstruct. xpull. intros Q'. xsimpl Q'.\n  intros v. xchange (himpl_hgc_r HA).\nQed.",
+      "explanation": "Discard affine predicates from mkstruct preconditions."
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "chapter": "Maps",
+  "volume": "vfa",
+  "exercises": {
+    "t_apply_empty": {
+      "solution": "Proof.\n  intros. unfold t_empty. reflexivity.\nQed.",
+      "explanation": "Unfold t_empty to see it is a constant function, then reflexivity."
+    },
+    "t_update_eq": {
+      "solution": "Proof.\n  intros. unfold t_update.\n  bdestruct (x =? x); auto. lia.\nQed.",
+      "explanation": "Unfold t_update, then bdestruct on x =? x. The equality case gives the result directly."
+    },
+    "t_update_neq": {
+      "solution": "Proof.\n  intros. unfold t_update.\n  bdestruct (x1 =? x2).\n  - lia.\n  - reflexivity.\nQed.",
+      "explanation": "Unfold t_update and bdestruct. Since x1 <> x2, the else branch gives m x2."
+    },
+    "t_update_shadow": {
+      "solution": "Proof.\n  intros. extensionality y.\n  unfold t_update.\n  bdestruct (x =? y); reflexivity.\nQed.",
+      "explanation": "Use extensionality, unfold, and bdestruct. In both cases the result is the same as t_update m x v2."
+    },
+    "t_update_same": {
+      "solution": "Proof.\n  intros. extensionality y.\n  unfold t_update.\n  bdestruct (x =? y).\n  - subst. reflexivity.\n  - reflexivity.\nQed.",
+      "explanation": "Use extensionality and bdestruct. When x = y, t_update returns m x = m y. When x <> y, it returns m y directly."
+    },
+    "t_update_permute": {
+      "solution": "Proof.\n  intros. extensionality y.\n  unfold t_update.\n  bdestruct (x1 =? y); bdestruct (x2 =? y); try lia; reflexivity.\nQed.",
+      "explanation": "Use extensionality and double bdestruct. The case where both equal y contradicts x2 <> x1."
+    }
+  }
+}

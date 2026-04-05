@@ -26,18 +26,18 @@ const NOTATION_RE = /^(Notation)\s+"([^"]+)"/;
 const MODULE_RE = /^(Module)\s+(\w+)/;
 
 const KIND_COLORS: Record<string, string> = {
-  Definition: 'text-blue-400 bg-blue-950/50',
-  Fixpoint: 'text-blue-400 bg-blue-950/50',
-  Theorem: 'text-purple-400 bg-purple-950/50',
-  Lemma: 'text-purple-400 bg-purple-950/50',
-  Fact: 'text-purple-400 bg-purple-950/50',
-  Corollary: 'text-purple-400 bg-purple-950/50',
-  Proposition: 'text-purple-400 bg-purple-950/50',
-  Inductive: 'text-emerald-400 bg-emerald-950/50',
-  Record: 'text-emerald-400 bg-emerald-950/50',
-  Example: 'text-amber-400 bg-amber-950/50',
-  Notation: 'text-gray-400 bg-gray-800',
-  Module: 'text-red-400 bg-red-950/50',
+  Definition: 'text-blue-700 bg-blue-50',
+  Fixpoint: 'text-blue-700 bg-blue-50',
+  Theorem: 'text-purple-700 bg-purple-50',
+  Lemma: 'text-purple-700 bg-purple-50',
+  Fact: 'text-purple-700 bg-purple-50',
+  Corollary: 'text-purple-700 bg-purple-50',
+  Proposition: 'text-purple-700 bg-purple-50',
+  Inductive: 'text-green-700 bg-green-50',
+  Record: 'text-green-700 bg-green-50',
+  Example: 'text-amber-700 bg-amber-50',
+  Notation: 'text-gray-600 bg-gray-100',
+  Module: 'text-red-700 bg-red-50',
 };
 
 export function parseContextEntries(sentences: string[]): ContextEntry[] {
@@ -47,7 +47,7 @@ export function parseContextEntries(sentences: string[]): ContextEntry[] {
     const trimmed = sentence.trim();
     const firstLine = trimmed.split('\n')[0];
 
-    for (const [re, kind] of [
+    for (const [re] of [
       [DEFINITION_RE, null],
       [THEOREM_RE, null],
       [INDUCTIVE_RE, null],
@@ -74,7 +74,7 @@ export function parseContextEntries(sentences: string[]): ContextEntry[] {
 
 /** Extract just the names for auto-completion */
 export function getContextNames(entries: ContextEntry[]): { name: string; kind: string }[] {
-  return entries.map(e => ({ name: e.name, kind: e.kind }));
+  return entries.map(e => ({ name: e.name, kind: e.kind }));  // kind is used by consumers
 }
 
 export default function ContextPanel({ executedSentences }: Props) {
@@ -132,7 +132,7 @@ export default function ContextPanel({ executedSentences }: Props) {
                 {items.map((e, i) => (
                   <div
                     key={`${e.name}-${i}`}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded hover:bg-gray-800/50 cursor-default"
+                    className="flex items-center gap-2 px-3 py-1.5 rounded hover:bg-gray-50 cursor-default"
                     title={e.signature}
                   >
                     <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
@@ -140,7 +140,7 @@ export default function ContextPanel({ executedSentences }: Props) {
                     }`}>
                       {e.kind.slice(0, 3)}
                     </span>
-                    <span className="text-xs font-mono text-gray-300 truncate">
+                    <span className="text-xs font-mono text-gray-700 truncate">
                       {e.name}
                     </span>
                   </div>

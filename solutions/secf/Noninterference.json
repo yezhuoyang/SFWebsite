@@ -1,0 +1,54 @@
+{
+  "chapter": "Noninterference",
+  "volume": "secf",
+  "exercises": {
+    "prove_or_disprove_obvious_f1": {
+      "solution": "Lemma prove_or_disprove_obvious_f1 :\n  noninterferent obvious_f1 \\/ ~noninterferent obvious_f1.\nProof.\n  left. unfold noninterferent, obvious_f1. intros pi si1 si2.\n  reflexivity.\nQed.",
+      "explanation": "obvious_f1 always returns (0,0) regardless of inputs, so it is trivially noninterferent."
+    },
+    "prove_or_disprove_obvious_f2": {
+      "solution": "Lemma prove_or_disprove_obvious_f2 :\n  noninterferent obvious_f2 \\/ ~noninterferent obvious_f2.\nProof.\n  right. unfold noninterferent, obvious_f2.\n  intros H. specialize (H 0 0 1). simpl in H. discriminate.\nQed.",
+      "explanation": "obvious_f2 uses si in the public output (pi+2*si), so it is interferent. Counterexample: pi=0, si1=0, si2=1 gives different public outputs."
+    },
+    "prove_or_disprove_less_obvious_f4": {
+      "solution": "Lemma prove_or_disprove_less_obvious_f4 :\n  noninterferent less_obvious_f4 \\/ ~noninterferent less_obvious_f4.\nProof.\n  left. unfold noninterferent, less_obvious_f4.\n  intros pi si1 si2. f_equal.\n  destruct (Nat.eqb si1 0) eqn:E1; destruct (Nat.eqb si2 0) eqn:E2;\n    try (apply Nat.eqb_eq in E1; subst; simpl; auto);\n    try (apply Nat.eqb_eq in E2; subst; simpl; auto with arith);\n    auto.\nQed.",
+      "explanation": "less_obvious_f4's public output is pi regardless of si: when si=0, si*pi=0=pi*0 doesn't depend on si; otherwise it's just pi."
+    },
+    "prove_or_disprove_less_obvious_f5": {
+      "solution": "Lemma prove_or_disprove_less_obvious_f5 :\n  noninterferent less_obvious_f5 \\/ ~noninterferent less_obvious_f5.\nProof.\n  left. unfold noninterferent, less_obvious_f5.\n  intros pi si1 si2. f_equal.\n  destruct (Nat.eqb si1 0) eqn:E1; destruct (Nat.eqb si2 0) eqn:E2.\n  - reflexivity.\n  - apply Nat.eqb_eq in E1. subst. simpl. reflexivity.\n  - apply Nat.eqb_eq in E2. subst. simpl. reflexivity.\n  - reflexivity.\nQed.",
+      "explanation": "less_obvious_f5: when si=0, si+pi = 0+pi = pi; when si<>0, output is pi. So public output is always pi."
+    },
+    "prove_or_disprove_less_obvious_f6": {
+      "solution": "Lemma prove_or_disprove_less_obvious_f6 :\n  noninterferent less_obvious_f6 \\/ ~noninterferent less_obvious_f6.\nProof.\n  right. unfold noninterferent, less_obvious_f6.\n  intros H. specialize (H 1 0 2). simpl in H. discriminate.\nQed.",
+      "explanation": "less_obvious_f6 compares si < pi, which leaks si through the public output. Counterexample: pi=1, si1=0 (0<1 is true, output 0), si2=2 (2<1 is false, output 1)."
+    },
+    "prove_or_disprove_less_obvious_f7": {
+      "solution": "Lemma prove_or_disprove_less_obvious_f7 :\n  noninterferent less_obvious_f7 \\/ ~noninterferent less_obvious_f7.\nProof.\n  left. unfold noninterferent, less_obvious_f7.\n  intros pi si1 si2.\n  destruct (Nat.eqb (si1 + pi) 0) eqn:E1;\n  destruct (Nat.eqb (si2 + pi) 0) eqn:E2.\n  - apply Nat.eqb_eq in E1. apply Nat.eqb_eq in E2.\n    assert (si1 = 0) by omega. assert (pi = 0) by omega.\n    assert (si2 = 0) by omega. subst. reflexivity.\n  - apply Nat.eqb_eq in E1.\n    assert (si1 = 0) by omega. assert (pi = 0) by omega.\n    subst. simpl in E2. discriminate.\n  - apply Nat.eqb_eq in E2.\n    assert (si2 = 0) by omega. assert (pi = 0) by omega.\n    subst. simpl in E1. discriminate.\n  - reflexivity.\nQed.",
+      "explanation": "less_obvious_f7: si+pi=0 iff si=0 and pi=0. When pi=0, both branches give (0,0)=(pi,si) since si must be 0 too. When pi<>0, both go to else branch returning (pi,si)."
+    },
+    "sme_another_insecure_f2": {
+      "solution": "Lemma sme_another_insecure_f2 : forall pi si,\n    sme 0 (another_insecure_f2) pi si = (pi, pi+si).\nProof.\n  unfold sme, another_insecure_f2.\n  intros pi si. simpl.\n  rewrite Nat.add_0_r. reflexivity.\nQed.",
+      "explanation": "SME runs f with (pi,0) for public output and (pi,si) for secret output. Public: si=0 gives 0*pi+pi = pi. Secret: pi+si."
+    },
+    "sme_another_insecure_f3": {
+      "solution": "Lemma sme_another_insecure_f3 : forall pi si,\n    sme 0 (another_insecure_f3) pi si = (pi, pi+si).\nProof.\n  unfold sme, another_insecure_f3.\n  intros pi si. simpl.\n  destruct (Nat.eqb 0 pi) eqn:E.\n  - apply Nat.eqb_eq in E. subst. simpl. reflexivity.\n  - reflexivity.\nQed.",
+      "explanation": "SME of another_insecure_f3: with si=0, eqb 0 pi determines public output, but either way it equals pi."
+    },
+    "noninterferent_secure_ex1": {
+      "solution": "Lemma noninterferent_secure_ex1 :\n  noninterferent_no_while xpub secure_ex1.\nProof.\n  unfold noninterferent_no_while, noninterferent_state, secure_ex1.\n  intros s1 s2 PEQUIV x Hx.\n  apply xpub_true in Hx. subst.\n  simpl. reflexivity.\nQed.",
+      "explanation": "secure_ex1 sets X:=1 (constant), so X's final value doesn't depend on secrets. Y is secret so we don't need to check it."
+    },
+    "noninterferent_secure_ex2": {
+      "solution": "Lemma noninterferent_secure_ex2 :\n  noninterferent_no_while xpub secure_ex2.\nProof.\n  unfold noninterferent_no_while, noninterferent_state, secure_ex2.\n  intros s1 s2 PEQUIV x Hx.\n  apply xpub_true in Hx. subst.\n  specialize (PEQUIV X xpubX).\n  simpl. rewrite PEQUIV.\n  destruct (s2 X =? 0) eqn:E; simpl; rewrite t_update_eq; reflexivity.\nQed.",
+      "explanation": "secure_ex2 branches on public X and only assigns to X (public) and Y (secret). X's value depends only on X."
+    },
+    "interferent_insecure_com_explicit": {
+      "solution": "Lemma interferent_insecure_com_explicit :\n  ~noninterferent_no_while xpub insecure_com_explicit.\nProof.\n  unfold noninterferent_no_while, noninterferent_state, insecure_com_explicit.\n  intro Hc.\n  set (s1 := (X !-> 0 ; Y !-> 0)).\n  set (s2 := (X !-> 0 ; Y !-> 1)).\n  specialize (Hc s1 s2).\n  assert (PEQUIV: pub_equiv xpub s1 s2).\n  { intros x H. apply xpub_true in H. subst. reflexivity. }\n  specialize (Hc PEQUIV X xpubX).\n  simpl in Hc. unfold s1, s2, t_update in Hc. simpl in Hc.\n  discriminate Hc.\nQed.",
+      "explanation": "insecure_com_explicit assigns X := Y + X, leaking secret Y into public X. Counterexample: same X, different Y."
+    },
+    "interferent_insecure_com_implicit": {
+      "solution": "Lemma interferent_insecure_com_implicit :\n  ~noninterferent_no_while xpub insecure_com_implicit.\nProof.\n  unfold noninterferent_no_while, noninterferent_state, insecure_com_implicit.\n  intro Hc.\n  set (s1 := (X !-> 0 ; Y !-> 42)).\n  set (s2 := (X !-> 0 ; Y !-> 0)).\n  specialize (Hc s1 s2).\n  assert (PEQUIV: pub_equiv xpub s1 s2).\n  { intros x H. apply xpub_true in H. subst. reflexivity. }\n  specialize (Hc PEQUIV X xpubX).\n  simpl in Hc. unfold s1, s2, t_update in Hc. simpl in Hc.\n  discriminate Hc.\nQed.",
+      "explanation": "insecure_com_implicit leaks Y through control flow: if Y=42 then X:=X-1. Different Y values lead to different X values."
+    }
+  }
+}

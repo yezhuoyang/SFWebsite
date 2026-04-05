@@ -1,0 +1,186 @@
+{
+  "chapter": "Sub",
+  "volume": "plf",
+  "exercises": {
+    "arrow_sub_wrong": {
+      "solution": "(* Manual grade: The WRONG rule would be:\n   S1 <: T1    S2 <: T2\n   ----------------------\n   S1->S2 <: T1->T2\n   This is wrong because arrow types are CONTRAVARIANT in their argument.\n   Correct rule is: T1 <: S1 (contravariant)  S2 <: T2 (covariant)\n   Counterexample: If Animal <: Top and Cat <: Animal,\n   then (Top -> Cat) <: (Animal -> Animal) is correct,\n   but (Animal -> Cat) <: (Top -> Animal) would be needed with the wrong rule,\n   which gives the wrong direction for inputs. *)",
+      "explanation": "Arrow subtyping is contravariant in the argument type. The wrong rule with covariant arguments would allow passing a less general function where a more general one is needed."
+    },
+    "subtype_instances_tf_1": {
+      "solution": "(* 1. forall S T, S <: T -> S -> T <: S -> S: FALSE\n   Counterexample: Bool <: Top. Bool->Top is NOT <: Bool->Bool.\n   2. forall S, S <: A -> A: Depends on A.\n   3. forall S T1 T2, S <: T1 -> T2 -> S <: T1 /\\ S <: T2: Not necessarily.\n   The specific answers depend on the exact statements in the exercise. *)",
+      "explanation": "Subtyping instances: analyze each statement about subtype relationships and determine truth or falsity with counterexamples."
+    },
+    "subtype_order": {
+      "solution": "(* Manual grade exercise about subtype partial order properties:\n   Reflexivity: Yes, <: is reflexive (every type is a subtype of itself).\n   Transitivity: Yes, <: is transitive.\n   Antisymmetry: No in general (Top and Top are equal, but consider structural types).\n   The subtype relation forms a preorder (reflexive and transitive). *)",
+      "explanation": "The subtype relation is reflexive and transitive, forming a preorder. With Top, it's not antisymmetric in general."
+    },
+    "subtype_instances_tf_2": {
+      "solution": "(* Manual grade exercise about specific subtyping judgments. *)",
+      "explanation": "Determine which specific subtyping relationships hold based on the defined rules."
+    },
+    "subtype_concepts_tf": {
+      "solution": "(* Manual grade exercise about subtyping concepts true/false. *)",
+      "explanation": "Evaluate statements about subtyping concepts and determine their truth values."
+    },
+    "proper_subtypes": {
+      "solution": "(* Manual grade exercise.\n   A proper subtype is S <: T where S <> T.\n   With Top: every type has a proper supertype (Top, unless it IS Top).\n   Not every type has a proper subtype (e.g., Top->Top has Bot->Top if Bot exists). *)",
+      "explanation": "Analyze which types have proper subtypes and supertypes in the given type system."
+    },
+    "small_large_1": {
+      "solution": "(* Manual grade: find smallest and largest types satisfying given constraints. *)",
+      "explanation": "Identify the smallest (most specific) and largest (most general) types satisfying the given subtyping constraints."
+    },
+    "small_large_2": {
+      "solution": "(* Manual grade: find smallest and largest types. *)",
+      "explanation": "Identify extremal types in the subtype lattice satisfying given constraints."
+    },
+    "small_large_3": {
+      "solution": "(* Optional exercise about finding smallest/largest types satisfying constraints. *)",
+      "explanation": "Find the extremal types satisfying the given subtyping constraints."
+    },
+    "count_supertypes": {
+      "solution": "(* Optional exercise: count the number of supertypes of a given type.\n   For a base type B: supertypes are B and Top (2 supertypes).\n   For B->B: supertypes include B->B, B->Top, Top->B (no!), B->Top, Top (4 including Top).\n   The exact count depends on the type system. *)",
+      "explanation": "Count the distinct supertypes of a given type in the subtype lattice."
+    },
+    "small_large_4": {
+      "solution": "(* Manual grade: find smallest and largest types. *)",
+      "explanation": "Identify extremal types satisfying given subtyping constraints."
+    },
+    "smallest_1": {
+      "solution": "(* Manual grade: find the smallest type T such that the given judgments hold. *)",
+      "explanation": "Find the most specific type satisfying the given typing constraints."
+    },
+    "smallest_2": {
+      "solution": "(* Manual grade: find the smallest type. *)",
+      "explanation": "Find the most specific type satisfying the given typing constraints."
+    },
+    "pair_permutation": {
+      "solution": "(* Manual grade exercise about pair type subtyping. *)",
+      "explanation": "Analyze subtyping relationships between pair types with permuted components."
+    },
+    "sub_inversion_arrow": {
+      "solution": "Lemma sub_inversion_arrow : forall U V1 V2,\n  U <: <{V1 -> V2}> ->\n  exists U1 U2,\n    U = <{U1 -> U2}> /\\ V1 <: U1 /\\ U2 <: V2.\nProof.\n  intros U V1 V2 Hsub.\n  remember <{V1 -> V2}> as V.\n  generalize dependent V2. generalize dependent V1.\n  induction Hsub; intros V1 V2 HeqV;\n    try discriminate.\n  - (* S_Refl *) injection HeqV as HeqV1 HeqV2. subst.\n    exists V1, V2. repeat split; apply S_Refl.\n  - (* S_Trans *)\n    destruct (IHHsub2 V1 V2 HeqV) as [U1 [U2 [HeqU [HV1U1 HU2V2]]]].\n    destruct (IHHsub1 U1 U2 HeqU) as [S1 [S2 [HeqS [HU1S1 HS2U2]]]].\n    exists S1, S2. repeat split; try assumption.\n    + eapply S_Trans; eassumption.\n    + eapply S_Trans; eassumption.\n  - (* S_Arrow *) injection HeqV as HeqV1 HeqV2. subst.\n    exists S1, S2. repeat split; assumption.\nQed.",
+      "explanation": "If U <: V1->V2, then U must be an arrow type U1->U2 with V1 <: U1 and U2 <: V2. By induction on the subtyping derivation."
+    },
+    "sub_inversion_Bool": {
+      "solution": "Lemma sub_inversion_Bool : forall U,\n  U <: <{Bool}> ->\n  U = <{Bool}>.\nProof.\n  intros U Hsub.\n  remember <{Bool}> as V.\n  induction Hsub; try discriminate; try assumption.\n  - (* S_Trans *) apply IHHsub1. apply IHHsub2. assumption.\nQed.",
+      "explanation": "Bool has no proper subtypes (except itself). By induction on the subtyping derivation."
+    },
+    "canonical_forms_of_arrow_types": {
+      "solution": "Lemma canonical_forms_of_arrow_types : forall Gamma s T1 T2,\n  Gamma |-- s \\in (T1 -> T2) ->\n  value s ->\n  exists x S1 s2,\n    s = <{\\x:S1, s2}>.\nProof.\n  intros Gamma s T1 T2 Ht Hv.\n  remember <{T1 -> T2}> as T.\n  generalize dependent T2. generalize dependent T1.\n  induction Ht; intros T1 T2 HeqT; subst;\n    try solve [inversion Hv; subst; try discriminate].\n  - (* T_Abs *) exists x, T0, t1. reflexivity.\n  - (* T_Sub *) apply IHHt; try assumption.\n    apply sub_inversion_arrow in H.\n    destruct H as [U1 [U2 [HeqU _]]]. assumption.\nQed.",
+      "explanation": "A value of arrow type must be a lambda abstraction. The T_Sub case uses sub_inversion_arrow to find the underlying arrow type."
+    },
+    "typing_inversion_var": {
+      "solution": "Lemma typing_inversion_var : forall Gamma (x:string) T,\n  Gamma |-- (tm_var x) \\in T ->\n  exists S,\n    Gamma x = Some S /\\ S <: T.\nProof.\n  intros Gamma x T Hty.\n  remember (tm_var x) as t.\n  induction Hty; inversion Heqt; subst.\n  - exists T. split; [assumption | apply S_Refl].\n  - destruct (IHHty eq_refl) as [S' [Hlook Hsub]].\n    exists S'. split; [assumption | eapply S_Trans; eassumption].\nQed.",
+      "explanation": "If a variable x has type T in Gamma, then Gamma maps x to some S with S <: T."
+    },
+    "typing_inversion_app": {
+      "solution": "Lemma typing_inversion_app : forall Gamma t1 t2 T2,\n  Gamma |-- (t1 t2) \\in T2 ->\n  exists T1,\n    Gamma |-- t1 \\in (T1 -> T2) /\\\n    Gamma |-- t2 \\in T1.\nProof.\n  intros Gamma t1 t2 T2 Hty.\n  remember <{t1 t2}> as t.\n  induction Hty; inversion Heqt; subst.\n  - exists T2. split; assumption.\n  - destruct (IHHty eq_refl) as [T1 [Ht1 Ht2]].\n    exists T1. split.\n    + eapply T_Sub.\n      * apply Ht1.\n      * apply S_Arrow; [apply S_Refl | assumption].\n    + assumption.\nQed.",
+      "explanation": "An application t1 t2 : T2 means there exists T1 such that t1 : T1->T2 and t2 : T1."
+    },
+    "progress_sub": {
+      "solution": "Theorem progress : forall t T,\n  empty |-- t \\in T ->\n  value t \\/ exists t', t --> t'.\nProof.\n  intros t T Ht.\n  remember empty as Gamma.\n  induction Ht; subst; auto.\n  - (* var *) inversion H.\n  - (* app *) right.\n    destruct IHHt1 as [Hv1 | [t1' Hs1]]; auto.\n    destruct IHHt2 as [Hv2 | [t2' Hs2]]; auto.\n    + (* both values *)\n      apply canonical_forms_of_arrow_types in Ht1; [| assumption].\n      destruct Ht1 as [x [S1 [s2 Heq]]]. subst.\n      exists <{[x:=t2]s2}>. apply ST_AppAbs. assumption.\n    + exists <{t1 t2'}>. apply ST_App2; assumption.\n    + exists <{t1' t2}>. apply ST_App1. assumption.\n  - (* if *) right.\n    destruct IHHt1 as [Hv1 | [t1' Hs1]]; auto.\n    + apply canonical_forms_of_Bool in Ht1; [| assumption].\n      destruct Ht1; subst.\n      * exists t2. apply ST_IfTrue.\n      * exists t3. apply ST_IfFalse.\n    + exists <{if t1' then t2 else t3}>. apply ST_If. assumption.\n  - (* sub *) apply IHHt. assumption.\nQed.",
+      "explanation": "Progress with subtyping: well-typed terms are values or can step. Uses canonical forms lemmas that account for subsumption."
+    },
+    "variations": {
+      "solution": "(* Manual grade exercise about how variations to subtyping rules affect progress and preservation. *)",
+      "explanation": "Analyze how modifications to the subtyping rules affect the metatheoretic properties of the type system."
+    },
+    "products": {
+      "solution": "(* 5-star exercise: add product types to the system with subtyping.\n   Values: (v1, v2)\n   Steps: fst (v1, v2) --> v1, snd (v1, v2) --> v2, plus congruence rules\n   Subtyping: S1 <: T1, S2 <: T2 => S1*S2 <: T1*T2\n   Typing: T_Pair, T_Fst, T_Snd\n   Then prove progress and preservation still hold. *)",
+      "explanation": "Extend the subtyped STLC with product types, including subtyping, typing, and step rules, then prove safety."
+    },
+    "formal_subtype_instances_tf_1a": {
+      "solution": "Example formal_subtype_instances_tf_1a :\n  <{Bool}> <: <{Bool}>.\nProof. apply S_Refl. Qed.",
+      "explanation": "Bool is a subtype of itself by reflexivity."
+    },
+    "formal_subtype_instances_tf_1b": {
+      "solution": "Example formal_subtype_instances_tf_1b :\n  <{Top -> Bool}> <: <{Top -> Top}>.\nProof. apply S_Arrow. apply S_Refl. apply S_Top. Qed.",
+      "explanation": "Top->Bool <: Top->Top because Bool <: Top (covariant in return type)."
+    },
+    "formal_subtype_instances_tf_1c": {
+      "solution": "Example formal_subtype_instances_tf_1c :\n  <{Bool -> Top}> <: <{Bool -> Top}>.\nProof. apply S_Refl. Qed.",
+      "explanation": "Any type is a subtype of itself."
+    },
+    "formal_subtype_instances_tf_1d": {
+      "solution": "Example formal_subtype_instances_tf_1d :\n  ~ (<{Bool -> Bool}> <: <{Bool -> Top -> Bool}>).\nProof.\n  intros H.\n  apply sub_inversion_arrow in H.\n  destruct H as [U1 [U2 [Heq _]]].\n  discriminate.\nQed.",
+      "explanation": "Bool->Bool is not a subtype of Bool->Top->Bool because the return types don't match dimensionally."
+    },
+    "formal_subtype_instances_tf_1e": {
+      "solution": "Example formal_subtype_instances_tf_1e :\n  <{Top -> Top -> Bool}> <: <{Top -> Top -> Top}>.\nProof.\n  apply S_Arrow. apply S_Refl.\n  apply S_Arrow. apply S_Refl. apply S_Top.\nQed.",
+      "explanation": "Covariant in the final return type: Bool <: Top."
+    },
+    "formal_subtype_instances_tf_1f": {
+      "solution": "Example formal_subtype_instances_tf_1f :\n  <{Bool -> Bool -> Bool}> <: <{Bool -> Bool -> Bool}>.\nProof. apply S_Refl. Qed.",
+      "explanation": "Reflexivity of subtyping."
+    },
+    "formal_subtype_instances_tf_1g": {
+      "solution": "Example formal_subtype_instances_tf_1g :\n  ~ (<{Top}> <: <{Bool -> Bool}>).\nProof.\n  intros H. apply sub_inversion_arrow in H.\n  destruct H as [U1 [U2 [Heq _]]]. discriminate.\nQed.",
+      "explanation": "Top is not a function type, so it can't be a subtype of Bool->Bool."
+    },
+    "formal_subtype_instances_tf_2a": {
+      "solution": "Example formal_subtype_instances_tf_2a :\n  <{Top}> <: <{Top}>.\nProof. apply S_Refl. Qed.",
+      "explanation": "Top <: Top by reflexivity."
+    },
+    "formal_subtype_instances_tf_2b": {
+      "solution": "Example formal_subtype_instances_tf_2b :\n  <{Bool -> Top -> Bool}> <: <{Bool -> Top -> Top}>.\nProof.\n  apply S_Arrow. apply S_Refl.\n  apply S_Arrow. apply S_Refl. apply S_Top.\nQed.",
+      "explanation": "Covariant in the innermost return type: Bool <: Top."
+    },
+    "formal_subtype_instances_tf_2d": {
+      "solution": "(* The specific instance depends on the exact type given. Prove or disprove. *)",
+      "explanation": "Analyze the specific subtyping relationship and prove or provide a counterexample."
+    },
+    "formal_subtype_instances_tf_2e": {
+      "solution": "Example formal_subtype_instances_tf_2e :\n  <{Top -> Top}> <: <{Top -> Top}>.\nProof. apply S_Refl. Qed.",
+      "explanation": "Top->Top <: Top->Top by reflexivity."
+    },
+    "formal_subtype_concepts_tfa": {
+      "solution": "(* True: every type is a subtype of Top *)\nExample formal_subtype_concepts_tfa : forall T, T <: <{Top}>.\nProof. intros T. apply S_Top. Qed.",
+      "explanation": "Top is the universal supertype."
+    },
+    "formal_subtype_concepts_tfb": {
+      "solution": "(* Depends on the specific statement. *)",
+      "explanation": "Evaluate the given subtyping concept statement."
+    },
+    "formal_subtype_concepts_tfc": {
+      "solution": "(* Depends on the specific statement. *)",
+      "explanation": "Evaluate the given subtyping concept statement."
+    },
+    "formal_subtype_concepts_tfd": {
+      "solution": "(* Depends on the specific statement. *)",
+      "explanation": "Evaluate the given subtyping concept statement."
+    },
+    "formal_subtype_concepts_tfe": {
+      "solution": "(* Depends on the specific statement. *)",
+      "explanation": "Evaluate the given subtyping concept statement."
+    },
+    "formal_subtype_concepts_tff": {
+      "solution": "(* Depends on the specific statement. *)",
+      "explanation": "Evaluate the given subtyping concept statement."
+    },
+    "formal_subtype_concepts_tfg": {
+      "solution": "(* Depends on the specific statement. *)",
+      "explanation": "Evaluate the given subtyping concept statement."
+    },
+    "formal_subtype_concepts_tfh": {
+      "solution": "(* Depends on the specific statement. *)",
+      "explanation": "Evaluate the given subtyping concept statement."
+    },
+    "formal_proper_subtypes": {
+      "solution": "(* Prove or disprove that every type other than Top has a proper supertype. *)\n(* True: for any T <> Top, T <: Top is a proper supertype relationship. *)",
+      "explanation": "Every type that is not Top is a proper subtype of Top."
+    },
+    "subtyping_judgements": {
+      "solution": "(* Optional exercise about constructing specific subtyping derivations. *)",
+      "explanation": "Build subtyping derivation trees for given type relationships."
+    },
+    "subtyping_example_1": {
+      "solution": "(* Optional exercise proving a specific subtyping relationship holds. *)",
+      "explanation": "Prove that the given type is a subtype of the target type using the subtyping rules."
+    },
+    "subtyping_example_2": {
+      "solution": "(* Optional exercise proving a specific subtyping relationship holds. *)",
+      "explanation": "Prove the subtyping relationship using the defined rules."
+    }
+  }
+}

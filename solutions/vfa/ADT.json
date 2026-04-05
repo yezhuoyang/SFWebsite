@@ -1,0 +1,50 @@
+{
+  "chapter": "ADT",
+  "volume": "vfa",
+  "exercises": {
+    "NatFunTableExamples": {
+      "solution": "Module NatFunTableExamples.\n  Module NatVal.\n    Definition V := nat.\n    Definition default := 0.\n  End NatVal.\n  Module NatFunTable := FunTable NatVal.\n  Import NatFunTable.\n  Example ex1 : get 0 empty = 0.\n  Proof. reflexivity. Qed.\n  Example ex2 : get 0 (set 0 42 empty) = 42.\n  Proof. reflexivity. Qed.\n  Example ex3 : get 1 (set 0 42 empty) = 0.\n  Proof. reflexivity. Qed.\nEnd NatFunTableExamples.",
+      "explanation": "Define a NatVal module with V=nat and default=0, instantiate FunTable, and write unit tests."
+    },
+    "lists_table": {
+      "solution": "Module ListsTable (VT : ValType) <: Table.\n  Definition V := VT.V.\n  Definition default := VT.default.\n  Definition key := nat.\n  Definition table := list (key * V).\n  Definition empty : table := [].\n  Fixpoint get (k : key) (t : table) : V :=\n    match t with\n    | [] => default\n    | (k', v) :: t' => if k =? k' then v else get k t'\n    end.\n  Definition set (k : key) (v : V) (t : table) : table := (k, v) :: t.\n  Theorem get_empty_default: forall (k : key), get k empty = default.\n  Proof. intros. reflexivity. Qed.\n  Theorem get_set_same: forall (k : key) (v : V) (t : table), get k (set k v t) = v.\n  Proof. intros. simpl. bdestruct (k =? k). reflexivity. lia. Qed.\n  Theorem get_set_other: forall (k k' : key) (v : V) (t : table), k <> k' -> get k' (set k v t) = get k' t.\n  Proof. intros. simpl. bdestruct (k' =? k). lia. reflexivity. Qed.\nEnd ListsTable.\n\n(* Examples: *)\nModule StringListsTableExamples.\n  Module StringListsTable := ListsTable StringVal.\n  Import StringListsTable.\n  Open Scope string_scope.\n  Example ex1 : get 0 empty = \"\". Proof. reflexivity. Qed.\n  Example ex2 : get 0 (set 0 \"A\" empty) = \"A\". Proof. reflexivity. Qed.\n  Example ex3 : get 1 (set 0 \"A\" empty) = \"\". Proof. reflexivity. Qed.\nEnd StringListsTableExamples.",
+      "explanation": "Implement Table using association lists. get scans the list for the key. set prepends a new binding. Proofs use bdestruct."
+    },
+    "list_etable_abs": {
+      "solution": "Module ListETableAbs (VT : ValType) <: ETableAbs.\n  Definition V := VT.V.\n  Definition default := VT.default.\n  Definition key := nat.\n  Definition table := list (key * V).\n  Definition empty : table := [].\n  Fixpoint get (k : key) (t : table) : V :=\n    match t with\n    | [] => default\n    | (k', v) :: t' => if k =? k' then v else get k t'\n    end.\n  Definition set (k : key) (v : V) (t : table) : table := (k, v) :: t.\n  Fixpoint bound (k : key) (t : table) : bool :=\n    match t with\n    | [] => false\n    | (k', _) :: t' => if k =? k' then true else bound k t'\n    end.\n  Definition elements (t : table) : list (key * V) := t.\n  Definition Abs (t : table) : partial_map V := map_of_list t.\n  Definition rep_ok (t : table) : Prop := True.\n  Theorem empty_ok : rep_ok empty. Proof. constructor. Qed.\n  Theorem set_ok : forall (k : key) (v : V) (t : table), rep_ok t -> rep_ok (set k v t). Proof. intros. constructor. Qed.\n  Theorem empty_relate : Abs empty = empty_map. Proof. reflexivity. Qed.\n  Theorem bound_relate : forall (t : table) (k : key), rep_ok t -> map_bound k (Abs t) = bound k t.\n  Proof.\n    intros t k _. unfold Abs, map_bound, bound. induction t as [| [k' v'] t' IH].\n    - simpl. reflexivity.\n    - simpl. bdestruct (k =? k').\n      + subst. rewrite update_eq. simpl. reflexivity.\n      + rewrite update_neq by lia. apply IH.\n  Qed.\n  Theorem lookup_relate : forall (t : table) (k : key), rep_ok t -> map_find default k (Abs t) = get k t.\n  Proof.\n    intros t k _. unfold Abs, map_find, find, get. induction t as [| [k' v'] t' IH].\n    - simpl. unfold empty, t_empty. reflexivity.\n    - simpl. bdestruct (k =? k').\n      + subst. rewrite update_eq. reflexivity.\n      + rewrite update_neq by lia. apply IH.\n  Qed.\n  Theorem insert_relate : forall (t : table) (k : key) (v : V), rep_ok t -> map_update k v (Abs t) = Abs (set k v t). Proof. intros. reflexivity. Qed.\n  Theorem elements_relate : forall (t : table), rep_ok t -> Abs t = map_of_list (elements t). Proof. intros. reflexivity. Qed.\nEnd ListETableAbs.",
+      "explanation": "Implement ETableAbs with association lists. rep_ok is trivially True. Abs is map_of_list. Some relate proofs require more work."
+    },
+    "list_queue": {
+      "solution": "Module ListQueue <: Queue.\n  Definition V := nat.\n  Definition queue := list V.\n  Definition empty : queue := [].\n  Definition is_empty (q : queue) : bool := match q with [] => true | _ => false end.\n  Definition enq (q : queue) (v : V) : queue := q ++ [v].\n  Definition deq (q : queue) : queue := match q with [] => [] | _ :: t => t end.\n  Definition peek (default : V) (q : queue) : V := match q with [] => default | h :: _ => h end.\n  Theorem is_empty_empty : is_empty empty = true. Proof. reflexivity. Qed.\n  Theorem is_empty_nonempty : forall q v, is_empty (enq q v) = false.\n  Proof. intros. unfold enq. destruct q; reflexivity. Qed.\n  Theorem peek_empty : forall d, peek d empty = d. Proof. reflexivity. Qed.\n  Theorem peek_nonempty : forall d q v, peek d (enq q v) = peek v q.\n  Proof. intros. unfold enq, peek. destruct q; reflexivity. Qed.\n  Theorem deq_empty : deq empty = empty. Proof. reflexivity. Qed.\n  Theorem deq_nonempty : forall q v, deq (enq q v) = if is_empty q then q else enq (deq q) v.\n  Proof. intros. unfold enq, deq, is_empty. destruct q; simpl; reflexivity. Qed.\nEnd ListQueue.",
+      "explanation": "Implement Queue using lists where enq appends to the end (linear time). deq and peek operate on the front."
+    },
+    "two_list_queue": {
+      "solution": "Theorem empty_relate : Abs empty = []. Proof. reflexivity. Qed.\nTheorem enq_relate : forall q v, Abs (enq q v) = (Abs q) ++ [v].\nProof. intros [f b] v. unfold Abs, enq. simpl. rewrite app_assoc. reflexivity. Qed.\nTheorem peek_relate : forall d q, peek d q = hd d (Abs q).\nProof. intros d [f b]. unfold Abs, peek. destruct f.\n  - simpl. destruct (rev b); reflexivity.\n  - simpl. reflexivity. Qed.\nTheorem deq_relate : forall q, Abs (deq q) = tl (Abs q).\nProof. intros [f b]. unfold Abs, deq. destruct f.\n  - simpl. destruct (rev b) eqn:E; simpl; try reflexivity.\n    rewrite app_nil_r. reflexivity.\n  - simpl. reflexivity. Qed.",
+      "explanation": "Verify the two-list queue implementation. Each proof unfolds definitions and reasons about the front and back lists."
+    },
+    "a_vector": {
+      "solution": "Proof.\n  apply (exist _ ([1; 2; 3], 3)).\n  reflexivity.\nQed.",
+      "explanation": "Construct a vector with list [1;2;3] and length 3, proving length [1;2;3] = 3 by reflexivity."
+    },
+    "vector_cons_correct": {
+      "solution": "Definition vector_cons {X : Type} (x : X) (v : vector X) : vector X.\nProof.\n  destruct v as [[xs n] Hlen].\n  apply (exist _ (x :: xs, S n)).\n  simpl. rewrite Hlen. reflexivity.\nDefined.\n\nTheorem vector_cons_correct : forall (X : Type) (x : X) (v : vector X),\n    list_of_vector (vector_cons x v) = x :: (list_of_vector v).\nProof.\n  intros. destruct v as [[xs n] Hlen]. simpl. reflexivity.\nQed.",
+      "explanation": "vector_cons prepends x to the list and increments the length. Correctness follows by destructing the vector."
+    },
+    "vector_app_correct": {
+      "solution": "Definition vector_app {X : Type} (v1 v2 : vector X) : vector X.\nProof.\n  destruct v1 as [[xs1 n1] H1].\n  destruct v2 as [[xs2 n2] H2].\n  apply (exist _ (xs1 ++ xs2, n1 + n2)).\n  simpl. rewrite app_length. lia.\nDefined.\n\nTheorem vector_app_correct : forall (X : Type) (v1 v2 : vector X),\n    list_of_vector (vector_app v1 v2) = list_of_vector v1 ++ list_of_vector v2.\nProof.\n  intros. destruct v1 as [[xs1 n1] H1]. destruct v2 as [[xs2 n2] H2].\n  simpl. reflexivity.\nQed.",
+      "explanation": "vector_app concatenates the lists and adds the lengths. Correctness is immediate after destructing."
+    },
+    "elements_spec": {
+      "solution": "(* Optional advanced exercise - manual grade *)",
+      "explanation": "This optional advanced exercise asks to develop a nicely-encapsulated interface exposing the full specification of elements from SearchTree."
+    },
+    "TreeTableModel": {
+      "solution": "(* Manual grade exercise - no code solution needed *)",
+      "explanation": "This exercise asks to implement ETableAbs using the Abs function from SearchTree. The relate proofs are direct applications of SearchTree lemmas."
+    },
+    "ListsETable": {
+      "solution": "(* Manual grade exercise - no code solution needed *)",
+      "explanation": "This advanced exercise asks to implement ETableSubset using association lists with no duplicate keys, enforced by a subset type."
+    }
+  }
+}

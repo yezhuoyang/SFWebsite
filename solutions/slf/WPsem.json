@@ -1,0 +1,42 @@
+{
+  "chapter": "WPsem",
+  "volume": "slf",
+  "exercises": {
+    "wp_conseq_of_wp_ramified": {
+      "solution": "Lemma wp_conseq_of_wp_ramified : forall t Q1 Q2,\n  Q1 ===> Q2 ->\n  wp t Q1 ==> wp t Q2.\nProof using.\n  introv M. xchange (wp_ramified t Q1 Q2). xsimpl.\n  intros v. xchange (M v).\nQed.",
+      "explanation": "Derive wp_conseq from wp_ramified by discharging the wand Q1 --* Q2 using the hypothesis Q1 ===> Q2."
+    },
+    "wp_frame_of_wp_ramified": {
+      "solution": "Lemma wp_frame_of_wp_ramified : forall t H Q,\n  (wp t Q) \\* H ==> wp t (Q \\*+ H).\nProof using.\n  intros. xchange (wp_ramified t Q (Q \\*+ H)). xsimpl.\n  intros v. xsimpl.\nQed.",
+      "explanation": "Derive wp_frame from wp_ramified: the wand Q --* (Q *+ H) is satisfied by H."
+    },
+    "wp_if'": {
+      "solution": "Lemma wp_if' : forall b t1 t2 Q,\n  (if b then wp t1 Q else wp t2 Q) ==> wp (trm_if b t1 t2) Q.\nProof using.\n  intros. applys wp_if.\nQed.",
+      "explanation": "Alternative form of wp_if using Coq's if-then-else directly."
+    },
+    "wp_conseq_frame_trans": {
+      "solution": "Lemma wp_conseq_frame_trans : forall t H H1 H2 Q1 Q,\n  H ==> H1 \\* H2 ->\n  H1 ==> wp t Q1 ->\n  Q1 \\*+ H2 ===> Q ->\n  H ==> wp t Q.\nProof using.\n  introv WH WH1 WQ. xchange WH. xchange WH1.\n  xchange wp_frame. applys wp_conseq WQ.\nQed.",
+      "explanation": "Combine consequence and frame for wp: split H into H1*H2, use H1 for wp, frame H2, then adjust postcondition."
+    },
+    "wp_conseq_frame": {
+      "solution": "Lemma wp_conseq_frame : forall t H Q1 Q2,\n  Q1 \\*+ H ===> Q2 ->\n  (wp t Q1) \\* H ==> wp t Q2.\nProof using.\n  introv M. xchange wp_frame. applys wp_conseq M.\nQed.",
+      "explanation": "Frame then consequence for wp: frame H into the wp, then use consequence to adjust the postcondition."
+    },
+    "wp_equiv_1": {
+      "solution": "Lemma wp_equiv_1 : forall t H Q,\n  H ==> wp_1 t Q <-> triple t H Q.\nProof using.\n  intros. unfold wp_1. split.\n  { intros M. rewrite wp_equiv. applys M. }\n  { intros M. rewrite wp_equiv in M. applys M. }\nQed.",
+      "explanation": "wp_1 (defined as wp) satisfies the wp equivalence characterization."
+    },
+    "wp_equiv_2": {
+      "solution": "Lemma wp_equiv_2 : forall t H Q,\n  H ==> wp_2 t Q <-> triple t H Q.\nProof using.\n  intros. unfold wp_2. split.\n  { intros M. rewrite wp_equiv. xchange M. xpull. intros H' M'.\n    rewrite wp_equiv in M'. applys M'. }\n  { intros M. xsimpl H. rewrite wp_equiv. applys M. }\nQed.",
+      "explanation": "wp_2 (defined existentially) also satisfies the wp equivalence, relating existential quantification to entailment."
+    },
+    "wp_equiv_iff_wp_pre_and_wp_weakest": {
+      "solution": "Lemma wp_equiv_iff_wp_pre_and_wp_weakest : forall wp',\n  (forall t H Q, H ==> wp' t Q <-> triple t H Q)\n  <->\n  ((forall t Q, triple t (wp' t Q) Q)\n   /\\ (forall t H Q, triple t H Q -> H ==> wp' t Q)).\nProof using.\n  intros. split.\n  { intros M. split.\n    { intros t Q. rewrite <- M. xsimpl. }\n    { intros t H Q N. rewrite M. applys N. } }\n  { intros (M1&M2). intros t H Q. split.\n    { intros N. applys triple_conseq (M1 t Q). { applys N. } { xsimpl. } }\n    { intros N. applys M2 N. } }\nQed.",
+      "explanation": "The wp equivalence property is equivalent to wp being both a valid precondition (pre) and the weakest precondition (weakest)."
+    },
+    "wp_incr": {
+      "solution": "Lemma wp_incr : forall (p:loc) (n:int),\n  (p ~~> n) ==> wp (trm_app (trm_app (trm_val val_incr) p) (trm_val val_unit))\n    (fun _ => p ~~> (n+1)).\nProof using.\n  intros. rewrite wp_equiv. applys triple_incr.\nQed.",
+      "explanation": "Express the specification of incr in wp-style by converting from the triple form using wp_equiv."
+    }
+  }
+}

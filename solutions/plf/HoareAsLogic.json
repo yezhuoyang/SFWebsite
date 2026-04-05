@@ -1,0 +1,30 @@
+{
+  "chapter": "HoareAsLogic",
+  "volume": "plf",
+  "exercises": {
+    "provable_true_post": {
+      "solution": "Theorem provable_true_post : forall c P,\n    derivable P c True.\nProof.\n  induction c; intros P.\n  - (* skip *)\n    eapply H_Consequence_pre.\n    + apply H_Skip.\n    + intros st _. reflexivity.\n  - (* asgn *)\n    eapply H_Consequence_pre.\n    + apply H_Asgn.\n    + intros st _. unfold assertion_sub. reflexivity.\n  - (* seq *)\n    eapply H_Seq.\n    + apply IHc1.\n    + apply IHc2.\n  - (* if *)\n    apply H_If.\n    + apply IHc1.\n    + apply IHc2.\n  - (* while *)\n    eapply H_Consequence_post.\n    + apply H_While. apply IHc.\n    + intros st [_ _]. reflexivity.\nQed.",
+      "explanation": "By induction on c. True as postcondition is trivially satisfiable. For while, any invariant works since the postcondition is True."
+    },
+    "provable_false_pre": {
+      "solution": "Theorem provable_false_pre : forall c Q,\n    derivable False c Q.\nProof.\n  induction c; intros Q.\n  - (* skip *)\n    eapply H_Consequence_pre.\n    + apply H_Skip.\n    + intros st H. inversion H.\n  - (* asgn *)\n    eapply H_Consequence_pre.\n    + apply H_Asgn.\n    + intros st H. inversion H.\n  - (* seq *)\n    eapply H_Seq.\n    + apply IHc1.\n    + eapply H_Consequence_pre.\n      * apply IHc2.\n      * intros st _. exact I.\n  - (* if *)\n    apply H_If.\n    + eapply H_Consequence_pre.\n      * apply IHc1.\n      * intros st [H _]. inversion H.\n    + eapply H_Consequence_pre.\n      * apply IHc2.\n      * intros st [H _]. inversion H.\n  - (* while *)\n    eapply H_Consequence_post.\n    + apply H_While.\n      eapply H_Consequence_pre.\n      * apply IHc.\n      * intros st [H _]. inversion H.\n    + intros st [H _]. inversion H.\nQed.",
+      "explanation": "By induction on c. False as precondition makes all obligations vacuously true since we can never have False as a hypothesis."
+    },
+    "hoare_sound": {
+      "solution": "Theorem hoare_sound : forall P c Q,\n  derivable P c Q -> valid P c Q.\nProof.\n  intros P c Q H. induction H.\n  - apply hoare_skip.\n  - apply hoare_asgn.\n  - eapply hoare_seq; eassumption.\n  - apply hoare_if; assumption.\n  - apply hoare_while. assumption.\n  - eapply hoare_consequence_pre; eassumption.\n  - eapply hoare_consequence_post; eassumption.\nQed.",
+      "explanation": "By induction on the derivation. Each constructor of derivable corresponds to a proven Hoare logic theorem."
+    },
+    "wp_seq": {
+      "solution": "Lemma wp_seq : forall P Q c1 c2,\n    derivable P c1 (wp c2 Q) -> derivable (wp c2 Q) c2 Q -> derivable P <{c1; c2}> Q.\nProof.\n  intros P Q c1 c2 H1 H2.\n  eapply H_Seq; eassumption.\nQed.",
+      "explanation": "Simply apply the sequencing rule with wp c2 Q as the intermediate assertion."
+    },
+    "wp_invariant": {
+      "solution": "Lemma wp_invariant : forall b c Q,\n    valid ({{$(wp <{while b do c end}> Q) /\\ b}}) c (wp <{while b do c end}> Q).\nProof.\n  intros b c Q st st' Hc [Hwp Hb].\n  unfold wp in *. intros s' Hwhile.\n  apply Hwp. eapply E_WhileTrue; eassumption.\nQed.",
+      "explanation": "If the wp holds before the body and b is true, after executing the body we can still complete the while loop, so wp is preserved."
+    },
+    "hoare_complete": {
+      "solution": "Theorem hoare_complete: forall P c Q,\n  valid P c Q -> derivable P c Q.\nProof.\n  unfold valid. intros P c. generalize dependent P.\n  induction c; intros P Q HT.\n  - (* skip *)\n    eapply H_Consequence_pre.\n    + apply H_Skip.\n    + intros st HP. apply (HT st st). apply E_Skip. assumption.\n  - (* asgn *)\n    eapply H_Consequence_pre.\n    + apply H_Asgn.\n    + intros st HP. unfold assertion_sub.\n      apply (HT st (x !-> aeval st a ; st)).\n      apply E_Asgn. reflexivity. assumption.\n  - (* seq *)\n    apply wp_seq.\n    + apply IHc1. intros st st' Hc1 HP.\n      unfold wp. intros s' Hc2.\n      apply (HT st s'). eapply E_Seq; eassumption. assumption.\n    + apply IHc2. apply wp_is_precondition.\n  - (* if *)\n    apply H_If.\n    + apply IHc1. intros st st' Hc1 [HP Hb].\n      apply (HT st st'). apply E_IfTrue; assumption. assumption.\n    + apply IHc2. intros st st' Hc2 [HP Hb].\n      apply (HT st st'). apply E_IfFalse.\n      * unfold bassertion in Hb. destruct (beval st b); try reflexivity. exfalso. apply Hb. reflexivity.\n      * assumption.\n      * assumption.\n  - (* while *)\n    eapply H_Consequence.\n    + apply H_While.\n      apply IHc. apply wp_invariant.\n    + intros st HP. unfold wp. intros s' Hwhile. apply (HT st s'); assumption.\n    + intros st [Hwp Hb]. unfold wp in Hwp.\n      apply Hwp. apply E_WhileFalse.\n      unfold bassertion in Hb. destruct (beval st b); try reflexivity. exfalso. apply Hb. reflexivity.\nQed.",
+      "explanation": "By induction on c. Use wp as the intermediate assertion for seq and as the loop invariant for while. Each case constructs the appropriate derivation using the IH."
+    }
+  }
+}

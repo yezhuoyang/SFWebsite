@@ -35,6 +35,8 @@ class ChapterOut(BaseModel):
     has_test_file: bool
     completed_count: int = 0
     total_points_earned: float = 0.0
+    summary: str = ""
+    line_count: int = 0
 
     class Config:
         from_attributes = True
@@ -135,6 +137,12 @@ class TutorChatRequest(BaseModel):
     volume_id: str | None = None
     chapter_name: str | None = None
     exercise_name: str | None = None
+    # Rich context from the live Coq session
+    student_code: str | None = None
+    proof_state_text: str | None = None
+    diagnostics_text: str | None = None
+    processed_lines: int | None = None
+    # Legacy fields (kept for compatibility)
     current_goals: str | None = None
     current_error: str | None = None
     current_code: str | None = None
