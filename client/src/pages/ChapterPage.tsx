@@ -1100,6 +1100,30 @@ export default function ChapterPage() {
             title="Reset to original code">
             Reset
           </button>
+          <button onClick={() => {
+              // Find the active editor with a selection
+              for (const [blockId, editor] of editorInstancesRef.current.entries()) {
+                if (!editor.hasTextFocus()) continue;
+                const sel = editor.getSelection();
+                if (!sel || sel.isEmpty()) continue;
+                const domNode = editor.getDomNode();
+                const rect = domNode?.getBoundingClientRect();
+                setAnnotationPopup({
+                  mode: 'create', blockId,
+                  startLine: sel.startLineNumber, startCol: sel.startColumn,
+                  endLine: sel.endLineNumber, endCol: sel.endColumn,
+                  x: rect ? rect.left + rect.width / 2 : 400,
+                  y: rect ? rect.top + 60 : 200,
+                });
+                setAnnotationText('');
+                return;
+              }
+              alert('Select some text in a code block first, then click Annotate.');
+            }}
+            className="px-3 py-1.5 text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-700 rounded font-medium border border-yellow-300"
+            title="Add annotation to selected text">
+            Annotate
+          </button>
           <button onClick={() => setTocOpen(!tocOpen)}
             className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded font-medium border border-gray-200">
             {tocOpen ? 'Hide TOC' : 'TOC'}
