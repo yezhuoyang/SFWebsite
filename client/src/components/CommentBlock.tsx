@@ -58,14 +58,6 @@ export default function CommentBlock({ content, annotations = [], onAnnotationCl
       return <>{result}</>;
     }
     if (Array.isArray(node)) return node.map((n, i) => <span key={i}>{highlightAnnotations(n)}</span>);
-    if (node && typeof node === 'object' && 'props' in (node as any)) {
-      const el = node as React.ReactElement;
-      if (el.props.children) {
-        const newChildren = highlightAnnotations(el.props.children);
-        // Clone preserving key
-        return { ...el, props: { ...el.props, children: newChildren } };
-      }
-    }
     return node;
   };
 
