@@ -558,6 +558,29 @@ export default function ChapterPage() {
   };
 
   // Run to end of a specific block
+  /** Compute the 0-indexed line range of a block in the Coq document
+   * (which may have auto-injected Admitted. lines shifting positions). */
+  const getCoqDocEndLine = useCallback((targetBlockId: number): number => {
+    let coqLine = 0; // 0-indexed cumulative line counter
+    for (const b of blocks) {
+      const content = blockContentsRef.current.get(b.id) || b.content;
+      const lineCount = content.split('\n').length;
+      if (b.id === targetBlockId) {
+        return coqLine + lineCount - 1; // last line of this block (0-indexed)
+      }
+      coqLine += lineCount;
+      // Account for auto-injected Admitted. lines (mirrors rebuildDocument(true))
+      if (b.kind === 'exercise') {
+        const stripped = content.replace(/\(\*[\s\S]*?\*\)/g, '');
+        const starts = (stripped.match(/\bProof\b/g) || []).length;
+        const ends = (stripped.match(/\b(?:Qed|Admitted|Defined|Abort)\s*\./g) || []).length;
+        const unclosed = starts - ends;
+        if (unclosed > 0) coqLine += unclosed;
+      }
+    }
+    return coqLine;
+  }, [blocks]);
+
   const runToBlock = useCallback((blockId: number) => {
     const block = blocks.find(b => b.id === blockId);
     if (!block) return;
@@ -569,22 +592,9 @@ export default function ChapterPage() {
     if (editHistoryRef.current.length > 100) editHistoryRef.current.shift();
     setActivityVersion(v => v + 1);
 
-    // Find the PREVIOUS block's end to use as start — run only THIS block
-    const blockIdx = blocks.findIndex(b => b.id === blockId);
-    // Find the next block's start line (dynamic) — that's where this block ends
-    let endLine: number;
-    if (blockIdx + 1 < blocks.length) {
-      const nextBlockStart = blockStartLines.get(blocks[blockIdx + 1].id) || blocks[blockIdx + 1].line_start;
-      endLine = nextBlockStart - 2; // -1 for 0-indexed, -1 for the gap between blocks
-    } else {
-      // Last block — use current content to compute end
-      const content = blockContentsRef.current.get(blockId) || block.content;
-      const startLine = blockStartLines.get(blockId) || block.line_start;
-      endLine = startLine + content.split('\n').length - 2; // 0-indexed
-    }
-
+    const endLine = getCoqDocEndLine(blockId);
     coqActions.interpretToPoint(Math.max(0, endLine), 9999);
-  }, [blocks, coqActions, blockStartLines]);
+  }, [blocks, coqActions, getCoqDocEndLine]);
 
   // Determine if a block has any processed range
   const isBlockProcessed = useCallback((blockId: number): 'none' | 'partial' | 'full' => {
@@ -1072,7 +1082,7 @@ export default function ChapterPage() {
                             <button onClick={(e) => { e.stopPropagation(); /* cursor movement disabled */ syncThenDo(() => runToBlock(block.id)); }}
                               disabled={!coqState.connected}
                               className="text-[10px] text-blue-500 hover:text-blue-700 disabled:opacity-30 font-medium">
-                              &#9654; run
+                              &#9654; run {(() => { const s = blockStartLines.get(block.id); if (!s) return ''; const c = blockContentsRef.current.get(block.id) || block.content; return `L${s}-${s + c.split('\n').length - 1}`; })()}
                             </button>
                           )}
                           {status === 'full' && (
@@ -1141,7 +1151,7 @@ export default function ChapterPage() {
                               <button onClick={(e) => { e.stopPropagation(); /* cursor movement disabled */ syncThenDo(() => runToBlock(block.id)); }}
                                 disabled={!coqState.connected}
                                 className="text-[10px] text-blue-500 hover:text-blue-700 disabled:opacity-30 font-medium">
-                                &#9654; run
+                                &#9654; run {(() => { const s = blockStartLines.get(block.id); if (!s) return ''; const c = blockContentsRef.current.get(block.id) || block.content; return `L${s}-${s + c.split('\n').length - 1}`; })()}
                               </button>
                             )}
                             {status === 'full' && (
