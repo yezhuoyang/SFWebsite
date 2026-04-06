@@ -593,6 +593,10 @@ export default function ChapterPage() {
     setActivityVersion(v => v + 1);
 
     const endLine = getCoqDocEndLine(blockId);
+    const displayStart = blockStartLines.get(blockId) || block.line_start;
+    const content = blockContentsRef.current.get(blockId) || block.content;
+    const displayEnd = displayStart + content.split('\n').length - 1;
+    console.log(`[runToBlock] block=${blockId} display=L${displayStart}-${displayEnd} coqEndLine=${endLine} (0-indexed)`);
     coqActions.interpretToPoint(Math.max(0, endLine), 9999);
   }, [blocks, coqActions, getCoqDocEndLine]);
 
