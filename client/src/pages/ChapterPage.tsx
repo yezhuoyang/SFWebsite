@@ -48,6 +48,13 @@ export default function ChapterPage() {
   const tutorBoxRef = useRef<HTMLDivElement>(null);
   const tutorChatRef = useRef<TutorChatHandle>(null);
   const [celebration, setCelebration] = useState<{ names: string[] } | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handler);
+    return () => document.removeEventListener('fullscreenchange', handler);
+  }, []);
 
   const blockContentsRef = useRef<Map<number, string>>(new Map());
   const blockRefsMap = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -1003,6 +1010,17 @@ export default function ChapterPage() {
           <button onClick={() => setTocOpen(!tocOpen)}
             className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded font-medium border border-gray-200">
             {tocOpen ? 'Hide TOC' : 'TOC'}
+          </button>
+          <button onClick={() => {
+              if (document.fullscreenElement) {
+                document.exitFullscreen();
+              } else {
+                document.documentElement.requestFullscreen();
+              }
+            }}
+            className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded font-medium border border-gray-200"
+            title="Toggle fullscreen (presenting mode)">
+            {isFullscreen ? 'Exit Present' : 'Present'}
           </button>
 
           <span className={`w-2 h-2 rounded-full ${coqState.connected ? 'bg-green-500' : 'bg-gray-300'}`}
