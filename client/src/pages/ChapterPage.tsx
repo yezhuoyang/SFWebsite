@@ -204,25 +204,28 @@ export default function ChapterPage() {
       if (editHistoryRef.current.length > 100) editHistoryRef.current.shift();
       setActivityVersion(v => v + 1);
     };
+    // Use a wrapper that always reads the latest ref values
+    const doStep = (desc: string, action: () => void) => {
+      logStep(desc);
+      const sync = syncThenDoRef.current;
+      if (sync) { sync(action); } else { action(); }
+    };
     editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.DownArrow, () => {
-      logStep('Alt+Down: step forward');
-      syncThenDoRef.current?.(() => coqActionsRef.current?.stepForward());
+      doStep('Alt+Down: step forward', () => coqActionsRef.current!.stepForward());
     });
     editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.UpArrow, () => {
-      logStep('Alt+Up: step backward');
-      syncThenDoRef.current?.(() => coqActionsRef.current?.stepBackward());
+      doStep('Alt+Up: step backward', () => coqActionsRef.current!.stepBackward());
     });
     editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.RightArrow, () => {
       const pos = editor.getPosition();
       if (pos) {
         const absLine = (blockStartLinesRef.current.get(blockId) || 1) + pos.lineNumber - 1 - 1;
-        logStep(`Alt+Right: interpret to cursor (line ${absLine + 1})`);
-        syncThenDoRef.current?.(() => coqActionsRef.current?.interpretToPoint(absLine, 9999));
+        doStep(`Alt+Right: interpret to cursor (line ${absLine + 1})`, () =>
+          coqActionsRef.current!.interpretToPoint(absLine, 9999));
       }
     });
     editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.End, () => {
-      logStep('Alt+End: interpret to end');
-      syncThenDoRef.current?.(() => coqActionsRef.current?.interpretToEnd());
+      doStep('Alt+End: interpret to end', () => coqActionsRef.current!.interpretToEnd());
     });
 
     // Auto-resize
@@ -417,10 +420,10 @@ export default function ChapterPage() {
     action();
   }, [rebuildDocument, coqActions]);
 
-  // Keep refs in sync so editor command closures always see current values
-  useEffect(() => { blockStartLinesRef.current = blockStartLines; }, [blockStartLines]);
-  useEffect(() => { coqActionsRef.current = coqActions; }, [coqActions]);
-  useEffect(() => { syncThenDoRef.current = syncThenDo; }, [syncThenDo]);
+  // Keep refs in sync — use assignment during render (not useEffect) for immediate availability
+  blockStartLinesRef.current = blockStartLines;
+  coqActionsRef.current = coqActions;
+  syncThenDoRef.current = syncThenDo;
 
   // Save the rebuilt document, auto-grade, and show results
   const handleSave = useCallback(async () => {
