@@ -241,59 +241,45 @@ export default function ChapterPage() {
     editor.onDidContentSizeChange(updateHeight);
     setTimeout(updateHeight, 50);
 
-    // Track content changes and debounce-sync to vscoqtop
+    // Track content changes — minimal work on each keystroke for fast typing
     editor.onDidChangeModelContent((ev: any) => {
       const newContent = editor.getModel()?.getValue() || '';
       blockContentsRef.current.set(blockId, newContent);
 
-      // Record edit in history with granular detail
-      // ev.changes is an array of { range, text, rangeLength }
-      // - text is what was inserted (empty if pure delete)
-      // - rangeLength is how many chars were removed
+      // Record edit in history — lightweight, no React state update
       try {
-        for (const change of (ev.changes || [])) {
+        const change = ev.changes?.[0];
+        if (change) {
           const localLine = change.range?.startLineNumber || 0;
           const absLine = (blockStartLinesRef.current.get(blockId) || 1) + localLine - 1;
           const col = change.range?.startColumn || 0;
           const inserted = change.text || '';
           const removed = change.rangeLength || 0;
-          let description: string;
-          if (inserted && removed > 0) {
-            const shown = inserted.length > 20 ? inserted.slice(0, 20) + '\u2026' : inserted;
-            description = `Replaced ${removed} char${removed>1?'s':''} with '${shown.replace(/\n/g, '\u21B5')}' at line ${absLine}, col ${col}`;
-          } else if (inserted) {
-            const shown = inserted.length > 20 ? inserted.slice(0, 20) + '\u2026' : inserted;
-            description = `Added '${shown.replace(/\n/g, '\u21B5')}' at line ${absLine}, col ${col}`;
-          } else if (removed > 0) {
-            description = `Deleted ${removed} char${removed>1?'s':''} at line ${absLine}, col ${col}`;
-          } else {
-            description = `Edit at line ${absLine}, col ${col}`;
-          }
-          editHistoryRef.current.push({
-            blockId, timestamp: Date.now(), action: 'edit', description,
-          });
+          const description = inserted
+            ? `Added '${(inserted.length > 15 ? inserted.slice(0, 15) + '\u2026' : inserted).replace(/\n/g, '\u21B5')}' at line ${absLine}, col ${col}`
+            : removed > 0
+            ? `Deleted ${removed} char${removed > 1 ? 's' : ''} at line ${absLine}, col ${col}`
+            : `Edit at line ${absLine}`;
+          editHistoryRef.current.push({ blockId, timestamp: Date.now(), action: 'edit', description });
+          if (editHistoryRef.current.length > 100) editHistoryRef.current.shift();
         }
-        if (editHistoryRef.current.length > 100) {
-          editHistoryRef.current.splice(0, editHistoryRef.current.length - 100);
-        }
-        setActivityVersion(v => v + 1);
       } catch {}
+      // NOTE: no setActivityVersion here — History tab reads from ref directly
 
-      // Recompute line numbers — all subsequent blocks shift when this block grows/shrinks
+      // Recompute line numbers — debounced heavily (only matters for display)
       recomputeStartLines();
 
-      // Mark this block and all subsequent blocks as dirty.
-      // Skip the update if the set already contains this block (common case during typing).
-      setDirtyBlockIds(prev => {
-        if (prev.has(blockId)) return prev;  // already marked dirty, no-op
-        const next = new Set(prev);
-        for (const b of blocks) {
-          if (b.id >= blockId && (b.kind === 'code' || b.kind === 'exercise')) {
-            next.add(b.id);
+      // Mark dirty — no immediate React state update if already dirty
+      if (!dirtyBlockIds.has(blockId)) {
+        setDirtyBlockIds(prev => {
+          if (prev.has(blockId)) return prev;
+          const next = new Set(prev);
+          for (const b of blocks) {
+            if (b.id >= blockId && (b.kind === 'code' || b.kind === 'exercise')) next.add(b.id);
           }
-        }
-        return next;
-      });
+          return next;
+        });
+      }
 
       // Mark that the document is dirty — do NOT send didChange here.
       // Only send when user explicitly steps (Alt+Down/Up, Run).
@@ -342,7 +328,7 @@ export default function ChapterPage() {
           charBefore: charBefore === ' ' ? '\u00B7' : charBefore,
           charAfter: charAfter === ' ' ? '\u00B7' : charAfter,
         });
-      }, 200);
+      }, 500);
     };
     editor.onDidChangeCursorPosition(updateCursor);
     editor.onDidFocusEditorText(updateCursor);
@@ -393,7 +379,7 @@ export default function ChapterPage() {
     recomputeThrottleRef.current = setTimeout(() => {
       recomputeThrottleRef.current = null;
       recomputeStartLinesRaw();
-    }, 150);
+    }, 500);
   }, [recomputeStartLinesRaw]);
 
   // Initial compute when blocks load (immediate, not throttled)
