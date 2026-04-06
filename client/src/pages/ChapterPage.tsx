@@ -426,21 +426,20 @@ export default function ChapterPage() {
     prevStartLinesRef.current = new Map(blockStartLines);
   }, [blockStartLines]);
 
-  /** Flush any pending edits and then run an action.
-   * If there was a pending edit, we need a short delay for vscoqtop
-   * to process the didChange before we send the step command. */
+  /** Always sync the document before stepping.
+   * This ensures vscoqtop has the latest text before any step command. */
   const syncThenDo = useCallback((action: () => void) => {
+    // Cancel any pending debounce
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
-      const newDoc = rebuildDocument();
-      coqActions.sendChange(newDoc);
-      originalDocRef.current = newDoc;
-      // Wait for vscoqtop to process the document change
-      setTimeout(action, 300);
-    } else {
-      action();
     }
+    // Always send the current document state
+    const newDoc = rebuildDocument();
+    coqActions.sendChange(newDoc);
+    originalDocRef.current = newDoc;
+    // Give vscoqtop time to process the didChange before stepping
+    setTimeout(action, 350);
   }, [rebuildDocument, coqActions]);
 
   // Keep refs in sync — use assignment during render (not useEffect) for immediate availability
