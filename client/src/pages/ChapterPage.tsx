@@ -295,15 +295,17 @@ export default function ChapterPage() {
         return next;
       });
 
-      // Debounce: rebuild full document and send change to vscoqtop.
-      // Do NOT auto-run interpretToEnd — it causes cursor jumps and stale errors.
-      // The user will explicitly step or run to recheck.
+      // Debounce: rebuild full document, send change, then re-check.
+      // interpretToEnd is needed so vscoqtop re-evaluates after edits
+      // (otherwise errors persist and Alt+Down stops working).
+      // Cursor won't jump because we skip updateOptions on focused editors.
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
         const newDoc = rebuildDocument();
         coqActions.sendChange(newDoc);
         originalDocRef.current = newDoc;
-      }, 400);
+        coqActions.interpretToEnd();
+      }, 600);
     });
 
     editor.onDidFocusEditorText(() => {
