@@ -60,6 +60,8 @@ export default function ChapterPage() {
     x: number; y: number;
   } | null>(null);
   const [annotationText, setAnnotationText] = useState('');
+  const [annotationColor, setAnnotationColor] = useState('#f59e0b');
+  const annotationPopupRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = () => setIsFullscreen(!!document.fullscreenElement);
@@ -516,59 +518,120 @@ export default function ChapterPage() {
     prevStartLinesRef.current = new Map(blockStartLines);
   }, [blockStartLines]);
 
-  // Apply annotation underline decorations to editors
-  const annotationDecorationsRef = useRef<Map<number, string[]>>(new Map());
+  // DOM-based annotation highlighting — works on ALL content (prose, headers, code)
+  // Runs after render: finds text matching annotation.selectedText in the block's DOM,
+  // wraps it with a <mark> element with dashed underline.
   useEffect(() => {
-    if (!monacoRef.current) return;
-    editorInstancesRef.current.forEach((editor, blockId) => {
-      const blockAnnotations = annotations.filter(a => a.blockId === blockId);
-      const decorations = blockAnnotations.map(a => ({
-        range: new monacoRef.current.Range(a.startLine, a.startCol, a.endLine, a.endCol),
-        options: {
-          inlineClassName: 'annotation-underline',
-          hoverMessage: { value: `**Note:** ${a.text}` },
-          glyphMarginClassName: 'annotation-glyph',
-        },
-      }));
-      const oldIds = annotationDecorationsRef.current.get(blockId) || [];
-      const newIds = editor.deltaDecorations(oldIds, decorations);
-      annotationDecorationsRef.current.set(blockId, newIds);
+    // Clear previous marks
+    document.querySelectorAll('mark[data-ann-id]').forEach(m => {
+      const parent = m.parentNode;
+      if (parent) {
+        parent.replaceChild(document.createTextNode(m.textContent || ''), m);
+        parent.normalize();
+      }
     });
+
+    // Apply Monaco decorations for code blocks
+    if (monacoRef.current) {
+      const annotationDecors = annotationDecorationsRef.current;
+      editorInstancesRef.current.forEach((editor, blockId) => {
+        const blockAnns = annotations.filter(a => a.blockId === blockId && a.startLine > 0);
+        const decorations = blockAnns.map(a => ({
+          range: new monacoRef.current.Range(a.startLine, a.startCol, a.endLine, a.endCol),
+          options: {
+            inlineClassName: 'annotation-underline',
+            hoverMessage: { value: `**Note:** ${a.text}` },
+          },
+        }));
+        const oldIds = annotationDecors.get(blockId) || [];
+        const newIds = editor.deltaDecorations(oldIds, decorations);
+        annotationDecors.set(blockId, newIds);
+      });
+    }
+
+    // Apply DOM marks for non-code blocks (comments, headers)
+    for (const ann of annotations) {
+      if (ann.startLine > 0) continue; // handled by Monaco above
+      if (!ann.selectedText) continue;
+      const blockEl = document.querySelector(`[data-block-id="${ann.blockId}"]`);
+      if (!blockEl) continue;
+      const walker = document.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT);
+      let node: Text | null;
+      let found = false;
+      while ((node = walker.nextNode() as Text | null) && !found) {
+        const idx = (node.textContent || '').indexOf(ann.selectedText);
+        if (idx === -1) continue;
+        found = true;
+        const range = document.createRange();
+        range.setStart(node, idx);
+        range.setEnd(node, idx + ann.selectedText.length);
+        const mark = document.createElement('mark');
+        mark.setAttribute('data-ann-id', ann.id);
+        mark.style.borderBottom = `2px dashed ${ann.color || '#f59e0b'}`;
+        mark.style.backgroundColor = `${ann.color || '#f59e0b'}15`;
+        mark.style.cursor = 'pointer';
+        mark.style.textDecoration = 'none';
+        mark.style.color = 'inherit';
+        mark.title = `Note: ${ann.text}`;
+        range.surroundContents(mark);
+      }
+    }
   }, [annotations, blocks]);
 
-  // Click handler for annotation underlines — show popup on click
+  // Click handler for annotation marks
+  const annotationDecorationsRef = useRef<Map<number, string[]>>(new Map());
   useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
+    const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.classList.contains('annotation-underline')) return;
-      // Find which editor/block was clicked
-      for (const [blockId, editor] of editorInstancesRef.current.entries()) {
-        const domNode = editor.getDomNode();
-        if (domNode && domNode.contains(target)) {
-          const pos = editor.getTargetAtClientPoint(e.clientX, e.clientY);
-          if (!pos?.position) break;
-          const line = pos.position.lineNumber;
-          const col = pos.position.column;
-          const ann = annotations.find(a =>
-            a.blockId === blockId &&
-            (a.startLine < line || (a.startLine === line && a.startCol <= col)) &&
-            (a.endLine > line || (a.endLine === line && a.endCol >= col))
-          );
-          if (ann) {
-            setAnnotationPopup({
-              mode: 'view', annotation: ann,
-              blockId, startLine: ann.startLine, startCol: ann.startCol,
-              endLine: ann.endLine, endCol: ann.endCol,
-              x: e.clientX, y: e.clientY,
-            });
-            setAnnotationText(ann.text);
+      // DOM marks
+      const mark = target.closest('mark[data-ann-id]') as HTMLElement | null;
+      if (mark) {
+        const annId = mark.getAttribute('data-ann-id');
+        const ann = annotations.find(a => a.id === annId);
+        if (ann) {
+          e.stopPropagation();
+          setAnnotationPopup({
+            mode: 'view', annotation: ann, blockId: ann.blockId,
+            startLine: 0, startCol: 0, endLine: 0, endCol: 0,
+            x: e.clientX, y: e.clientY,
+          });
+          setAnnotationText(ann.text);
+          setAnnotationColor(ann.color || '#f59e0b');
+        }
+        return;
+      }
+      // Monaco annotation underlines
+      if (target.classList.contains('annotation-underline')) {
+        for (const [blockId, editor] of editorInstancesRef.current.entries()) {
+          const domNode = editor.getDomNode();
+          if (domNode && domNode.contains(target)) {
+            const pos = editor.getTargetAtClientPoint(e.clientX, e.clientY);
+            if (!pos?.position) break;
+            const line = pos.position.lineNumber;
+            const col = pos.position.column;
+            const ann = annotations.find(a =>
+              a.blockId === blockId &&
+              (a.startLine < line || (a.startLine === line && a.startCol <= col)) &&
+              (a.endLine > line || (a.endLine === line && a.endCol >= col))
+            );
+            if (ann) {
+              e.stopPropagation();
+              setAnnotationPopup({
+                mode: 'view', annotation: ann, blockId,
+                startLine: ann.startLine, startCol: ann.startCol,
+                endLine: ann.endLine, endCol: ann.endCol,
+                x: e.clientX, y: e.clientY,
+              });
+              setAnnotationText(ann.text);
+              setAnnotationColor(ann.color || '#f59e0b');
+            }
+            break;
           }
-          break;
         }
       }
     };
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
+    document.addEventListener('click', handler, true);
+    return () => document.removeEventListener('click', handler, true);
   }, [annotations]);
 
   /** Sync document if dirty, then run action.
@@ -1061,36 +1124,6 @@ export default function ChapterPage() {
     document.addEventListener('pointerup', onUp);
   }, []);
 
-  /** Highlight annotation matches in plain text (headers, etc.) */
-  const highlightTextAnnotations = (text: string, blockId: number): React.ReactNode => {
-    const blockAnns = annotations.filter(a => a.blockId === blockId && a.selectedText);
-    if (blockAnns.length === 0) return text;
-    let parts: React.ReactNode[] = [text];
-    for (const ann of blockAnns) {
-      const next: React.ReactNode[] = [];
-      for (const part of parts) {
-        if (typeof part !== 'string') { next.push(part); continue; }
-        const idx = part.indexOf(ann.selectedText);
-        if (idx === -1) { next.push(part); continue; }
-        if (idx > 0) next.push(part.slice(0, idx));
-        next.push(
-          <span key={ann.id} className="annotation-underline cursor-pointer"
-            title={`Note: ${ann.text}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              setAnnotationPopup({ mode: 'view', annotation: ann, blockId, startLine: 0, startCol: 0, endLine: 0, endCol: 0, x: e.clientX, y: e.clientY });
-              setAnnotationText(ann.text);
-            }}>
-            {ann.selectedText}
-          </span>
-        );
-        if (idx + ann.selectedText.length < part.length) next.push(part.slice(idx + ann.selectedText.length));
-      }
-      parts = next;
-    }
-    return <>{parts}</>;
-  };
-
   return (
     <div className="h-screen flex flex-col bg-white" style={{ fontFamily: "'Open Sans', sans-serif" }}>
       {/* Top bar */}
@@ -1357,23 +1390,17 @@ export default function ChapterPage() {
                 <div key={block.id} data-block-id={block.id} ref={el => { if (el) blockRefsMap.current.set(block.id, el); }}>
                   {/* Section header */}
                   {block.kind === 'section_header' && (
-                    <div className="sf-section-header">{highlightTextAnnotations(block.title || '', block.id)}</div>
+                    <div className="sf-section-header">{block.title}</div>
                   )}
 
                   {/* Subsection header */}
                   {block.kind === 'subsection_header' && (
-                    <div className="sf-subsection-header">{highlightTextAnnotations(block.title || '', block.id)}</div>
+                    <div className="sf-subsection-header">{block.title}</div>
                   )}
 
                   {/* Comment */}
                   {block.kind === 'comment' && (
-                    <div className="px-1 py-2"><CommentBlock content={block.content}
-                      annotations={annotations.filter(a => a.blockId === block.id).map(a => ({ selectedText: a.selectedText, note: a.text, id: a.id }))}
-                      onAnnotationClick={(id, x, y) => {
-                        const ann = annotations.find(a => a.id === id);
-                        if (ann) { setAnnotationPopup({ mode: 'view', annotation: ann, blockId: block.id, startLine: 0, startCol: 0, endLine: 0, endCol: 0, x, y }); setAnnotationText(ann.text); }
-                      }}
-                    /></div>
+                    <div className="px-1 py-2"><CommentBlock content={block.content} /></div>
                   )}
 
                   {/* Code block */}
@@ -1795,68 +1822,96 @@ export default function ChapterPage() {
           )}
         </>
       )}
-      {/* Annotation popup */}
+      {/* Annotation popup — draggable */}
       {annotationPopup && (
-        <div className="fixed z-50" style={{ left: Math.min(annotationPopup.x, window.innerWidth - 340), top: Math.min(annotationPopup.y, window.innerHeight - 200) }}>
-          <div className="bg-white border border-yellow-300 rounded-lg shadow-xl p-3 w-80">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-yellow-700 uppercase tracking-wider">
+        <div ref={annotationPopupRef} className="fixed z-50"
+          style={{ left: Math.min(annotationPopup.x - 160, window.innerWidth - 360), top: Math.min(annotationPopup.y, window.innerHeight - 260) }}>
+          <div className="bg-white border-2 rounded-lg shadow-2xl w-80" style={{ borderColor: annotationColor }}>
+            {/* Draggable header */}
+            <div className="flex items-center justify-between px-3 py-2 rounded-t-lg cursor-move select-none"
+              style={{ backgroundColor: annotationColor + '20' }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                const box = annotationPopupRef.current;
+                if (!box) return;
+                const rect = box.getBoundingClientRect();
+                const offX = e.clientX - rect.left, offY = e.clientY - rect.top;
+                const onMove = (ev: MouseEvent) => { box.style.left = (ev.clientX - offX) + 'px'; box.style.top = (ev.clientY - offY) + 'px'; };
+                const onUp = () => { document.removeEventListener('pointermove', onMove); document.removeEventListener('pointerup', onUp); };
+                document.addEventListener('pointermove', onMove);
+                document.addEventListener('pointerup', onUp);
+              }}>
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: annotationColor }}>
                 {annotationPopup.mode === 'create' ? 'New Annotation' : 'Annotation'}
               </span>
-              <button onClick={() => setAnnotationPopup(null)} className="text-gray-400 hover:text-gray-600 text-sm">&times;</button>
+              <button onClick={() => setAnnotationPopup(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
             </div>
-            <textarea
-              className="w-full border border-gray-200 rounded p-2 text-sm resize-none focus:outline-none focus:border-yellow-400"
-              rows={3}
-              placeholder="Type your note here..."
-              value={annotationText}
-              onChange={e => setAnnotationText(e.target.value)}
-              autoFocus
-            />
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={() => {
-                  if (!annotationText.trim() || !volumeId || !chapterName) return;
-                  const newAnn: Annotation = {
-                    id: annotationPopup.annotation?.id || `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                    blockId: annotationPopup.blockId,
-                    selectedText: annotationPopup.selectedText || annotationPopup.annotation?.selectedText || '',
-                    startLine: annotationPopup.startLine,
-                    startCol: annotationPopup.startCol,
-                    endLine: annotationPopup.endLine,
-                    endCol: annotationPopup.endCol,
-                    text: annotationText.trim(),
-                    createdAt: annotationPopup.annotation?.createdAt || Date.now(),
-                  };
-                  const updated = annotationPopup.mode === 'create'
-                    ? [...annotations, newAnn]
-                    : annotations.map(a => a.id === newAnn.id ? newAnn : a);
-                  setAnnotations(updated);
-                  saveAnnotations(volumeId, chapterName, updated);
-                  setAnnotationPopup(null);
-                }}
-                className="flex-1 text-xs bg-yellow-500 text-white py-1.5 rounded hover:bg-yellow-600 font-medium"
-              >
-                {annotationPopup.mode === 'create' ? 'Save' : 'Update'}
-              </button>
-              {annotationPopup.mode === 'view' && annotationPopup.annotation && (
+            <div className="px-3 pb-3 pt-2">
+              {/* Color picker */}
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="text-[10px] text-gray-400">Color:</span>
+                {['#f59e0b', '#ef4444', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899'].map(c => (
+                  <button key={c} onClick={() => setAnnotationColor(c)}
+                    className={`w-5 h-5 rounded-full border-2 ${annotationColor === c ? 'border-gray-800 scale-110' : 'border-transparent'}`}
+                    style={{ backgroundColor: c }} />
+                ))}
+              </div>
+              <textarea
+                className="w-full border border-gray-200 rounded p-2 text-sm resize-none focus:outline-none focus:ring-1"
+                style={{ focusRingColor: annotationColor } as any}
+                rows={3}
+                placeholder="Type your note here..."
+                value={annotationText}
+                onChange={e => setAnnotationText(e.target.value)}
+                autoFocus
+              />
+              <div className="flex gap-2 mt-2">
                 <button
                   onClick={() => {
-                    if (!volumeId || !chapterName) return;
-                    const updated = annotations.filter(a => a.id !== annotationPopup.annotation!.id);
+                    if (!annotationText.trim() || !volumeId || !chapterName) return;
+                    const newAnn: Annotation = {
+                      id: annotationPopup.annotation?.id || `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                      blockId: annotationPopup.blockId,
+                      selectedText: annotationPopup.selectedText || annotationPopup.annotation?.selectedText || '',
+                      color: annotationColor,
+                      startLine: annotationPopup.startLine,
+                      startCol: annotationPopup.startCol,
+                      endLine: annotationPopup.endLine,
+                      endCol: annotationPopup.endCol,
+                      text: annotationText.trim(),
+                      createdAt: annotationPopup.annotation?.createdAt || Date.now(),
+                    };
+                    const updated = annotationPopup.mode === 'create'
+                      ? [...annotations, newAnn]
+                      : annotations.map(a => a.id === newAnn.id ? newAnn : a);
                     setAnnotations(updated);
                     saveAnnotations(volumeId, chapterName, updated);
                     setAnnotationPopup(null);
                   }}
-                  className="text-xs bg-red-100 text-red-600 px-3 py-1.5 rounded hover:bg-red-200 font-medium"
+                  className="flex-1 text-xs text-white py-1.5 rounded font-medium"
+                  style={{ backgroundColor: annotationColor }}
                 >
-                  Delete
+                  {annotationPopup.mode === 'create' ? 'Save' : 'Update'}
                 </button>
-              )}
-              <button onClick={() => setAnnotationPopup(null)}
-                className="text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded hover:bg-gray-200 font-medium">
-                Cancel
-              </button>
+                {annotationPopup.mode === 'view' && annotationPopup.annotation && (
+                  <button
+                    onClick={() => {
+                      if (!volumeId || !chapterName) return;
+                      const updated = annotations.filter(a => a.id !== annotationPopup.annotation!.id);
+                      setAnnotations(updated);
+                      saveAnnotations(volumeId, chapterName, updated);
+                      setAnnotationPopup(null);
+                    }}
+                    className="text-xs bg-red-100 text-red-600 px-3 py-1.5 rounded hover:bg-red-200 font-medium"
+                  >
+                    Delete
+                  </button>
+                )}
+                <button onClick={() => setAnnotationPopup(null)}
+                  className="text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded hover:bg-gray-200 font-medium">
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>

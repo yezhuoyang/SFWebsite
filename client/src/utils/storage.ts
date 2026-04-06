@@ -103,6 +103,7 @@ export interface Annotation {
   id: string;           // unique id
   blockId: number;
   selectedText: string; // the text that was selected (used to find & highlight)
+  color: string;        // user-chosen color for underline
   startLine: number;    // 1-indexed within the block (for Monaco code blocks)
   startCol: number;
   endLine: number;
