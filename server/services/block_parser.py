@@ -64,7 +64,8 @@ EXERCISE_HEADER = re.compile(
     r'\s+\(([^)]+)\)',
     re.IGNORECASE
 )
-EXERCISE_END = re.compile(r'\(\*\*\s+\[\]\s+\*\)')
+# Exercise end marker: (** [] *) or (* ... [] *) — both single and double star
+EXERCISE_END = re.compile(r'\(\*\*?\s+\[\]\s*\*\)|\[\]\s*\*\)')
 DOC_COMMENT_START = re.compile(r'^\(\*\*\s')
 COMMENT_END = re.compile(r'\*\)\s*$')
 
