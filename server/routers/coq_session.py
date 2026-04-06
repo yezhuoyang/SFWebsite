@@ -44,6 +44,23 @@ async def create_session(req: CoqSessionCreate):
     )
 
 
+@router.get("/coq/session/{session_id}/info")
+async def session_info(session_id: str):
+    """Get session status: remaining timeout, active session count."""
+    import time as _time
+    session = pool.get(session_id)
+    remaining = 0
+    if session:
+        idle = _time.time() - session.last_activity
+        remaining = max(0, int(SESSION_IDLE_TIMEOUT - idle))
+    return {
+        "active_count": pool.active_count,
+        "max_sessions": MAX_SESSIONS,
+        "remaining_seconds": remaining,
+        "timeout_seconds": SESSION_IDLE_TIMEOUT,
+    }
+
+
 @router.delete("/coq/session/{session_id}")
 async def close_session(session_id: str):
     session = pool.get(session_id)

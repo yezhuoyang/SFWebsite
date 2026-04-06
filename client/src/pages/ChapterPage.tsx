@@ -18,6 +18,7 @@ import {
   resetChapterFile,
   getExercises,
   getExerciseSolution,
+  getSessionInfo,
   explainOutput,
   type BlockData,
   type TocEntry,
@@ -62,6 +63,12 @@ export default function ChapterPage() {
   const [annotationText, setAnnotationText] = useState('');
   const [annotationColor, setAnnotationColor] = useState('#f59e0b');
   const annotationPopupRef = useRef<HTMLDivElement>(null);
+
+  // Timer & session info
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [sessionRemaining, setSessionRemaining] = useState<number | null>(null);
+  const [activeSessions, setActiveSessions] = useState<number | null>(null);
+  const [maxSessions, setMaxSessions] = useState<number | null>(null);
 
   useEffect(() => {
     const handler = () => setIsFullscreen(!!document.fullscreenElement);
@@ -147,6 +154,27 @@ export default function ChapterPage() {
       }
     }).catch(console.error);
   }, [volumeId, chapterName]);
+
+  // Page timer — counts up from when page was opened
+  useEffect(() => {
+    const interval = setInterval(() => setElapsedSeconds(s => s + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Poll session info every 10 seconds
+  useEffect(() => {
+    if (!sessionId) return;
+    const poll = () => {
+      getSessionInfo(sessionId).then(info => {
+        setSessionRemaining(info.remaining_seconds);
+        setActiveSessions(info.active_count);
+        setMaxSessions(info.max_sessions);
+      }).catch(() => {});
+    };
+    poll();
+    const interval = setInterval(poll, 10000);
+    return () => clearInterval(interval);
+  }, [sessionId]);
 
   // Disable Alt+Left (browser back) on this page — too easy to trigger accidentally
   useEffect(() => {
@@ -1131,6 +1159,21 @@ export default function ChapterPage() {
             {isFullscreen ? 'Exit Present' : 'Present'}
           </button>
 
+          <div className="flex items-center gap-2 text-[10px] text-gray-400 font-mono">
+            <span title="Time on this page">
+              {Math.floor(elapsedSeconds / 60)}:{String(elapsedSeconds % 60).padStart(2, '0')}
+            </span>
+            {sessionRemaining !== null && (
+              <span title="Session expires in" className={sessionRemaining < 300 ? 'text-red-400' : ''}>
+                TTL {Math.floor(sessionRemaining / 60)}m
+              </span>
+            )}
+            {activeSessions !== null && (
+              <span title={`${activeSessions} of ${maxSessions} backend sessions active`}>
+                {activeSessions}/{maxSessions}
+              </span>
+            )}
+          </div>
           <span className={`w-2 h-2 rounded-full ${coqState.connected ? 'bg-green-500' : 'bg-gray-300'}`}
                 title={coqState.connected ? 'vscoqtop connected' : 'Connecting...'} />
         </div>

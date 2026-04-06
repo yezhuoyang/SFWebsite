@@ -26,6 +26,11 @@ export const createCoqSession = (volumeId: string, chapterName?: string) =>
     body: JSON.stringify({ volume_id: volumeId, chapter_name: chapterName }),
   });
 
+export const getSessionInfo = (sessionId: string) =>
+  fetchJSON<{ active_count: number; max_sessions: number; remaining_seconds: number; timeout_seconds: number }>(
+    `${BASE}/coq/session/${sessionId}/info`
+  );
+
 export const coqStep = (sessionId: string, code: string) =>
   fetchJSON<CoqStepResult>(`${BASE}/coq/step`, {
     method: 'POST',
