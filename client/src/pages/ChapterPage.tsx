@@ -126,6 +126,15 @@ export default function ChapterPage() {
     }).catch(console.error);
   }, [volumeId, chapterName]);
 
+  // Disable Alt+Left (browser back) on this page — too easy to trigger accidentally
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.altKey && e.key === 'ArrowLeft') e.preventDefault();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   // Once session + blocks are both ready, sync the canonical document to vscoqtop
   useEffect(() => {
     if (!sessionId || !coqState.connected || blocks.length === 0) return;
