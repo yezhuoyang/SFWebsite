@@ -207,6 +207,7 @@ export default function ChapterPage() {
     // Use a wrapper that always reads the latest ref values
     const doStep = (desc: string, action: () => void) => {
       logStep(desc);
+      userSteppedRef.current = true;  // allow moveCursor to fire
       const sync = syncThenDoRef.current;
       if (sync) { sync(action); } else { action(); }
     };
@@ -294,15 +295,14 @@ export default function ChapterPage() {
         return next;
       });
 
-      // Debounce: rebuild full document, send change, then re-check.
-      // vscoqtop processes messages in order, so interpretToEnd can fire
-      // immediately after sendChange.
+      // Debounce: rebuild full document and send change to vscoqtop.
+      // Do NOT auto-run interpretToEnd — it causes cursor jumps and stale errors.
+      // The user will explicitly step or run to recheck.
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
         const newDoc = rebuildDocument();
         coqActions.sendChange(newDoc);
         originalDocRef.current = newDoc;
-        coqActions.interpretToEnd();
       }, 400);
     });
 
@@ -516,23 +516,27 @@ export default function ChapterPage() {
     setCompletionContext(getContextNames(entries));
   }, [allExecutedTexts]);
 
-  // Move cursor to end of processed region when vscoqtop tells us to
-  // (triggered by Step Forward / Step Back / Interpret to Point / Interpret to End)
-  useEffect(() => {
-    if (!coqState.moveCursorTarget) return;
-    const { line: absLine, character } = coqState.moveCursorTarget;  // 0-indexed
+  // Move cursor to end of processed region ONLY when user explicitly stepped.
+  // We track whether the last action was a manual step (Alt+Down/Up/Right/End or "run" button).
+  // If it was an auto-recheck (edit debounce), we do NOT move the cursor.
+  const userSteppedRef = useRef(false);
 
-    // Find which block contains this absolute line
+  useEffect(() => {
+    if (!coqState.moveCursorTarget || !userSteppedRef.current) return;
+    userSteppedRef.current = false;  // consume the flag
+
+    const { line: absLine, character } = coqState.moveCursorTarget;
+
     let targetBlockId: number | null = null;
     let localLine = 0;
     for (const b of blocks) {
-      const start = (blockStartLines.get(b.id) || 1) - 1;  // 0-indexed
+      const start = (blockStartLines.get(b.id) || 1) - 1;
       const content = blockContentsRef.current.get(b.id) || b.content;
       const lineCount = content.split('\n').length;
       const end = start + lineCount - 1;
       if (absLine >= start && absLine <= end) {
         targetBlockId = b.id;
-        localLine = absLine - start + 1;  // 1-indexed within block
+        localLine = absLine - start + 1;
         break;
       }
     }
@@ -541,7 +545,6 @@ export default function ChapterPage() {
     const editor = editorInstancesRef.current.get(targetBlockId);
     if (!editor) return;
 
-    // Focus editor, move cursor, scroll into view
     editor.focus();
     editor.setPosition({ lineNumber: localLine, column: character + 1 });
     editor.revealPositionInCenterIfOutsideViewport({ lineNumber: localLine, column: character + 1 });
@@ -778,13 +781,13 @@ export default function ChapterPage() {
         <span className="text-sm font-semibold text-gray-800">{chapterName}.v</span>
 
         <div className="flex items-center gap-2 ml-auto">
-          <button onClick={() => syncThenDo(coqActions.stepBackward)}
+          <button onClick={() => { userSteppedRef.current = true; syncThenDo(coqActions.stepBackward); }}
             disabled={!coqState.connected}
             className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 disabled:opacity-30 rounded font-medium border border-gray-200"
             title="Step Back (Alt+Up)">
             &#9664; Undo
           </button>
-          <button onClick={() => syncThenDo(coqActions.stepForward)}
+          <button onClick={() => { userSteppedRef.current = true; syncThenDo(coqActions.stepForward); }}
             disabled={!coqState.connected}
             className="px-3 py-1.5 text-xs bg-[#7088a8] hover:bg-[#607898] text-white disabled:opacity-30 rounded font-medium shadow-sm"
             title="Step Forward (Alt+Down)">
@@ -921,7 +924,7 @@ export default function ChapterPage() {
                         <span className="text-[10px] font-mono text-gray-300" />
                         <div className="ml-auto flex items-center gap-2">
                           {status !== 'full' && (
-                            <button onClick={(e) => { e.stopPropagation(); syncThenDo(() => runToBlock(block.id)); }}
+                            <button onClick={(e) => { e.stopPropagation(); userSteppedRef.current = true; syncThenDo(() => runToBlock(block.id)); }}
                               disabled={!coqState.connected}
                               className="text-[10px] text-blue-500 hover:text-blue-700 disabled:opacity-30 font-medium">
                               &#9654; run
@@ -990,7 +993,7 @@ export default function ChapterPage() {
                           })()}
                           <div className="ml-auto flex items-center gap-2">
                             {status !== 'full' && (
-                              <button onClick={(e) => { e.stopPropagation(); syncThenDo(() => runToBlock(block.id)); }}
+                              <button onClick={(e) => { e.stopPropagation(); userSteppedRef.current = true; syncThenDo(() => runToBlock(block.id)); }}
                                 disabled={!coqState.connected}
                                 className="text-[10px] text-blue-500 hover:text-blue-700 disabled:opacity-30 font-medium">
                                 &#9654; run
