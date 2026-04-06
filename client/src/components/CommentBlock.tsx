@@ -6,11 +6,19 @@
  * inference rules, code-like blocks) while reflowing prose paragraphs.
  */
 
-interface Props {
-  content: string;
+interface AnnotationHighlight {
+  selectedText: string;
+  note: string;
+  id: string;
 }
 
-export default function CommentBlock({ content }: Props) {
+interface Props {
+  content: string;
+  annotations?: AnnotationHighlight[];
+  onAnnotationClick?: (id: string, x: number, y: number) => void;
+}
+
+export default function CommentBlock({ content, annotations = [], onAnnotationClick }: Props) {
   let text = content
     .replace(/^\(\*\*\s*/, '')
     .replace(/\s*\*\)\s*$/, '')
@@ -24,6 +32,42 @@ export default function CommentBlock({ content }: Props) {
 
   // Split into paragraphs by blank lines
   const paragraphs = text.split(/\n\s*\n/);
+
+  const highlightAnnotations = (node: React.ReactNode): React.ReactNode => {
+    if (annotations.length === 0) return node;
+    if (typeof node === 'string') {
+      let result: React.ReactNode[] = [node];
+      for (const ann of annotations) {
+        const newResult: React.ReactNode[] = [];
+        for (const part of result) {
+          if (typeof part !== 'string') { newResult.push(part); continue; }
+          const idx = part.indexOf(ann.selectedText);
+          if (idx === -1) { newResult.push(part); continue; }
+          if (idx > 0) newResult.push(part.slice(0, idx));
+          newResult.push(
+            <span key={ann.id} className="annotation-underline cursor-pointer"
+              title={`Note: ${ann.note}`}
+              onClick={(e) => { e.stopPropagation(); onAnnotationClick?.(ann.id, e.clientX, e.clientY); }}>
+              {ann.selectedText}
+            </span>
+          );
+          if (idx + ann.selectedText.length < part.length) newResult.push(part.slice(idx + ann.selectedText.length));
+        }
+        result = newResult;
+      }
+      return <>{result}</>;
+    }
+    if (Array.isArray(node)) return node.map((n, i) => <span key={i}>{highlightAnnotations(n)}</span>);
+    if (node && typeof node === 'object' && 'props' in (node as any)) {
+      const el = node as React.ReactElement;
+      if (el.props.children) {
+        const newChildren = highlightAnnotations(el.props.children);
+        // Clone preserving key
+        return { ...el, props: { ...el.props, children: newChildren } };
+      }
+    }
+    return node;
+  };
 
   return (
     <div className="sf-prose">
@@ -48,7 +92,7 @@ export default function CommentBlock({ content }: Props) {
           return (
             <ul key={i}>
               {items.filter(Boolean).map((item, j) => (
-                <li key={j}>{renderInline(item)}</li>
+                <li key={j}>{highlightAnnotations(renderInline(item))}</li>
               ))}
             </ul>
           );
@@ -65,7 +109,7 @@ export default function CommentBlock({ content }: Props) {
           return (
             <pre key={i} className="sf-prose-pre">
               {lines.map((line, j) => (
-                <span key={j}>{renderInline(line)}{j < lines.length - 1 ? '\n' : ''}</span>
+                <span key={j}>{highlightAnnotations(renderInline(line))}{j < lines.length - 1 ? '\n' : ''}</span>
               ))}
             </pre>
           );
@@ -73,7 +117,7 @@ export default function CommentBlock({ content }: Props) {
 
         if (!reflowed) return null;
 
-        return <p key={i}>{renderInline(reflowed)}</p>;
+        return <p key={i}>{highlightAnnotations(renderInline(reflowed))}</p>;
       })}
     </div>
   );

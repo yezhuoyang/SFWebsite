@@ -102,7 +102,8 @@ export function countLocalCompleted(volume: string, chapter: string): number {
 export interface Annotation {
   id: string;           // unique id
   blockId: number;
-  startLine: number;    // 1-indexed within the block
+  selectedText: string; // the text that was selected (used to find & highlight)
+  startLine: number;    // 1-indexed within the block (for Monaco code blocks)
   startCol: number;
   endLine: number;
   endCol: number;

@@ -54,6 +54,7 @@ export default function ChapterPage() {
     mode: 'create' | 'view';
     annotation?: Annotation;
     blockId: number;
+    selectedText?: string;
     startLine: number; startCol: number;
     endLine: number; endCol: number;
     x: number; y: number;
@@ -1060,6 +1061,36 @@ export default function ChapterPage() {
     document.addEventListener('pointerup', onUp);
   }, []);
 
+  /** Highlight annotation matches in plain text (headers, etc.) */
+  const highlightTextAnnotations = (text: string, blockId: number): React.ReactNode => {
+    const blockAnns = annotations.filter(a => a.blockId === blockId && a.selectedText);
+    if (blockAnns.length === 0) return text;
+    let parts: React.ReactNode[] = [text];
+    for (const ann of blockAnns) {
+      const next: React.ReactNode[] = [];
+      for (const part of parts) {
+        if (typeof part !== 'string') { next.push(part); continue; }
+        const idx = part.indexOf(ann.selectedText);
+        if (idx === -1) { next.push(part); continue; }
+        if (idx > 0) next.push(part.slice(0, idx));
+        next.push(
+          <span key={ann.id} className="annotation-underline cursor-pointer"
+            title={`Note: ${ann.text}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setAnnotationPopup({ mode: 'view', annotation: ann, blockId, startLine: 0, startCol: 0, endLine: 0, endCol: 0, x: e.clientX, y: e.clientY });
+              setAnnotationText(ann.text);
+            }}>
+            {ann.selectedText}
+          </span>
+        );
+        if (idx + ann.selectedText.length < part.length) next.push(part.slice(idx + ann.selectedText.length));
+      }
+      parts = next;
+    }
+    return <>{parts}</>;
+  };
+
   return (
     <div className="h-screen flex flex-col bg-white" style={{ fontFamily: "'Open Sans', sans-serif" }}>
       {/* Top bar */}
@@ -1101,15 +1132,17 @@ export default function ChapterPage() {
             Reset
           </button>
           <button onClick={() => {
-              // Find the active editor with a selection
+              // 1. Try Monaco editor selection first
               for (const [blockId, editor] of editorInstancesRef.current.entries()) {
                 if (!editor.hasTextFocus()) continue;
                 const sel = editor.getSelection();
                 if (!sel || sel.isEmpty()) continue;
+                const selectedText = editor.getModel()?.getValueInRange(sel) || '';
+                if (!selectedText.trim()) continue;
                 const domNode = editor.getDomNode();
                 const rect = domNode?.getBoundingClientRect();
                 setAnnotationPopup({
-                  mode: 'create', blockId,
+                  mode: 'create', blockId, selectedText,
                   startLine: sel.startLineNumber, startCol: sel.startColumn,
                   endLine: sel.endLineNumber, endCol: sel.endColumn,
                   x: rect ? rect.left + rect.width / 2 : 400,
@@ -1118,7 +1151,27 @@ export default function ChapterPage() {
                 setAnnotationText('');
                 return;
               }
-              alert('Select some text in a code block first, then click Annotate.');
+              // 2. Try browser text selection (for comments, headers, prose)
+              const browserSel = window.getSelection();
+              if (browserSel && browserSel.toString().trim()) {
+                const selectedText = browserSel.toString().trim();
+                // Find which block container holds this selection
+                const anchor = browserSel.anchorNode;
+                const blockEl = (anchor instanceof HTMLElement ? anchor : anchor?.parentElement)
+                  ?.closest('[data-block-id]') as HTMLElement | null;
+                const blockId = blockEl ? Number(blockEl.getAttribute('data-block-id')) : -1;
+                const range = browserSel.getRangeAt(0);
+                const rect = range.getBoundingClientRect();
+                setAnnotationPopup({
+                  mode: 'create', blockId, selectedText,
+                  startLine: 0, startCol: 0, endLine: 0, endCol: 0,
+                  x: rect ? rect.left + rect.width / 2 : 400,
+                  y: rect ? rect.bottom + 8 : 200,
+                });
+                setAnnotationText('');
+                return;
+              }
+              alert('Select some text first, then click Annotate.');
             }}
             className="px-3 py-1.5 text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-700 rounded font-medium border border-yellow-300"
             title="Add annotation to selected text">
@@ -1301,20 +1354,26 @@ export default function ChapterPage() {
               const status = isBlockProcessed(block.id);
 
               return (
-                <div key={block.id} ref={el => { if (el) blockRefsMap.current.set(block.id, el); }}>
+                <div key={block.id} data-block-id={block.id} ref={el => { if (el) blockRefsMap.current.set(block.id, el); }}>
                   {/* Section header */}
                   {block.kind === 'section_header' && (
-                    <div className="sf-section-header">{block.title}</div>
+                    <div className="sf-section-header">{highlightTextAnnotations(block.title || '', block.id)}</div>
                   )}
 
                   {/* Subsection header */}
                   {block.kind === 'subsection_header' && (
-                    <div className="sf-subsection-header">{block.title}</div>
+                    <div className="sf-subsection-header">{highlightTextAnnotations(block.title || '', block.id)}</div>
                   )}
 
                   {/* Comment */}
                   {block.kind === 'comment' && (
-                    <div className="px-1 py-2"><CommentBlock content={block.content} /></div>
+                    <div className="px-1 py-2"><CommentBlock content={block.content}
+                      annotations={annotations.filter(a => a.blockId === block.id).map(a => ({ selectedText: a.selectedText, note: a.text, id: a.id }))}
+                      onAnnotationClick={(id, x, y) => {
+                        const ann = annotations.find(a => a.id === id);
+                        if (ann) { setAnnotationPopup({ mode: 'view', annotation: ann, blockId: block.id, startLine: 0, startCol: 0, endLine: 0, endCol: 0, x, y }); setAnnotationText(ann.text); }
+                      }}
+                    /></div>
                   )}
 
                   {/* Code block */}
@@ -1761,6 +1820,7 @@ export default function ChapterPage() {
                   const newAnn: Annotation = {
                     id: annotationPopup.annotation?.id || `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                     blockId: annotationPopup.blockId,
+                    selectedText: annotationPopup.selectedText || annotationPopup.annotation?.selectedText || '',
                     startLine: annotationPopup.startLine,
                     startCol: annotationPopup.startCol,
                     endLine: annotationPopup.endLine,
