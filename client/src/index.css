@@ -47,6 +47,23 @@ body {
   font-weight: normal;
 }
 
+/* Preformatted blocks inside prose (BNF grammars, inference rules) */
+.sf-prose-pre {
+  font-family: monospace;
+  font-size: 105%;
+  color: rgb(35%, 35%, 70%);
+  line-height: 1.5;
+  white-space: pre;
+  margin: 0.6em 0;
+  padding: 0.4em 1.2em;
+  overflow-x: auto;
+}
+
+.sf-prose-pre code {
+  font-size: 100%;
+  color: rgb(35%, 35%, 70%);
+}
+
 .sf-prose em {
   font-style: italic;
 }

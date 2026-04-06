@@ -1,6 +1,9 @@
 /**
  * Renders Coq documentation comments as readable prose,
  * styled to match the original Software Foundations website.
+ *
+ * Preserves formatting for indented content (BNF grammars,
+ * inference rules, code-like blocks) while reflowing prose paragraphs.
  */
 
 interface Props {
@@ -11,7 +14,7 @@ export default function CommentBlock({ content }: Props) {
   let text = content
     .replace(/^\(\*\*\s*/, '')
     .replace(/\s*\*\)\s*$/, '')
-    .replace(/^\(\*\s*[#=]+\s*\*\)\s*/m, '')
+    .replace(/^\(\*\s*[#=\-]+\s*\*\)\s*/m, '')
     .trim();
 
   // Convert [text] to `code` markers
@@ -19,17 +22,49 @@ export default function CommentBlock({ content }: Props) {
   // Convert _text_ to emphasis
   text = text.replace(/\b_([^_]+)_\b/g, '<em>$1</em>');
 
+  // Split into paragraphs by blank lines
   const paragraphs = text.split(/\n\s*\n/);
 
   return (
     <div className="sf-prose">
       {paragraphs.map((p, i) => {
-        const trimmed = p.replace(/^\s{4}/gm, '').replace(/\s+/g, ' ').trim();
-        if (!trimmed) return null;
+        // Remove the common 4-space Coq doc comment indentation
+        const dedented = p.replace(/^    /gm, '');
+
+        // Detect if this paragraph is "formatted" content that needs
+        // line breaks preserved (BNF, inference rules, indented code):
+        // - Has lines starting with significant whitespace (4+ spaces after dedent)
+        // - Has lines with --- or === (inference rule separators)
+        // - Has lines with | (BNF alternatives)
+        // - Has very short lines (< 40 chars) that look like structured content
+        const lines = dedented.split('\n');
+        const hasIndentedLines = lines.some(l => /^\s{2,}\S/.test(l));
+        const hasRuleSeparators = lines.some(l => /^[\s]*[-]{3,}/.test(l) || /^[\s]*[=]{3,}/.test(l));
+        const hasBNFPipes = lines.filter(l => /^\s*\|/.test(l)).length >= 2;
+        const mostlyShortLines = lines.length >= 3 && lines.filter(l => l.trim().length > 0 && l.trim().length < 45).length > lines.length * 0.6;
+        const hasArrows = dedented.includes('==>') || dedented.includes('->') || dedented.includes(':=');
+
+        const isFormatted = hasIndentedLines || hasRuleSeparators || hasBNFPipes ||
+          (mostlyShortLines && (hasArrows || hasBNFPipes));
+
+        if (isFormatted) {
+          // Preserve line breaks — render as preformatted block
+          return (
+            <pre key={i} className="sf-prose-pre">
+              {lines.map((line, j) => (
+                <span key={j}>{renderInline(line)}{j < lines.length - 1 ? '\n' : ''}</span>
+              ))}
+            </pre>
+          );
+        }
+
+        // Regular prose — reflow into a single paragraph
+        const reflowed = dedented.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+        if (!reflowed) return null;
 
         // List items
-        if (trimmed.match(/^\s*-\s/)) {
-          const items = trimmed.split(/\n\s*-\s/).map(s => s.replace(/^-\s*/, '').trim());
+        if (reflowed.match(/^\s*-\s/)) {
+          const items = dedented.split(/\n\s*-\s/).map(s => s.replace(/^-\s*/, '').replace(/\s+/g, ' ').trim());
           return (
             <ul key={i}>
               {items.filter(Boolean).map((item, j) => (
@@ -39,7 +74,7 @@ export default function CommentBlock({ content }: Props) {
           );
         }
 
-        return <p key={i}>{renderInline(trimmed)}</p>;
+        return <p key={i}>{renderInline(reflowed)}</p>;
       })}
     </div>
   );
