@@ -1018,6 +1018,13 @@ export default function ChapterPage() {
         return (
           <div className="px-4 py-1.5 bg-gray-50 border-b border-gray-200 flex items-center gap-3 shrink-0">
             <span className="text-xs text-gray-500 font-medium whitespace-nowrap">{done}/{total} solved</span>
+            <span className="text-[10px] text-gray-400 whitespace-nowrap">
+              <kbd className="px-1 py-0.5 bg-gray-200 rounded text-[9px] font-mono">Alt+&#8595;</kbd> next
+              <span className="mx-1">&#183;</span>
+              <kbd className="px-1 py-0.5 bg-gray-200 rounded text-[9px] font-mono">Alt+&#8593;</kbd> prev
+              <span className="mx-1">&#183;</span>
+              <kbd className="px-1 py-0.5 bg-gray-200 rounded text-[9px] font-mono">Alt+&#8594;</kbd> to cursor
+            </span>
             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-700 ease-out"
