@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { getVolumes } from '../api/client';
 import type { Volume } from '../types';
 import { SFLogo } from './VolumeIllustrations';
+import { PLSELogo } from './PLSELogo';
 
 const VOLUME_COLORS: Record<string, string> = {
   lf: 'bg-blue-500',
@@ -82,7 +83,10 @@ export default function Layout() {
             <span className="text-base">&#9672;</span>
             AI Tutor
           </Link>
-          <p className="text-[10px] text-gray-300 px-3 pb-1 font-medium">Coq 8.20 + SerAPI</p>
+          <div className="px-3 py-2 flex justify-center">
+            <PLSELogo size={80} />
+          </div>
+          <p className="text-[10px] text-gray-300 px-3 pb-1 font-medium text-center">UCLA PLSE &middot; Rocq 8.20</p>
         </div>
       </aside>
 

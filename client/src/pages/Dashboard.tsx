@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { getVolumes } from '../api/client';
 import type { Volume } from '../types';
 import { VOLUME_ILLUSTRATIONS } from '../components/VolumeIllustrations';
+import { PLSELogo, UCLACSLogo } from '../components/PLSELogo';
 
 const VOLUME_META: Record<string, { gradient: string; accent: string; desc: string; topics: string[] }> = {
   lf: {
@@ -55,6 +56,11 @@ export default function Dashboard() {
     <div className="p-10 max-w-5xl mx-auto">
       {/* Header */}
       <div className="mb-12">
+        {/* Institutional logos */}
+        <div className="flex items-center gap-5 mb-6">
+          <PLSELogo size={64} />
+          <UCLACSLogo size={50} />
+        </div>
         <p className="text-sm font-semibold text-indigo-500 uppercase tracking-wider mb-2">Learning Platform</p>
         <h1 className="text-4xl font-extrabold text-gray-900 mb-2 tracking-tight">
           Software Foundations
