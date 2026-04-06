@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import Editor, { type OnMount, type BeforeMount } from '@monaco-editor/react';
+import { type OnMount, type BeforeMount } from '@monaco-editor/react';
+import LazyEditor from '../components/LazyEditor';
 import GoalsPanel from '../components/GoalsPanel';
 import CommentBlock from '../components/CommentBlock';
 import ContextPanel, { parseContextEntries, getContextNames } from '../components/ContextPanel';
@@ -928,7 +929,7 @@ export default function ChapterPage() {
                           )}
                         </div>
                       </div>
-                      <Editor height="auto" language={COQ_LANGUAGE_ID} theme="coqTheme"
+                      <LazyEditor blockId={block.id} language={COQ_LANGUAGE_ID} theme="coqTheme"
                         defaultValue={block.content}
                         beforeMount={handleBeforeMount} onMount={handleEditorMount(block.id)}
                         options={{
@@ -1028,7 +1029,7 @@ export default function ChapterPage() {
                           </div>
                         )}
 
-                        <Editor height="auto" language={COQ_LANGUAGE_ID} theme="coqTheme"
+                        <LazyEditor blockId={block.id} language={COQ_LANGUAGE_ID} theme="coqTheme"
                           defaultValue={block.content}
                           beforeMount={handleBeforeMount} onMount={handleEditorMount(block.id)}
                           options={{
