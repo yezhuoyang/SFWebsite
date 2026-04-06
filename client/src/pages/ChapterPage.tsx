@@ -207,7 +207,7 @@ export default function ChapterPage() {
     // Use a wrapper that always reads the latest ref values
     const doStep = (desc: string, action: () => void) => {
       logStep(desc);
-      userSteppedAtRef.current = Date.now();  // allow moveCursor to fire
+      /* cursor movement disabled */  // allow moveCursor to fire
       const sync = syncThenDoRef.current;
       if (sync) { sync(action); } else { action(); }
     };
@@ -422,7 +422,8 @@ export default function ChapterPage() {
   }, [blockStartLines]);
 
   /** Sync document if dirty, then run action.
-   * Only sends didChange when user explicitly steps — never auto during typing. */
+   * Only sends didChange when user explicitly steps — never auto during typing.
+   * No artificial delays — vscoqtop processes messages in order. */
   const syncThenDo = useCallback((action: () => void) => {
     if (debounceTimerRef.current) {
       // Document is dirty — sync it before stepping
@@ -433,12 +434,10 @@ export default function ChapterPage() {
       const newDoc = rebuildDocument();
       coqActions.sendChange(newDoc);
       originalDocRef.current = newDoc;
-      // Wait for vscoqtop to process the didChange
-      setTimeout(action, 400);
-    } else {
-      // Document is clean — step immediately
-      action();
     }
+    // Step immediately — vscoqtop processes didChange before stepForward
+    // because they arrive in order on the same WebSocket
+    action();
   }, [rebuildDocument, coqActions]);
 
   // Keep refs in sync — use assignment during render (not useEffect) for immediate availability
@@ -553,48 +552,10 @@ export default function ChapterPage() {
     setCompletionContext(getContextNames(entries));
   }, [allExecutedTexts]);
 
-  // Move cursor ONLY when user explicitly stepped, and only within a short window.
-  const userSteppedAtRef = useRef(0);  // timestamp of last explicit step
-
-  useEffect(() => {
-    if (!coqState.moveCursorTarget) return;
-
-    // Only act if user stepped within the last 2 seconds
-    const elapsed = Date.now() - userSteppedAtRef.current;
-    if (elapsed > 2000) return;
-    userSteppedAtRef.current = 0;  // consume
-
-    const { line: absLine, character } = coqState.moveCursorTarget;
-
-    let targetBlockId: number | null = null;
-    let localLine = 0;
-    for (const b of blocks) {
-      const start = (blockStartLines.get(b.id) || 1) - 1;
-      const content = blockContentsRef.current.get(b.id) || b.content;
-      const lineCount = content.split('\n').length;
-      const end = start + lineCount - 1;
-      if (absLine >= start && absLine <= end) {
-        targetBlockId = b.id;
-        localLine = absLine - start + 1;
-        break;
-      }
-    }
-    if (targetBlockId === null) return;
-
-    // Don't steal focus if user is currently typing in any editor
-    const anyFocused = Array.from(editorInstancesRef.current.values()).some(e => e.hasTextFocus());
-    if (anyFocused && targetBlockId === cursorInfo?.blockId) {
-      // User is typing in the same block — just scroll, don't move cursor
-      return;
-    }
-
-    const editor = editorInstancesRef.current.get(targetBlockId);
-    if (!editor) return;
-
-    editor.focus();
-    editor.setPosition({ lineNumber: localLine, column: character + 1 });
-    editor.revealPositionInCenterIfOutsideViewport({ lineNumber: localLine, column: character + 1 });
-  }, [coqState.moveCursorTarget, blocks, blockStartLines, cursorInfo]);
+  // Disabled: never programmatically move the cursor.
+  // The user controls their cursor position — vscoqtop's moveCursor
+  // notifications are ignored to prevent cursor jumping between blocks.
+  // The green highlight shows what's been processed instead.
 
   // IntersectionObserver — detect which block is currently in the viewport
   useEffect(() => {
@@ -827,13 +788,13 @@ export default function ChapterPage() {
         <span className="text-sm font-semibold text-gray-800">{chapterName}.v</span>
 
         <div className="flex items-center gap-2 ml-auto">
-          <button onClick={() => { userSteppedAtRef.current = Date.now(); syncThenDo(coqActions.stepBackward); }}
+          <button onClick={() => { /* cursor movement disabled */ syncThenDo(coqActions.stepBackward); }}
             disabled={!coqState.connected}
             className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 disabled:opacity-30 rounded font-medium border border-gray-200"
             title="Step Back (Alt+Up)">
             &#9664; Undo
           </button>
-          <button onClick={() => { userSteppedAtRef.current = Date.now(); syncThenDo(coqActions.stepForward); }}
+          <button onClick={() => { /* cursor movement disabled */ syncThenDo(coqActions.stepForward); }}
             disabled={!coqState.connected}
             className="px-3 py-1.5 text-xs bg-[#7088a8] hover:bg-[#607898] text-white disabled:opacity-30 rounded font-medium shadow-sm"
             title="Step Forward (Alt+Down)">
@@ -970,7 +931,7 @@ export default function ChapterPage() {
                         <span className="text-[10px] font-mono text-gray-300" />
                         <div className="ml-auto flex items-center gap-2">
                           {status !== 'full' && (
-                            <button onClick={(e) => { e.stopPropagation(); userSteppedAtRef.current = Date.now(); syncThenDo(() => runToBlock(block.id)); }}
+                            <button onClick={(e) => { e.stopPropagation(); /* cursor movement disabled */ syncThenDo(() => runToBlock(block.id)); }}
                               disabled={!coqState.connected}
                               className="text-[10px] text-blue-500 hover:text-blue-700 disabled:opacity-30 font-medium">
                               &#9654; run
@@ -1039,7 +1000,7 @@ export default function ChapterPage() {
                           })()}
                           <div className="ml-auto flex items-center gap-2">
                             {status !== 'full' && (
-                              <button onClick={(e) => { e.stopPropagation(); userSteppedAtRef.current = Date.now(); syncThenDo(() => runToBlock(block.id)); }}
+                              <button onClick={(e) => { e.stopPropagation(); /* cursor movement disabled */ syncThenDo(() => runToBlock(block.id)); }}
                                 disabled={!coqState.connected}
                                 className="text-[10px] text-blue-500 hover:text-blue-700 disabled:opacity-30 font-medium">
                                 &#9654; run
