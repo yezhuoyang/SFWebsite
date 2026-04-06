@@ -527,18 +527,16 @@ export default function ChapterPage() {
       // Also persist current edits
       saveBlockEdits(volumeId, chapterName, blockContentsRef.current);
 
-      // Refresh exercises to update status badges (merge with local grades)
-      getExercises(volumeId, chapterName).then(serverExercises => {
-        const localGrades = loadGradeResults(volumeId, chapterName);
-        if (localGrades) {
-          setExercises(serverExercises.map(ex => {
-            const local = localGrades[ex.name];
-            return (local?.status === 'completed') ? { ...ex, status: 'completed' as const } : ex;
-          }));
-        } else {
-          setExercises(serverExercises);
-        }
-      }).catch(console.error);
+      // Update exercises state immediately from grade results (no server round-trip)
+      const localGrades = loadGradeResults(volumeId, chapterName) || {};
+      setExercises(prev => prev.map(ex => {
+        // Check grade result first, then localStorage
+        const graded = result.exercises?.find(e => e.name === ex.name);
+        if (graded?.status === 'completed') return { ...ex, status: 'completed' as const };
+        if (localGrades[ex.name]?.status === 'completed') return { ...ex, status: 'completed' as const };
+        if (graded) return { ...ex, status: graded.status as any };
+        return ex;
+      }));
       // Clear save result notification after 5 seconds
       setTimeout(() => setSaveResult(null), 5000);
     } catch (e: any) {
