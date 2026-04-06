@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { getVolumes } from '../api/client';
 import type { Volume } from '../types';
 import { VOLUME_ILLUSTRATIONS } from '../components/VolumeIllustrations';
 import { PLSELogo, UCLACSLogo } from '../components/PLSELogo';
+import { countVolumeLocalCompleted } from '../utils/storage';
 
 const VOLUME_META: Record<string, { gradient: string; accent: string; desc: string; topics: string[] }> = {
   lf: {
@@ -48,8 +49,14 @@ export default function Dashboard() {
     getVolumes().then(setVolumes).catch(console.error);
   }, []);
 
-  const totalExercises = volumes.reduce((s, v) => s + v.exercise_count, 0);
-  const totalCompleted = volumes.reduce((s, v) => s + v.completed_count, 0);
+  // Overlay localStorage grades onto volume completed counts
+  const volumesWithLocal = useMemo(() => volumes.map(v => {
+    const localCount = countVolumeLocalCompleted(v.id);
+    return { ...v, completed_count: Math.max(v.completed_count, localCount) };
+  }), [volumes]);
+
+  const totalExercises = volumesWithLocal.reduce((s, v) => s + v.exercise_count, 0);
+  const totalCompleted = volumesWithLocal.reduce((s, v) => s + v.completed_count, 0);
   const overallPct = totalExercises > 0 ? Math.round((totalCompleted / totalExercises) * 100) : 0;
 
   return (
@@ -86,16 +93,16 @@ export default function Dashboard() {
         </div>
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Volumes</p>
-          <p className="text-4xl font-extrabold text-gray-900 mt-1">{volumes.length}</p>
+          <p className="text-4xl font-extrabold text-gray-900 mt-1">{volumesWithLocal.length}</p>
           <p className="text-sm text-gray-400 mt-1">
-            {volumes.filter(v => v.completed_count > 0).length} in progress
+            {volumesWithLocal.filter(v => v.completed_count > 0).length} in progress
           </p>
         </div>
       </div>
 
       {/* Volume cards */}
       <div className="space-y-5">
-        {volumes.map((v) => {
+        {volumesWithLocal.map((v) => {
           const meta = VOLUME_META[v.id] || { gradient: 'from-gray-500 to-gray-600', accent: 'text-gray-600', desc: '', topics: [] };
           const pct = v.exercise_count > 0
             ? Math.round((v.completed_count / v.exercise_count) * 100)

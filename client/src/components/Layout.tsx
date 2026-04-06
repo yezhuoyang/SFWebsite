@@ -4,6 +4,7 @@ import { getVolumes } from '../api/client';
 import type { Volume } from '../types';
 import { SFLogo } from './VolumeIllustrations';
 import { PLSELogo } from './PLSELogo';
+import { countVolumeLocalCompleted } from '../utils/storage';
 
 const VOLUME_COLORS: Record<string, string> = {
   lf: 'bg-blue-500',
@@ -35,8 +36,10 @@ export default function Layout() {
 
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
           {volumes.map((v) => {
+            const localCount = countVolumeLocalCompleted(v.id);
+            const completed = Math.max(v.completed_count, localCount);
             const pct = v.exercise_count > 0
-              ? Math.round((v.completed_count / v.exercise_count) * 100)
+              ? Math.round((completed / v.exercise_count) * 100)
               : 0;
             const isActive = location.pathname.includes(`/volume/${v.id}`);
 
@@ -64,7 +67,7 @@ export default function Layout() {
                   />
                 </div>
                 <p className="text-[11px] text-gray-400 mt-1">
-                  {v.completed_count}/{v.exercise_count}
+                  {completed}/{v.exercise_count}
                 </p>
               </Link>
             );

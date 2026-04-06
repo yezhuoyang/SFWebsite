@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getChapters, getVolumes } from '../api/client';
 import type { Chapter, Volume } from '../types';
 import { getChapterIllustration } from '../components/ChapterIllustrations';
+import { countLocalCompleted } from '../utils/storage';
 
 const VOLUME_GRADIENTS: Record<string, string> = {
   lf: 'from-blue-500 to-indigo-600',
@@ -23,10 +24,20 @@ export default function VolumePage() {
     getChapters(volumeId).then(setChapters).catch(console.error);
   }, [volumeId]);
 
+  // Overlay localStorage grades onto chapter completed counts
+  const chaptersWithLocal = useMemo(() => {
+    if (!volumeId) return chapters;
+    return chapters.map(ch => {
+      const localCount = countLocalCompleted(volumeId, ch.name);
+      return { ...ch, completed_count: Math.max(ch.completed_count, localCount) };
+    });
+  }, [chapters, volumeId]);
+
   if (!volumeId || !volume) return <div className="p-10 text-gray-400">Loading...</div>;
 
+  const totalCompleted = chaptersWithLocal.reduce((s, ch) => s + ch.completed_count, 0);
   const overallPct = volume.exercise_count > 0
-    ? Math.round((volume.completed_count / volume.exercise_count) * 100)
+    ? Math.round((totalCompleted / volume.exercise_count) * 100)
     : 0;
   const gradient = VOLUME_GRADIENTS[volumeId] || 'from-gray-500 to-gray-600';
 
@@ -45,7 +56,7 @@ export default function VolumePage() {
         </div>
         <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">{volume.name}</h1>
         <p className="text-sm text-gray-500 mt-2">
-          {volume.completed_count} of {volume.exercise_count} exercises completed ({overallPct}%)
+          {totalCompleted} of {volume.exercise_count} exercises completed ({overallPct}%)
         </p>
         <div className="w-full max-w-sm bg-gray-100 rounded-full h-2.5 mt-3">
           <div className={`bg-gradient-to-r ${gradient} h-2.5 rounded-full transition-all`} style={{ width: `${overallPct}%` }} />
@@ -54,7 +65,7 @@ export default function VolumePage() {
 
       {/* Chapter list */}
       <div className="space-y-2">
-        {chapters.map((ch, i) => {
+        {chaptersWithLocal.map((ch, i) => {
           const pct = ch.exercise_count > 0
             ? Math.round((ch.completed_count / ch.exercise_count) * 100)
             : 0;

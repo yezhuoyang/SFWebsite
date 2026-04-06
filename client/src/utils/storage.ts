@@ -89,3 +89,30 @@ export function loadGradeResults(
     return null;
   }
 }
+
+/** Count locally-completed exercises for a chapter */
+export function countLocalCompleted(volume: string, chapter: string): number {
+  const grades = loadGradeResults(volume, chapter);
+  if (!grades) return 0;
+  return Object.values(grades).filter(g => g.status === 'completed').length;
+}
+
+/** Get total local completions across all chapters for a volume.
+ *  Scans all localStorage keys matching sf:grades:{volume}:* */
+export function countVolumeLocalCompleted(volume: string): number {
+  const prefix = `${PREFIX}:grades:${volume}:`;
+  let total = 0;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix)) {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const grades = JSON.parse(raw) as Record<string, StoredGrade>;
+          total += Object.values(grades).filter(g => g.status === 'completed').length;
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  return total;
+}
