@@ -207,7 +207,7 @@ export default function ChapterPage() {
     // Use a wrapper that always reads the latest ref values
     const doStep = (desc: string, action: () => void) => {
       logStep(desc);
-      userSteppedRef.current = true;  // allow moveCursor to fire
+      userSteppedAtRef.current = Date.now();  // allow moveCursor to fire
       const sync = syncThenDoRef.current;
       if (sync) { sync(action); } else { action(); }
     };
@@ -516,14 +516,16 @@ export default function ChapterPage() {
     setCompletionContext(getContextNames(entries));
   }, [allExecutedTexts]);
 
-  // Move cursor to end of processed region ONLY when user explicitly stepped.
-  // We track whether the last action was a manual step (Alt+Down/Up/Right/End or "run" button).
-  // If it was an auto-recheck (edit debounce), we do NOT move the cursor.
-  const userSteppedRef = useRef(false);
+  // Move cursor ONLY when user explicitly stepped, and only within a short window.
+  const userSteppedAtRef = useRef(0);  // timestamp of last explicit step
 
   useEffect(() => {
-    if (!coqState.moveCursorTarget || !userSteppedRef.current) return;
-    userSteppedRef.current = false;  // consume the flag
+    if (!coqState.moveCursorTarget) return;
+
+    // Only act if user stepped within the last 2 seconds
+    const elapsed = Date.now() - userSteppedAtRef.current;
+    if (elapsed > 2000) return;
+    userSteppedAtRef.current = 0;  // consume
 
     const { line: absLine, character } = coqState.moveCursorTarget;
 
@@ -542,13 +544,20 @@ export default function ChapterPage() {
     }
     if (targetBlockId === null) return;
 
+    // Don't steal focus if user is currently typing in any editor
+    const anyFocused = Array.from(editorInstancesRef.current.values()).some(e => e.hasTextFocus());
+    if (anyFocused && targetBlockId === cursorInfo?.blockId) {
+      // User is typing in the same block — just scroll, don't move cursor
+      return;
+    }
+
     const editor = editorInstancesRef.current.get(targetBlockId);
     if (!editor) return;
 
     editor.focus();
     editor.setPosition({ lineNumber: localLine, column: character + 1 });
     editor.revealPositionInCenterIfOutsideViewport({ lineNumber: localLine, column: character + 1 });
-  }, [coqState.moveCursorTarget, blocks, blockStartLines]);
+  }, [coqState.moveCursorTarget, blocks, blockStartLines, cursorInfo]);
 
   // IntersectionObserver — detect which block is currently in the viewport
   useEffect(() => {
@@ -781,13 +790,13 @@ export default function ChapterPage() {
         <span className="text-sm font-semibold text-gray-800">{chapterName}.v</span>
 
         <div className="flex items-center gap-2 ml-auto">
-          <button onClick={() => { userSteppedRef.current = true; syncThenDo(coqActions.stepBackward); }}
+          <button onClick={() => { userSteppedAtRef.current = Date.now(); syncThenDo(coqActions.stepBackward); }}
             disabled={!coqState.connected}
             className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 disabled:opacity-30 rounded font-medium border border-gray-200"
             title="Step Back (Alt+Up)">
             &#9664; Undo
           </button>
-          <button onClick={() => { userSteppedRef.current = true; syncThenDo(coqActions.stepForward); }}
+          <button onClick={() => { userSteppedAtRef.current = Date.now(); syncThenDo(coqActions.stepForward); }}
             disabled={!coqState.connected}
             className="px-3 py-1.5 text-xs bg-[#7088a8] hover:bg-[#607898] text-white disabled:opacity-30 rounded font-medium shadow-sm"
             title="Step Forward (Alt+Down)">
@@ -924,7 +933,7 @@ export default function ChapterPage() {
                         <span className="text-[10px] font-mono text-gray-300" />
                         <div className="ml-auto flex items-center gap-2">
                           {status !== 'full' && (
-                            <button onClick={(e) => { e.stopPropagation(); userSteppedRef.current = true; syncThenDo(() => runToBlock(block.id)); }}
+                            <button onClick={(e) => { e.stopPropagation(); userSteppedAtRef.current = Date.now(); syncThenDo(() => runToBlock(block.id)); }}
                               disabled={!coqState.connected}
                               className="text-[10px] text-blue-500 hover:text-blue-700 disabled:opacity-30 font-medium">
                               &#9654; run
@@ -993,7 +1002,7 @@ export default function ChapterPage() {
                           })()}
                           <div className="ml-auto flex items-center gap-2">
                             {status !== 'full' && (
-                              <button onClick={(e) => { e.stopPropagation(); userSteppedRef.current = true; syncThenDo(() => runToBlock(block.id)); }}
+                              <button onClick={(e) => { e.stopPropagation(); userSteppedAtRef.current = Date.now(); syncThenDo(() => runToBlock(block.id)); }}
                                 disabled={!coqState.connected}
                                 className="text-[10px] text-blue-500 hover:text-blue-700 disabled:opacity-30 font-medium">
                                 &#9654; run
