@@ -396,14 +396,24 @@ export default function ChapterPage() {
     if (blocks.length > 0) recomputeStartLinesRaw();
   }, [blocks, recomputeStartLinesRaw]);
 
-  // Update Monaco line-number functions whenever offsets change
+  // Update Monaco line-number functions — ONLY for editors whose start line changed.
+  // Calling updateOptions on the focused editor causes cursor position disturbance.
+  const prevStartLinesRef = useRef<Map<number, number>>(new Map());
   useEffect(() => {
+    const prev = prevStartLinesRef.current;
     editorInstancesRef.current.forEach((editor, blockId) => {
       const start = blockStartLines.get(blockId) || 1;
-      editor.updateOptions({
-        lineNumbers: ((n: number) => String(start + n - 1)) as any,
-      });
+      const oldStart = prev.get(blockId) || 0;
+      if (start !== oldStart) {
+        // Skip updating the editor that currently has text focus — avoids cursor jump
+        if (!editor.hasTextFocus()) {
+          editor.updateOptions({
+            lineNumbers: ((n: number) => String(start + n - 1)) as any,
+          });
+        }
+      }
     });
+    prevStartLinesRef.current = new Map(blockStartLines);
   }, [blockStartLines]);
 
   /** Flush any pending edits and then run an action. vscoqtop processes
