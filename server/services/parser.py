@@ -106,18 +106,27 @@ def parse_exercises(filepath: Path) -> list[ParsedExercise]:
         has_replace = bool(REPLACE_LINE_RE.search(body))
         has_admitted = bool(ADMITTED_RE.search(body))
         has_qed = bool(re.search(r'\b(Qed|Defined)\s*\.', body))
-
-        if has_admitted:
-            # Admitted always means incomplete
-            status = "not_started"
-        elif (has_fill_in or has_replace) and not has_qed:
-            # Placeholder comment still present and no completed proof
-            status = "not_started"
-        else:
-            # Either no markers, or user wrote proof alongside the comment
-            status = "completed"
+        # Check if user added substantive Coq code (definitions, inductive types, etc.)
+        # Strip out the manual_grade sentinel before checking
+        code_after = body.split('FILL IN HERE')[-1] if 'FILL IN HERE' in body else body
+        code_after = re.sub(r'Definition\s+manual_grade_for_\w+\s*:.*?\.', '', code_after)
+        has_real_code = bool(re.search(
+            r'\b(Inductive|Fixpoint|Definition|Lemma|Theorem|Example|'
+            r'Corollary|Fact|Remark|Proposition|Record|Class|Instance)\b',
+            code_after
+        ))
 
         is_manual = name in manual_exercises
+
+        if has_admitted and not has_qed:
+            # Admitted without Qed means incomplete
+            status = "not_started"
+        elif (has_fill_in or has_replace) and not has_qed and not has_real_code:
+            # Placeholder still present, no completed proof, no new definitions
+            status = "not_started"
+        else:
+            # User wrote proof (Qed) or added real definitions
+            status = "completed"
 
         exercises.append(ParsedExercise(
             name=name,
