@@ -19,7 +19,8 @@ interface Props {
   onExplain: () => void;
 }
 
-export default function GoalsPanel({ proofView, diagnostics, loading, explanation, explainLoading, activityInfo, renderMarkdown, onExplain }: Props) {
+export default function GoalsPanel({ proofView, diagnostics, loading, explanation, explainLoading, activityInfo: _activityInfo, renderMarkdown, onExplain }: Props) {
+  void _activityInfo; // Moved to History tab
   const proof = proofView?.proof;
   const messages = proofView?.messages || [];
   const goals = proof?.goals || [];
@@ -41,39 +42,6 @@ export default function GoalsPanel({ proofView, diagnostics, loading, explanatio
   return (
     <div className="h-full flex flex-col">
       <div className="flex-1 overflow-y-auto p-4">
-
-        {/* Activity tracking */}
-        <div className="mb-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
-          <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider mb-1.5">Activity Tracking</div>
-          <div className="space-y-1 text-[11px]">
-            <div className="flex gap-2">
-              <span className="text-gray-500 shrink-0 w-20">Viewing:</span>
-              <span className="text-indigo-800 font-medium truncate">{activityInfo.viewedLabel || '—'}</span>
-            </div>
-            <div className="flex gap-2">
-              <span className="text-gray-500 shrink-0 w-20">Cursor block:</span>
-              <span className="text-indigo-800 font-medium truncate">{activityInfo.focusedLabel || '—'}</span>
-            </div>
-            {activityInfo.cursorDetail && (
-              <div className="flex gap-2">
-                <span className="text-gray-500 shrink-0 w-20">Cursor pos:</span>
-                <span className="text-indigo-800 font-mono text-[10px] truncate">{activityInfo.cursorDetail}</span>
-              </div>
-            )}
-            {activityInfo.recentEdits.length > 0 && (
-              <div className="pt-1 mt-1 border-t border-indigo-200">
-                <div className="text-gray-500 mb-0.5">Recent activity:</div>
-                {activityInfo.recentEdits.slice(0, 4).map((e, i) => (
-                  <div key={i} className="flex gap-2 text-[10px]">
-                    <span className="text-indigo-400 shrink-0 w-12">{e.action}</span>
-                    <span className="text-gray-700 truncate flex-1">{e.label}</span>
-                    <span className="text-gray-400 shrink-0">{e.ago}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
 
         {/* Errors from diagnostics */}
         {errors.length > 0 && (

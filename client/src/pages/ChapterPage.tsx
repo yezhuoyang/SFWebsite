@@ -1215,6 +1215,41 @@ export default function ChapterPage() {
                     className="ml-auto text-[10px] text-gray-400 hover:text-gray-600 px-2 py-1"
                   >clear</button>
                 </div>
+                {/* Activity Tracking — live cursor/view state */}
+                <div className="px-3 py-2 border-b border-gray-200">
+                  <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider mb-1.5">Current Position</div>
+                  <div className="space-y-1 text-[11px]">
+                    <div className="flex gap-2">
+                      <span className="text-gray-500 shrink-0 w-20">Viewing:</span>
+                      <span className="text-indigo-800 font-medium truncate">{(() => {
+                        if (!viewedBlockId) return '—';
+                        const b = blocks.find(bl => bl.id === viewedBlockId);
+                        if (!b) return '—';
+                        const startLine = blockStartLines.get(b.id) || b.line_start;
+                        return b.title || b.exercise_name || `${b.kind} at line ${startLine}`;
+                      })()}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className="text-gray-500 shrink-0 w-20">Cursor block:</span>
+                      <span className="text-indigo-800 font-medium truncate">{(() => {
+                        if (!cursorInfo) return '—';
+                        const b = blocks.find(bl => bl.id === cursorInfo.blockId);
+                        if (!b) return '—';
+                        const startLine = blockStartLines.get(b.id) || b.line_start;
+                        return b.title || b.exercise_name || `${b.kind} at line ${startLine}`;
+                      })()}</span>
+                    </div>
+                    {cursorInfo && (
+                      <div className="flex gap-2">
+                        <span className="text-gray-500 shrink-0 w-20">Cursor pos:</span>
+                        <span className="text-indigo-800 font-mono text-[10px] truncate">
+                          line {(blockStartLines.get(cursorInfo.blockId) || 1) + cursorInfo.localLine - 1}, col {cursorInfo.column} — after '{cursorInfo.charBefore}', before '{cursorInfo.charAfter}'
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex-1 overflow-y-auto p-2">
                   {editHistoryRef.current.length === 0 && (
                     <div className="text-center text-gray-300 text-xs mt-6">
