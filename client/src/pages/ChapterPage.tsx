@@ -26,7 +26,7 @@ import {
 } from '../api/client';
 import { useCoqWebSocket } from '../api/coqWebSocket';
 import type { Exercise } from '../types';
-import { saveBlockEdits, loadBlockEdits, clearBlockEdits, saveGradeResults, loadGradeResults, type StoredGrade } from '../utils/storage';
+import { saveBlockEdits, loadBlockEdits, clearBlockEdits, saveGradeResults, loadGradeResults, type StoredGrade, loadAnnotations, saveAnnotations, clearAnnotations, type Annotation } from '../utils/storage';
 
 export default function ChapterPage() {
   const { volumeId, chapterName } = useParams<{ volumeId: string; chapterName: string }>();
@@ -49,6 +49,16 @@ export default function ChapterPage() {
   const tutorChatRef = useRef<TutorChatHandle>(null);
   const [celebration, setCelebration] = useState<{ names: string[] } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [annotationPopup, setAnnotationPopup] = useState<{
+    mode: 'create' | 'view';
+    annotation?: Annotation;
+    blockId: number;
+    startLine: number; startCol: number;
+    endLine: number; endCol: number;
+    x: number; y: number;
+  } | null>(null);
+  const [annotationText, setAnnotationText] = useState('');
 
   useEffect(() => {
     const handler = () => setIsFullscreen(!!document.fullscreenElement);
@@ -115,6 +125,8 @@ export default function ChapterPage() {
       blocksWithEdits.forEach(b => blockContentsRef.current.set(b.id, b.content));
       originalDocRef.current = blocksWithEdits.map(b => b.content).join('\n');
     });
+    // Load annotations from localStorage
+    setAnnotations(loadAnnotations(volumeId, chapterName));
     // Load exercises, then overlay with locally-stored grades
     getExercises(volumeId, chapterName).then(serverExercises => {
       const localGrades = loadGradeResults(volumeId, chapterName);
@@ -270,6 +282,32 @@ export default function ChapterPage() {
     });
     editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.End, () => {
       doStep('Alt+End: interpret to end', () => coqActionsRef.current!.interpretToEnd());
+    });
+
+    // Annotate action — right-click or Ctrl+M
+    editor.addAction({
+      id: 'annotate-selection',
+      label: 'Add Annotation',
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyM],
+      contextMenuGroupId: '9_cutcopypaste',
+      contextMenuOrder: 10,
+      run: (ed: any) => {
+        const sel = ed.getSelection();
+        if (!sel || sel.isEmpty()) return;
+        const domNode = ed.getDomNode();
+        const rect = domNode?.getBoundingClientRect();
+        setAnnotationPopup({
+          mode: 'create',
+          blockId,
+          startLine: sel.startLineNumber,
+          startCol: sel.startColumn,
+          endLine: sel.endLineNumber,
+          endCol: sel.endColumn,
+          x: rect ? rect.left + rect.width / 2 : 400,
+          y: rect ? rect.top + 60 : 200,
+        });
+        setAnnotationText('');
+      },
     });
 
     // Auto-resize
@@ -476,6 +514,61 @@ export default function ChapterPage() {
     });
     prevStartLinesRef.current = new Map(blockStartLines);
   }, [blockStartLines]);
+
+  // Apply annotation underline decorations to editors
+  const annotationDecorationsRef = useRef<Map<number, string[]>>(new Map());
+  useEffect(() => {
+    if (!monacoRef.current) return;
+    editorInstancesRef.current.forEach((editor, blockId) => {
+      const blockAnnotations = annotations.filter(a => a.blockId === blockId);
+      const decorations = blockAnnotations.map(a => ({
+        range: new monacoRef.current.Range(a.startLine, a.startCol, a.endLine, a.endCol),
+        options: {
+          inlineClassName: 'annotation-underline',
+          hoverMessage: { value: `**Note:** ${a.text}` },
+          glyphMarginClassName: 'annotation-glyph',
+        },
+      }));
+      const oldIds = annotationDecorationsRef.current.get(blockId) || [];
+      const newIds = editor.deltaDecorations(oldIds, decorations);
+      annotationDecorationsRef.current.set(blockId, newIds);
+    });
+  }, [annotations, blocks]);
+
+  // Click handler for annotation underlines — show popup on click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.classList.contains('annotation-underline')) return;
+      // Find which editor/block was clicked
+      for (const [blockId, editor] of editorInstancesRef.current.entries()) {
+        const domNode = editor.getDomNode();
+        if (domNode && domNode.contains(target)) {
+          const pos = editor.getTargetAtClientPoint(e.clientX, e.clientY);
+          if (!pos?.position) break;
+          const line = pos.position.lineNumber;
+          const col = pos.position.column;
+          const ann = annotations.find(a =>
+            a.blockId === blockId &&
+            (a.startLine < line || (a.startLine === line && a.startCol <= col)) &&
+            (a.endLine > line || (a.endLine === line && a.endCol >= col))
+          );
+          if (ann) {
+            setAnnotationPopup({
+              mode: 'view', annotation: ann,
+              blockId, startLine: ann.startLine, startCol: ann.startCol,
+              endLine: ann.endLine, endCol: ann.endCol,
+              x: e.clientX, y: e.clientY,
+            });
+            setAnnotationText(ann.text);
+          }
+          break;
+        }
+      }
+    };
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [annotations]);
 
   /** Sync document if dirty, then run action.
    * Only sends didChange when user explicitly steps — never auto during typing.
@@ -1619,12 +1712,90 @@ export default function ChapterPage() {
           )}
         </>
       )}
+      {/* Annotation popup */}
+      {annotationPopup && (
+        <div className="fixed z-50" style={{ left: Math.min(annotationPopup.x, window.innerWidth - 340), top: Math.min(annotationPopup.y, window.innerHeight - 200) }}>
+          <div className="bg-white border border-yellow-300 rounded-lg shadow-xl p-3 w-80">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-yellow-700 uppercase tracking-wider">
+                {annotationPopup.mode === 'create' ? 'New Annotation' : 'Annotation'}
+              </span>
+              <button onClick={() => setAnnotationPopup(null)} className="text-gray-400 hover:text-gray-600 text-sm">&times;</button>
+            </div>
+            <textarea
+              className="w-full border border-gray-200 rounded p-2 text-sm resize-none focus:outline-none focus:border-yellow-400"
+              rows={3}
+              placeholder="Type your note here..."
+              value={annotationText}
+              onChange={e => setAnnotationText(e.target.value)}
+              autoFocus
+            />
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={() => {
+                  if (!annotationText.trim() || !volumeId || !chapterName) return;
+                  const newAnn: Annotation = {
+                    id: annotationPopup.annotation?.id || `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    blockId: annotationPopup.blockId,
+                    startLine: annotationPopup.startLine,
+                    startCol: annotationPopup.startCol,
+                    endLine: annotationPopup.endLine,
+                    endCol: annotationPopup.endCol,
+                    text: annotationText.trim(),
+                    createdAt: annotationPopup.annotation?.createdAt || Date.now(),
+                  };
+                  const updated = annotationPopup.mode === 'create'
+                    ? [...annotations, newAnn]
+                    : annotations.map(a => a.id === newAnn.id ? newAnn : a);
+                  setAnnotations(updated);
+                  saveAnnotations(volumeId, chapterName, updated);
+                  setAnnotationPopup(null);
+                }}
+                className="flex-1 text-xs bg-yellow-500 text-white py-1.5 rounded hover:bg-yellow-600 font-medium"
+              >
+                {annotationPopup.mode === 'create' ? 'Save' : 'Update'}
+              </button>
+              {annotationPopup.mode === 'view' && annotationPopup.annotation && (
+                <button
+                  onClick={() => {
+                    if (!volumeId || !chapterName) return;
+                    const updated = annotations.filter(a => a.id !== annotationPopup.annotation!.id);
+                    setAnnotations(updated);
+                    saveAnnotations(volumeId, chapterName, updated);
+                    setAnnotationPopup(null);
+                  }}
+                  className="text-xs bg-red-100 text-red-600 px-3 py-1.5 rounded hover:bg-red-200 font-medium"
+                >
+                  Delete
+                </button>
+              )}
+              <button onClick={() => setAnnotationPopup(null)}
+                className="text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded hover:bg-gray-200 font-medium">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Keyboard shortcut reminder bar */}
       <div className="h-8 bg-gray-100 border-t border-gray-200 flex items-center justify-center gap-6 shrink-0 text-sm text-gray-500">
         <span><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded text-xs font-mono shadow-sm">Alt+&#8595;</kbd> Step forward</span>
         <span><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded text-xs font-mono shadow-sm">Alt+&#8593;</kbd> Step back</span>
         <span><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded text-xs font-mono shadow-sm">Alt+&#8594;</kbd> Run to cursor</span>
         <span><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded text-xs font-mono shadow-sm">Alt+End</kbd> Run all</span>
+        <span className="text-gray-300">|</span>
+        <span><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded text-xs font-mono shadow-sm">Ctrl+M</kbd> Annotate selection</span>
+        {annotations.length > 0 && (
+          <button onClick={() => {
+            if (!volumeId || !chapterName) return;
+            if (!confirm(`Clear all ${annotations.length} annotations for this chapter?`)) return;
+            clearAnnotations(volumeId, chapterName);
+            setAnnotations([]);
+          }} className="text-red-400 hover:text-red-600 text-xs font-medium">
+            Clear notes ({annotations.length})
+          </button>
+        )}
       </div>
     </div>
   );

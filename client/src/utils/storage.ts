@@ -97,6 +97,43 @@ export function countLocalCompleted(volume: string, chapter: string): number {
   return Object.values(grades).filter(g => g.status === 'completed').length;
 }
 
+// ── Annotations ──────────────────────────────────────────────
+
+export interface Annotation {
+  id: string;           // unique id
+  blockId: number;
+  startLine: number;    // 1-indexed within the block
+  startCol: number;
+  endLine: number;
+  endCol: number;
+  text: string;         // user's note
+  createdAt: number;
+}
+
+function annotationsKey(volume: string, chapter: string): string {
+  return `${PREFIX}:annotations:${volume}:${chapter}`;
+}
+
+export function loadAnnotations(volume: string, chapter: string): Annotation[] {
+  try {
+    const raw = localStorage.getItem(annotationsKey(volume, chapter));
+    if (!raw) return [];
+    return JSON.parse(raw) as Annotation[];
+  } catch {
+    return [];
+  }
+}
+
+export function saveAnnotations(volume: string, chapter: string, annotations: Annotation[]): void {
+  try {
+    localStorage.setItem(annotationsKey(volume, chapter), JSON.stringify(annotations));
+  } catch { /* ignore */ }
+}
+
+export function clearAnnotations(volume: string, chapter: string): void {
+  localStorage.removeItem(annotationsKey(volume, chapter));
+}
+
 /** Get total local completions across all chapters for a volume.
  *  Scans all localStorage keys matching sf:grades:{volume}:* */
 export function countVolumeLocalCompleted(volume: string): number {

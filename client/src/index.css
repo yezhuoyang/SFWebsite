@@ -125,6 +125,18 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.45); }
 
 /* ===================================================================
+   Annotation underlines
+   =================================================================== */
+.annotation-underline {
+  border-bottom: 2px solid #f59e0b;
+  cursor: pointer;
+  background: rgba(245, 158, 11, 0.08);
+}
+.annotation-underline:hover {
+  background: rgba(245, 158, 11, 0.18);
+}
+
+/* ===================================================================
    Celebration animations
    =================================================================== */
 @keyframes rocketUp {
