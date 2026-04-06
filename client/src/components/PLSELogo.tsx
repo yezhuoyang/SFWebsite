@@ -39,19 +39,11 @@ export function PLSELogo({ size = 120 }: { size?: number }) {
         <text x="82" y="52">1</text>
       </g>
 
-      {/* ⊢ (turnstile) — proof symbol */}
-      <g transform="translate(22, 78)" fill="#6b3a0a" opacity="0.8">
-        <rect x="0" y="0" width="3" height="22" rx="1" />
-        <rect x="3" y="9" width="16" height="3" rx="1" />
-      </g>
+      {/* S — stylized with circuit-like look */}
+      <text x="20" y="100" fill="#6b3a0a" fontSize="32" fontFamily="Georgia, serif" fontWeight="700" opacity="0.85">S</text>
 
-      {/* E — Engineering */}
-      <g transform="translate(55, 78)" fill="#6b3a0a" opacity="0.8">
-        <rect x="0" y="0" width="3" height="22" rx="1" />
-        <rect x="3" y="0" width="18" height="3" rx="1" />
-        <rect x="3" y="9" width="14" height="3" rx="1" />
-        <rect x="3" y="19" width="18" height="3" rx="1" />
-      </g>
+      {/* E — stylized */}
+      <text x="52" y="100" fill="#6b3a0a" fontSize="32" fontFamily="Georgia, serif" fontWeight="700" opacity="0.85">E</text>
 
       {/* More binary digits around ⊢ and E */}
       <g fill="#8b6914" fontSize="6" fontFamily="monospace" opacity="0.35">

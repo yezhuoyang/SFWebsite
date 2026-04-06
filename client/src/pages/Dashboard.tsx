@@ -57,9 +57,9 @@ export default function Dashboard() {
       {/* Header */}
       <div className="mb-12">
         {/* Institutional logos */}
-        <div className="flex items-center gap-5 mb-6">
-          <PLSELogo size={64} />
-          <UCLACSLogo size={50} />
+        <div className="flex items-center gap-6 mb-6">
+          <PLSELogo size={80} />
+          <UCLACSLogo size={80} />
         </div>
         <p className="text-sm font-semibold text-indigo-500 uppercase tracking-wider mb-2">Learning Platform</p>
         <h1 className="text-4xl font-extrabold text-gray-900 mb-2 tracking-tight">
