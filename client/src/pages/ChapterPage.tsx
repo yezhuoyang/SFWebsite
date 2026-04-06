@@ -1004,20 +1004,32 @@ export default function ChapterPage() {
               <div className="p-3">
                 <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Contents</h3>
                 <nav className="space-y-0.5">
-                  {toc.map(entry => (
+                  {toc.map(entry => {
+                    // Check if this exercise is solved
+                    const exBlock = entry.level === 3 ? blocks.find(b => b.id === entry.block_id) : null;
+                    const exName = exBlock?.exercise_name;
+                    const isSolved = exName ? exercises.some(e => e.name === exName && e.status === 'completed') : false;
+                    return (
                     <button key={entry.block_id} onClick={() => scrollToBlock(entry.block_id)}
                       className={`block w-full text-left text-xs py-1.5 px-2 rounded truncate transition-colors ${
                         activeBlockId === entry.block_id
                           ? 'bg-blue-50 text-blue-700 font-medium'
+                          : isSolved
+                          ? 'text-green-700 hover:bg-green-50'
                           : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                       }`}
                       style={{ paddingLeft: `${entry.level * 10}px` }}
                       title={entry.title}
                     >
-                      {entry.level === 3 && <span className="text-amber-500 mr-1">&#9733;</span>}
+                      {entry.level === 3 && (
+                        isSolved
+                          ? <span className="text-green-500 mr-1">&#10003;</span>
+                          : <span className="text-amber-500 mr-1">&#9733;</span>
+                      )}
                       {entry.title}
                     </button>
-                  ))}
+                    );
+                  })}
                 </nav>
               </div>
             </aside>
