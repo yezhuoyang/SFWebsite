@@ -295,17 +295,12 @@ export default function ChapterPage() {
         return next;
       });
 
-      // Debounce: rebuild full document and send didChange to vscoqtop.
-      // Do NOT auto-interpret — just let vscoqtop know the document changed.
-      // The user steps manually with Alt+Down when they're done typing.
-      // This avoids: (1) errors on incomplete tactics, (2) cursor jumps,
-      // (3) line number glitches from updateOptions during typing.
+      // Mark that the document is dirty — do NOT send didChange here.
+      // Only send when user explicitly steps (Alt+Down/Up, Run).
+      // This prevents vscoqtop from parsing incomplete code mid-typing
+      // (e.g., typing a comment like "(*ANum*)" before a tactic).
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = setTimeout(() => {
-        const newDoc = rebuildDocument();
-        coqActions.sendChange(newDoc);
-        originalDocRef.current = newDoc;
-      }, 500);
+      debounceTimerRef.current = 'dirty' as any;  // non-null sentinel = dirty
     });
 
     editor.onDidFocusEditorText(() => {
@@ -426,21 +421,22 @@ export default function ChapterPage() {
     prevStartLinesRef.current = new Map(blockStartLines);
   }, [blockStartLines]);
 
-  /** Sync document if needed, then run action.
-   * Only sends didChange if the document actually changed. */
+  /** Sync document if dirty, then run action.
+   * Only sends didChange when user explicitly steps — never auto during typing. */
   const syncThenDo = useCallback((action: () => void) => {
-    // Cancel any pending debounce
     if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
+      // Document is dirty — sync it before stepping
+      if (typeof debounceTimerRef.current === 'number') {
+        clearTimeout(debounceTimerRef.current);
+      }
       debounceTimerRef.current = null;
-      // Debounce was pending = document changed, need to sync
       const newDoc = rebuildDocument();
       coqActions.sendChange(newDoc);
       originalDocRef.current = newDoc;
-      // Wait for vscoqtop to process the change
-      setTimeout(action, 350);
+      // Wait for vscoqtop to process the didChange
+      setTimeout(action, 400);
     } else {
-      // No pending edit — document is already synced, step immediately
+      // Document is clean — step immediately
       action();
     }
   }, [rebuildDocument, coqActions]);
