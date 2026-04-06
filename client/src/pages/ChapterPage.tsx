@@ -426,20 +426,23 @@ export default function ChapterPage() {
     prevStartLinesRef.current = new Map(blockStartLines);
   }, [blockStartLines]);
 
-  /** Always sync the document before stepping.
-   * This ensures vscoqtop has the latest text before any step command. */
+  /** Sync document if needed, then run action.
+   * Only sends didChange if the document actually changed. */
   const syncThenDo = useCallback((action: () => void) => {
     // Cancel any pending debounce
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
+      // Debounce was pending = document changed, need to sync
+      const newDoc = rebuildDocument();
+      coqActions.sendChange(newDoc);
+      originalDocRef.current = newDoc;
+      // Wait for vscoqtop to process the change
+      setTimeout(action, 350);
+    } else {
+      // No pending edit — document is already synced, step immediately
+      action();
     }
-    // Always send the current document state
-    const newDoc = rebuildDocument();
-    coqActions.sendChange(newDoc);
-    originalDocRef.current = newDoc;
-    // Give vscoqtop time to process the didChange before stepping
-    setTimeout(action, 350);
   }, [rebuildDocument, coqActions]);
 
   // Keep refs in sync — use assignment during render (not useEffect) for immediate availability
