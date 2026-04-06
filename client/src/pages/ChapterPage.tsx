@@ -518,20 +518,14 @@ export default function ChapterPage() {
     prevStartLinesRef.current = new Map(blockStartLines);
   }, [blockStartLines]);
 
-  // DOM-based annotation highlighting — works on ALL content (prose, headers, code)
-  // Runs after render: finds text matching annotation.selectedText in the block's DOM,
-  // wraps it with a <mark> element with dashed underline.
-  useEffect(() => {
-    // Clear previous marks
-    document.querySelectorAll('mark[data-ann-id]').forEach(m => {
-      const parent = m.parentNode;
-      if (parent) {
-        parent.replaceChild(document.createTextNode(m.textContent || ''), m);
-        parent.normalize();
-      }
-    });
+  // DOM-based annotation highlighting — stable across React re-renders.
+  // Uses an interval to check for missing marks and reapply them,
+  // since React re-renders destroy direct DOM modifications.
+  const annotationsRef = useRef(annotations);
+  annotationsRef.current = annotations;
 
-    // Apply Monaco decorations for code blocks
+  useEffect(() => {
+    // Apply Monaco decorations once when annotations change
     if (monacoRef.current) {
       const annotationDecors = annotationDecorationsRef.current;
       editorInstancesRef.current.forEach((editor, blockId) => {
@@ -548,35 +542,51 @@ export default function ChapterPage() {
         annotationDecors.set(blockId, newIds);
       });
     }
-
-    // Apply DOM marks for non-code blocks (comments, headers)
-    for (const ann of annotations) {
-      if (ann.startLine > 0) continue; // handled by Monaco above
-      if (!ann.selectedText) continue;
-      const blockEl = document.querySelector(`[data-block-id="${ann.blockId}"]`);
-      if (!blockEl) continue;
-      const walker = document.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT);
-      let node: Text | null;
-      let found = false;
-      while ((node = walker.nextNode() as Text | null) && !found) {
-        const idx = (node.textContent || '').indexOf(ann.selectedText);
-        if (idx === -1) continue;
-        found = true;
-        const range = document.createRange();
-        range.setStart(node, idx);
-        range.setEnd(node, idx + ann.selectedText.length);
-        const mark = document.createElement('mark');
-        mark.setAttribute('data-ann-id', ann.id);
-        mark.style.borderBottom = `2px dashed ${ann.color || '#f59e0b'}`;
-        mark.style.backgroundColor = `${ann.color || '#f59e0b'}15`;
-        mark.style.cursor = 'pointer';
-        mark.style.textDecoration = 'none';
-        mark.style.color = 'inherit';
-        mark.title = `Note: ${ann.text}`;
-        range.surroundContents(mark);
-      }
-    }
   }, [annotations, blocks]);
+
+  // Interval: check every 500ms if DOM marks are present, reapply missing ones
+  useEffect(() => {
+    if (annotations.length === 0) return;
+
+    const applyMissingMarks = () => {
+      const anns = annotationsRef.current;
+      for (const ann of anns) {
+        if (ann.startLine > 0) continue; // Monaco handles code blocks
+        if (!ann.selectedText) continue;
+        // Already marked?
+        if (document.querySelector(`mark[data-ann-id="${ann.id}"]`)) continue;
+        const blockEl = document.querySelector(`[data-block-id="${ann.blockId}"]`);
+        if (!blockEl) continue;
+        const walker = document.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT);
+        let node: Text | null;
+        while ((node = walker.nextNode() as Text | null)) {
+          const text = node.textContent || '';
+          const idx = text.indexOf(ann.selectedText);
+          if (idx === -1) continue;
+          try {
+            const range = document.createRange();
+            range.setStart(node, idx);
+            range.setEnd(node, idx + ann.selectedText.length);
+            const mark = document.createElement('mark');
+            mark.setAttribute('data-ann-id', ann.id);
+            mark.style.borderBottom = `2px dashed ${ann.color || '#f59e0b'}`;
+            mark.style.backgroundColor = `${ann.color || '#f59e0b'}15`;
+            mark.style.cursor = 'pointer';
+            mark.style.textDecoration = 'none';
+            mark.style.color = 'inherit';
+            mark.title = `Note: ${ann.text}`;
+            range.surroundContents(mark);
+          } catch { /* surroundContents can fail on cross-element ranges */ }
+          break;
+        }
+      }
+    };
+
+    // Apply immediately + set up interval
+    const raf = requestAnimationFrame(applyMissingMarks);
+    const interval = setInterval(applyMissingMarks, 500);
+    return () => { cancelAnimationFrame(raf); clearInterval(interval); };
+  }, [annotations.length]); // restart interval when annotation count changes
 
   // Click handler for annotation marks
   const annotationDecorationsRef = useRef<Map<number, string[]>>(new Map());
@@ -1827,38 +1837,39 @@ export default function ChapterPage() {
         // Find the <mark> element for the arrow anchor
         const annId = annotationPopup.annotation?.id;
         const markEl = annId ? document.querySelector(`mark[data-ann-id="${annId}"]`) : null;
-        const markRect = markEl?.getBoundingClientRect();
         const initLeft = Math.min(annotationPopup.x - 160, window.innerWidth - 360);
         const initTop = Math.min(annotationPopup.y + 10, window.innerHeight - 280);
         return (<>
-          {/* SVG arrow from mark to popup */}
-          {markRect && (
-            <svg className="fixed inset-0 z-40 pointer-events-none" style={{ width: '100vw', height: '100vh' }}>
+          {/* SVG arrow from mark to popup — uses rAF to track positions */}
+          {markEl && (
+            <svg className="fixed inset-0 z-40 pointer-events-none" style={{ width: '100vw', height: '100vh' }}
+              ref={(svgEl) => {
+                if (!svgEl) return;
+                const line = svgEl.querySelector('line');
+                if (!line) return;
+                let rafId = 0;
+                const update = () => {
+                  const box = annotationPopupRef.current;
+                  const mk = document.querySelector(`mark[data-ann-id="${annId}"]`);
+                  if (!box || !mk) { cancelAnimationFrame(rafId); return; }
+                  const mr = mk.getBoundingClientRect();
+                  const br = box.getBoundingClientRect();
+                  line.setAttribute('x1', String(mr.left + mr.width / 2));
+                  line.setAttribute('y1', String(mr.bottom + 2));
+                  line.setAttribute('x2', String(br.left + br.width / 2));
+                  line.setAttribute('y2', String(br.top));
+                  rafId = requestAnimationFrame(update);
+                };
+                rafId = requestAnimationFrame(update);
+                // cleanup via ref unmount (React calls ref(null) on unmount)
+                (svgEl as any)._annRaf = rafId;
+              }}>
               <defs><marker id="ann-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
                 <path d="M0,0 L8,4 L0,8 Z" fill={annotationColor} />
               </marker></defs>
-              <line
-                x1={markRect.left + markRect.width / 2} y1={markRect.bottom}
-                x2={initLeft + 160} y2={initTop}
+              <line x1="0" y1="0" x2="0" y2="0"
                 stroke={annotationColor} strokeWidth="1.5" strokeDasharray="6,3"
-                markerEnd="url(#ann-arrow)" opacity="0.7"
-                ref={(el) => {
-                  // Update arrow endpoints when popup is dragged
-                  if (!el) return;
-                  const obs = new MutationObserver(() => {
-                    const box = annotationPopupRef.current;
-                    if (!box || !markEl) return;
-                    const br = box.getBoundingClientRect();
-                    const mr = markEl.getBoundingClientRect();
-                    el.setAttribute('x1', String(mr.left + mr.width / 2));
-                    el.setAttribute('y1', String(mr.bottom));
-                    el.setAttribute('x2', String(br.left + br.width / 2));
-                    el.setAttribute('y2', String(br.top));
-                  });
-                  const box = annotationPopupRef.current;
-                  if (box) obs.observe(box, { attributes: true, attributeFilter: ['style'] });
-                }}
-              />
+                markerEnd="url(#ann-arrow)" opacity="0.7" />
             </svg>
           )}
           <div ref={annotationPopupRef} className="fixed z-50"
