@@ -518,14 +518,14 @@ export default function ChapterPage() {
     prevStartLinesRef.current = new Map(blockStartLines);
   }, [blockStartLines]);
 
-  // DOM-based annotation highlighting — stable across React re-renders.
-  // Uses an interval to check for missing marks and reapply them,
-  // since React re-renders destroy direct DOM modifications.
+  // Annotation overlay positioning — renders dashed underlines as absolutely-positioned
+  // divs in a separate overlay container. Immune to React re-renders.
   const annotationsRef = useRef(annotations);
   annotationsRef.current = annotations;
+  const annotationOverlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Apply Monaco decorations once when annotations change
+    // Apply Monaco decorations for code blocks
     if (monacoRef.current) {
       const annotationDecors = annotationDecorationsRef.current;
       editorInstancesRef.current.forEach((editor, blockId) => {
@@ -544,48 +544,94 @@ export default function ChapterPage() {
     }
   }, [annotations, blocks]);
 
-  // Interval: check every 500ms if DOM marks are present, reapply missing ones
+  // Position annotation overlays using text search + getClientRects
   useEffect(() => {
-    if (annotations.length === 0) return;
+    const overlay = annotationOverlayRef.current;
+    if (!overlay) return;
+    if (annotations.length === 0) { overlay.innerHTML = ''; return; }
 
-    const applyMissingMarks = () => {
+    const positionOverlays = () => {
       const anns = annotationsRef.current;
+      overlay.innerHTML = '';
       for (const ann of anns) {
         if (ann.startLine > 0) continue; // Monaco handles code blocks
         if (!ann.selectedText) continue;
-        // Already marked?
-        if (document.querySelector(`mark[data-ann-id="${ann.id}"]`)) continue;
         const blockEl = document.querySelector(`[data-block-id="${ann.blockId}"]`);
         if (!blockEl) continue;
+
+        // Find the text across all text nodes using a concatenated approach
+        const textNodes: Text[] = [];
         const walker = document.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT);
-        let node: Text | null;
-        while ((node = walker.nextNode() as Text | null)) {
-          const text = node.textContent || '';
-          const idx = text.indexOf(ann.selectedText);
-          if (idx === -1) continue;
-          try {
-            const range = document.createRange();
-            range.setStart(node, idx);
-            range.setEnd(node, idx + ann.selectedText.length);
-            const mark = document.createElement('mark');
-            mark.setAttribute('data-ann-id', ann.id);
-            mark.style.borderBottom = `2px dashed ${ann.color || '#f59e0b'}`;
-            mark.style.backgroundColor = `${ann.color || '#f59e0b'}15`;
-            mark.style.cursor = 'pointer';
-            mark.style.textDecoration = 'none';
-            mark.style.color = 'inherit';
-            mark.title = `Note: ${ann.text}`;
-            range.surroundContents(mark);
-          } catch { /* surroundContents can fail on cross-element ranges */ }
-          break;
+        let tn: Text | null;
+        while ((tn = walker.nextNode() as Text | null)) textNodes.push(tn);
+
+        // Build full text and offset map
+        let fullText = '';
+        const offsets: { node: Text; start: number }[] = [];
+        for (const n of textNodes) {
+          offsets.push({ node: n, start: fullText.length });
+          fullText += n.textContent || '';
         }
+
+        const idx = fullText.indexOf(ann.selectedText);
+        if (idx === -1) continue;
+
+        // Find start and end text nodes
+        const endIdx = idx + ann.selectedText.length;
+        let startNode: Text | null = null, startOffset = 0;
+        let endNode: Text | null = null, endOffset = 0;
+        for (let k = 0; k < offsets.length; k++) {
+          const o = offsets[k];
+          const nodeEnd = o.start + (o.node.textContent?.length || 0);
+          if (!startNode && idx < nodeEnd) { startNode = o.node; startOffset = idx - o.start; }
+          if (endIdx <= nodeEnd) { endNode = o.node; endOffset = endIdx - o.start; break; }
+        }
+        if (!startNode || !endNode) continue;
+
+        try {
+          const range = document.createRange();
+          range.setStart(startNode, startOffset);
+          range.setEnd(endNode, endOffset);
+          const rects = range.getClientRects();
+          for (let r = 0; r < rects.length; r++) {
+            const rect = rects[r];
+            const div = document.createElement('div');
+            div.setAttribute('data-ann-overlay', ann.id);
+            div.style.position = 'fixed';
+            div.style.left = rect.left + 'px';
+            div.style.top = (rect.bottom - 2) + 'px';
+            div.style.width = rect.width + 'px';
+            div.style.height = '3px';
+            div.style.borderBottom = `2px dashed ${ann.color || '#f59e0b'}`;
+            div.style.pointerEvents = 'auto';
+            div.style.cursor = 'pointer';
+            div.style.zIndex = '30';
+            div.title = `Note: ${ann.text}`;
+            div.onclick = (e) => {
+              e.stopPropagation();
+              setAnnotationPopup({
+                mode: 'view', annotation: ann, blockId: ann.blockId,
+                startLine: 0, startCol: 0, endLine: 0, endCol: 0,
+                x: e.clientX, y: e.clientY,
+              });
+              setAnnotationText(ann.text);
+              setAnnotationColor(ann.color || '#f59e0b');
+            };
+            overlay.appendChild(div);
+          }
+        } catch { /* range errors */ }
       }
     };
 
-    // Apply immediately + set up interval
-    const raf = requestAnimationFrame(applyMissingMarks);
-    const interval = setInterval(applyMissingMarks, 500);
-    return () => { cancelAnimationFrame(raf); clearInterval(interval); };
+    // Run on load + interval (handles scroll, resize, React re-renders)
+    positionOverlays();
+    const interval = setInterval(positionOverlays, 800);
+    // Also reposition on scroll
+    const scrollEl = document.querySelector('.flex-1.min-h-0.overflow-y-auto');
+    const onScroll = () => positionOverlays();
+    scrollEl?.addEventListener('scroll', onScroll);
+    window.addEventListener('resize', onScroll);
+    return () => { clearInterval(interval); scrollEl?.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onScroll); };
   }, [annotations.length]); // restart interval when annotation count changes
 
   // Click handler for annotation marks
@@ -1136,6 +1182,8 @@ export default function ChapterPage() {
 
   return (
     <div className="h-screen flex flex-col bg-white" style={{ fontFamily: "'Open Sans', sans-serif" }}>
+      {/* Annotation overlay container — positioned dashed underlines */}
+      <div ref={annotationOverlayRef} className="pointer-events-none" style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
       {/* Top bar */}
       <div className="h-11 bg-white border-b border-gray-200 flex items-center px-4 gap-3 shrink-0 shadow-sm">
         <Link to={`/volume/${volumeId}`} className="text-sm text-gray-500 hover:text-gray-700">
