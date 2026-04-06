@@ -43,7 +43,7 @@ DATABASE_URL = os.environ.get(
 
 # --- Session limits ---
 MAX_SESSIONS = int(os.environ.get("MAX_SESSIONS", "5"))
-SESSION_IDLE_TIMEOUT = int(os.environ.get("SESSION_IDLE_TIMEOUT", "600"))  # seconds
+SESSION_IDLE_TIMEOUT = int(os.environ.get("SESSION_IDLE_TIMEOUT", "3600"))  # seconds (1 hour)
 
 # --- Auth ---
 JWT_SECRET = os.environ.get("JWT_SECRET", "dev-secret-change-in-production")
