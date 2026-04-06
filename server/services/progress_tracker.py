@@ -64,11 +64,11 @@ async def update_progress_from_grade(session: AsyncSession, grade_result: GradeR
         )).scalar_one_or_none()
 
         if not activity:
-            activity = DailyActivity(date=today_str)
+            activity = DailyActivity(date=today_str, exercises_completed=0, points_earned=0.0)
             session.add(activity)
 
-        activity.exercises_completed += new_completions
-        activity.points_earned += new_points
+        activity.exercises_completed = (activity.exercises_completed or 0) + new_completions
+        activity.points_earned = (activity.points_earned or 0) + new_points
 
     await session.commit()
 
