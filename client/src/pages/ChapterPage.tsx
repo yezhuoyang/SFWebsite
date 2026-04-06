@@ -47,6 +47,7 @@ export default function ChapterPage() {
   const [tutorOpen, setTutorOpen] = useState(false);
   const tutorBoxRef = useRef<HTMLDivElement>(null);
   const tutorChatRef = useRef<TutorChatHandle>(null);
+  const [celebration, setCelebration] = useState<{ names: string[] } | null>(null);
 
   const blockContentsRef = useRef<Map<number, string>>(new Map());
   const blockRefsMap = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -494,16 +495,23 @@ export default function ChapterPage() {
       originalDocRef.current = doc;
       setSaveResult(result);
 
-      // Persist grades to localStorage
+      // Persist grades to localStorage + detect new completions for celebration
       if (result.exercises) {
         const grades: Record<string, StoredGrade> = {};
-        // Load existing grades first to preserve previous completions
         const existing = loadGradeResults(volumeId, chapterName) || {};
         for (const [k, v] of Object.entries(existing)) grades[k] = v;
+        const newlyCompleted: string[] = [];
         for (const ex of result.exercises) {
+          if (ex.status === 'completed' && existing[ex.name]?.status !== 'completed') {
+            newlyCompleted.push(ex.name);
+          }
           grades[ex.name] = { status: ex.status, points: ex.points, gradedAt: Date.now() };
         }
         saveGradeResults(volumeId, chapterName, grades);
+        if (newlyCompleted.length > 0) {
+          setCelebration({ names: newlyCompleted });
+          setTimeout(() => setCelebration(null), 4000);
+        }
       }
       // Also persist current edits
       saveBlockEdits(volumeId, chapterName, blockContentsRef.current);
@@ -885,6 +893,72 @@ export default function ChapterPage() {
                 title={coqState.connected ? 'vscoqtop connected' : 'Connecting...'} />
         </div>
       </div>
+
+      {/* Progress bar */}
+      {exercises.length > 0 && (() => {
+        const done = exercises.filter(e => e.status === 'completed').length;
+        const total = exercises.length;
+        const pct = Math.round((done / total) * 100);
+        return (
+          <div className="px-4 py-1.5 bg-gray-50 border-b border-gray-200 flex items-center gap-3 shrink-0">
+            <span className="text-xs text-gray-500 font-medium whitespace-nowrap">{done}/{total} solved</span>
+            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-700 ease-out"
+                style={{
+                  width: `${pct}%`,
+                  background: pct === 100 ? '#22c55e' : 'linear-gradient(90deg, #7088a8, #60a5fa)',
+                }}
+              />
+            </div>
+            <span className="text-xs text-gray-400 font-medium">{pct}%</span>
+          </div>
+        );
+      })()}
+
+      {/* Rocket celebration overlay */}
+      {celebration && (
+        <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+          {/* Dark overlay */}
+          <div className="absolute inset-0 bg-black/20 animate-[fadeIn_0.3s_ease-out]" />
+          {/* Rocket */}
+          <div className="absolute left-1/2 bottom-0 -translate-x-1/2 animate-[rocketUp_2s_ease-out_forwards]">
+            <div className="text-7xl">🚀</div>
+            {/* Flame trail */}
+            <div className="absolute left-1/2 -translate-x-1/2 top-full flex flex-col items-center gap-0">
+              <div className="text-3xl animate-pulse">🔥</div>
+              <div className="text-2xl animate-pulse opacity-70">🔥</div>
+              <div className="text-xl animate-pulse opacity-40">🔥</div>
+            </div>
+          </div>
+          {/* Sparkles */}
+          {Array.from({ length: 20 }).map((_, i) => (
+            <div
+              key={i}
+              className="absolute text-2xl animate-[sparkle_1.5s_ease-out_forwards]"
+              style={{
+                left: `${15 + Math.random() * 70}%`,
+                top: `${20 + Math.random() * 40}%`,
+                animationDelay: `${0.3 + Math.random() * 0.8}s`,
+                opacity: 0,
+              }}
+            >
+              {['✨', '⭐', '🌟', '💫', '🎉', '🎊'][i % 6]}
+            </div>
+          ))}
+          {/* Congratulations text */}
+          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center animate-[popIn_0.5s_ease-out_0.5s_both]">
+            <div className="text-4xl font-bold text-white drop-shadow-lg mb-2">
+              Congratulations!
+            </div>
+            <div className="text-lg text-white/90 drop-shadow">
+              {celebration.names.length === 1
+                ? `You solved ${celebration.names[0]}!`
+                : `You solved ${celebration.names.length} exercises!`}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Save result notification */}
       {saveResult && (
