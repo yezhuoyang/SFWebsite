@@ -1018,13 +1018,6 @@ export default function ChapterPage() {
         return (
           <div className="px-4 py-1.5 bg-gray-50 border-b border-gray-200 flex items-center gap-3 shrink-0">
             <span className="text-xs text-gray-500 font-medium whitespace-nowrap">{done}/{total} solved</span>
-            <span className="text-[10px] text-gray-400 whitespace-nowrap">
-              <kbd className="px-1 py-0.5 bg-gray-200 rounded text-[9px] font-mono">Alt+&#8595;</kbd> next
-              <span className="mx-1">&#183;</span>
-              <kbd className="px-1 py-0.5 bg-gray-200 rounded text-[9px] font-mono">Alt+&#8593;</kbd> prev
-              <span className="mx-1">&#183;</span>
-              <kbd className="px-1 py-0.5 bg-gray-200 rounded text-[9px] font-mono">Alt+&#8594;</kbd> to cursor
-            </span>
             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-700 ease-out"
@@ -1608,6 +1601,13 @@ export default function ChapterPage() {
           )}
         </>
       )}
+      {/* Keyboard shortcut reminder bar */}
+      <div className="h-8 bg-gray-100 border-t border-gray-200 flex items-center justify-center gap-6 shrink-0 text-sm text-gray-500">
+        <span><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded text-xs font-mono shadow-sm">Alt+&#8595;</kbd> Step forward</span>
+        <span><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded text-xs font-mono shadow-sm">Alt+&#8593;</kbd> Step back</span>
+        <span><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded text-xs font-mono shadow-sm">Alt+&#8594;</kbd> Run to cursor</span>
+        <span><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded text-xs font-mono shadow-sm">Alt+End</kbd> Run all</span>
+      </div>
     </div>
   );
 }
