@@ -966,6 +966,12 @@ export default function ChapterPage() {
             title="Step Forward (Alt+Down)">
             Step &#9654;
           </button>
+          <button onClick={() => coqActions.interrupt()}
+            disabled={!coqState.connected}
+            className="px-2 py-1.5 text-xs bg-red-500 hover:bg-red-600 text-white disabled:opacity-30 rounded font-medium shadow-sm"
+            title="Interrupt Coq (stop long-running computation)">
+            &#9632; Stop
+          </button>
 
           <div className="w-px h-5 bg-gray-200" />
 

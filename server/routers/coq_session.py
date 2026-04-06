@@ -127,6 +127,8 @@ async def coq_websocket(ws: WebSocket, session_id: str):
                     await session.interpret_to_end()
                 elif msg_type == "change":
                     await session.update_document(msg["text"])
+                elif msg_type == "interrupt":
+                    await session.interrupt()
                 else:
                     await ws.send_json({"type": "error", "message": f"Unknown type: {msg_type}"})
             except RuntimeError as e:

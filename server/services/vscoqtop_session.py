@@ -161,6 +161,18 @@ class VscoqtopSession:
             "textDocument": {"uri": self.uri, "version": self.version},
         })
 
+    async def interrupt(self) -> None:
+        """Send SIGINT to the vscoqtop process to cancel a long-running computation."""
+        self._touch()
+        proc = self.transport.process
+        if proc and proc.returncode is None:
+            import signal, os
+            try:
+                os.kill(proc.pid, signal.SIGINT)
+                logger.info(f"Session {self.session_id}: sent SIGINT to vscoqtop (pid {proc.pid})")
+            except (OSError, ProcessLookupError) as e:
+                logger.warning(f"Session {self.session_id}: failed to send SIGINT: {e}")
+
     async def update_document(self, new_text: str) -> None:
         self._touch()
         old_lines = self.document_text.split("\n")

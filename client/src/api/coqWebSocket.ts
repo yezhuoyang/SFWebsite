@@ -63,6 +63,7 @@ export interface CoqSessionActions {
   interpretToPoint: (line: number, character: number) => void;
   interpretToEnd: () => void;
   sendChange: (text: string) => void;
+  interrupt: () => void;
 }
 
 export function useCoqWebSocket(
@@ -146,6 +147,7 @@ export function useCoqWebSocket(
       send({ type: 'interpretToPoint', line, character }), [send]),
     interpretToEnd: useCallback(() => send({ type: 'interpretToEnd' }), [send]),
     sendChange: useCallback((text: string) => send({ type: 'change', text }), [send]),
+    interrupt: useCallback(() => send({ type: 'interrupt' }), [send]),
   };
 
   return [{ connected, proofView, highlights, diagnostics, moveCursorTarget }, actions];
