@@ -14,12 +14,15 @@ interface Props {
   loading?: boolean;
   explanation: string | null;
   explainLoading: boolean;
+  hint: string | null;
+  hintLoading: boolean;
   activityInfo: ActivityInfo;
   renderMarkdown: (text: string) => React.ReactNode;
   onExplain: () => void;
+  onHint: () => void;
 }
 
-export default function GoalsPanel({ proofView, diagnostics, loading, explanation, explainLoading, activityInfo: _activityInfo, renderMarkdown, onExplain }: Props) {
+export default function GoalsPanel({ proofView, diagnostics, loading, explanation, explainLoading, hint, hintLoading, activityInfo: _activityInfo, renderMarkdown, onExplain, onHint }: Props) {
   void _activityInfo; // Moved to History tab
   const proof = proofView?.proof;
   const messages = proofView?.messages || [];
@@ -165,15 +168,22 @@ export default function GoalsPanel({ proofView, diagnostics, loading, explanatio
           </div>
         )}
 
-        {/* Explain button */}
+        {/* AI buttons */}
         {(proofView || diagnostics.length > 0) && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <button onClick={onExplain} disabled={explainLoading}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg hover:from-blue-600 hover:to-indigo-600 disabled:opacity-50 shadow-sm transition-all">
+          <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2">
+            <button onClick={onExplain} disabled={explainLoading || hintLoading}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg hover:from-blue-600 hover:to-indigo-600 disabled:opacity-50 shadow-sm transition-all">
               <svg viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="currentColor">
                 <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 7a1 1 0 011 1v4a1 1 0 11-2 0v-4a1 1 0 011-1zm0-3a1 1 0 100 2 1 1 0 000-2z" />
               </svg>
-              {explainLoading ? 'Thinking...' : explanation ? 'Refresh explanation' : 'Explain this output'}
+              {explainLoading ? 'Thinking...' : 'Explain'}
+            </button>
+            <button onClick={onHint} disabled={hintLoading || explainLoading}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 disabled:opacity-50 shadow-sm transition-all">
+              <svg viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="currentColor">
+                <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zm4.657 2.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zm3-7a5 5 0 00-1 9.9V14a1 1 0 001 1h2a1 1 0 001-1v-1.1A5 5 0 008 3zm0 2a3 3 0 00-1 5.83V12h2v-1.17A3 3 0 008 5zm-1 11a1 1 0 011-1h2a1 1 0 110 2H8a1 1 0 01-1-1z" />
+              </svg>
+              {hintLoading ? 'Thinking...' : 'Hint'}
             </button>
           </div>
         )}
@@ -188,6 +198,20 @@ export default function GoalsPanel({ proofView, diagnostics, loading, explanatio
             </div>
             <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3 text-[12.5px] leading-relaxed text-gray-800">
               {explanation ? renderMarkdown(explanation) : <span className="text-gray-400">Analyzing...</span>}
+            </div>
+          </div>
+        )}
+
+        {/* Inline AI Hint */}
+        {(hint || hintLoading) && (
+          <div className="mt-3">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">AI Hint</span>
+              {hintLoading && <span className="text-[10px] text-gray-400">thinking...</span>}
+            </div>
+            <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3 text-[12.5px] leading-relaxed text-gray-800">
+              {hint ? renderMarkdown(hint) : <span className="text-gray-400">Thinking of a hint...</span>}
             </div>
           </div>
         )}

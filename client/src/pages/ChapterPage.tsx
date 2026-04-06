@@ -76,9 +76,11 @@ export default function ChapterPage() {
     charAfter: string;      // character at/after cursor
   } | null>(null);
 
-  // Inline explanation state (refreshes when Goals change)
+  // Inline explanation / hint state
   const [explanation, setExplanation] = useState<string | null>(null);
   const [explainLoading, setExplainLoading] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
+  const [hintLoading, setHintLoading] = useState(false);
   const [dirtyBlockIds, setDirtyBlockIds] = useState<Set<number>>(new Set()); // Blocks edited since last sync
   // Map of block.id -> starting line number in the rebuilt document (1-indexed)
   const [blockStartLines, setBlockStartLines] = useState<Map<number, number>>(new Map());
@@ -824,6 +826,64 @@ export default function ChapterPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [volumeId, chapterName, blocks, activeBlockId, cursorInfo, viewedBlockId, blockStartLines, getActivityContext, formatProofState, rebuildDocument, coqState.proofView, coqState.diagnostics, coqState.highlights, explainLoading]);
 
+  const handleHint = useCallback(async () => {
+    if (!volumeId || !chapterName || hintLoading) return;
+    setHintLoading(true);
+    try {
+      const activeEx = blocks.find(b => b.id === activeBlockId && b.kind === 'exercise');
+      const activityCtx = getActivityContext();
+      const proofText = formatProofState(coqState.proofView);
+      const diagText = coqState.diagnostics.map(d =>
+        `Line ${d.range.start.line + 1}: ${d.message}`
+      ).join('\n');
+      const processed = coqState.highlights?.processedRange?.length
+        ? Math.max(...coqState.highlights.processedRange.map(r => r.end.line))
+        : null;
+
+      let currentBlockContent = '';
+      const curBlock = cursorInfo ? blocks.find(b => b.id === cursorInfo.blockId) : null;
+      if (curBlock) {
+        const content = blockContentsRef.current.get(curBlock.id) || curBlock.content;
+        const startLine = blockStartLines.get(curBlock.id) || curBlock.line_start;
+        currentBlockContent = `\n## CURRENT BLOCK (where cursor is, starting at line ${startLine}):\n\`\`\`coq\n${content}\n\`\`\``;
+      }
+
+      const message = `## USER ACTIVITY\n${activityCtx || 'No activity tracked yet'}${currentBlockContent}\n\n` +
+        `## YOUR ROLE\n` +
+        `You are a Socratic tutor for the Software Foundations textbook (Coq/Rocq formal verification). ` +
+        `The student is working on chapter "${chapterName}" in volume "${volumeId?.toUpperCase()}".\n\n` +
+        `## INSTRUCTIONS — HINT FOR NEXT STEP\n` +
+        `Based on the current proof state (goals, hypotheses) and the student's code so far:\n\n` +
+        `1. **DO NOT give the solution directly.** Instead, guide the student to discover it.\n` +
+        `2. Look at the current goal and hypotheses. Suggest which **tactics** could be useful here, ` +
+        `and briefly explain WHY each tactic applies (e.g., "The goal is a conjunction, so \`split\` would break it into two subgoals").\n` +
+        `3. If there are **multiple approaches**, describe all of them so the student learns the trade-offs ` +
+        `(e.g., "You could use \`induction\` for a structural proof, or \`destruct\` if you only need case analysis").\n` +
+        `4. If the goal matches a hypothesis or a known lemma, hint at that connection without spelling it out.\n` +
+        `5. If the student seems stuck on an error, explain what went wrong and how to recover.\n` +
+        `6. Keep it concise — 2-4 short paragraphs. Use markdown. ` +
+        `Mention specific tactic names in backticks.\n\n` +
+        `Remember: the goal is to help the student **learn**, not just finish the exercise.`;
+
+      const result = await explainOutput({
+        volume_id: volumeId,
+        chapter_name: chapterName,
+        exercise_name: activeEx?.exercise_name || null,
+        student_code: rebuildDocument(),
+        proof_state_text: proofText,
+        diagnostics_text: diagText,
+        processed_lines: processed,
+        message,
+      });
+      setHint(result.explanation);
+    } catch (e: any) {
+      setHint(`Error: ${e.message}`);
+    } finally {
+      setHintLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [volumeId, chapterName, blocks, activeBlockId, cursorInfo, blockStartLines, getActivityContext, formatProofState, rebuildDocument, coqState.proofView, coqState.diagnostics, coqState.highlights, hintLoading]);
+
   // Drag handler for the tutor chatbox header
   const onDragStart = useCallback((e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('button')) return;
@@ -1318,8 +1378,11 @@ export default function ChapterPage() {
                     recentEdits,
                   };
                 })()}
+                hint={hint}
+                hintLoading={hintLoading}
                 renderMarkdown={(text) => renderTutorMarkdown(text, navigateToBlock, gpsAnchors)}
                 onExplain={handleExplain}
+                onHint={handleHint}
               />
             )}
             {rightTab === 'context' && (
