@@ -295,16 +295,24 @@ export default function ChapterPage() {
         return next;
       });
 
-      // Debounce: rebuild full document, send change, then re-check.
-      // interpretToEnd is needed so vscoqtop re-evaluates after edits
-      // (otherwise errors persist and Alt+Down stops working).
-      // Cursor won't jump because we skip updateOptions on focused editors.
+      // Debounce: rebuild full document, send change, then re-check
+      // up to the CURRENT processed point (not to end).
+      // This lets vscoqtop know about edits without running past where
+      // the user is manually stepping — so Alt+Down still works.
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
         const newDoc = rebuildDocument();
         coqActions.sendChange(newDoc);
         originalDocRef.current = newDoc;
-        coqActions.interpretToEnd();
+
+        // Re-interpret up to where we were already processed (not to end).
+        // Uses ref to get the latest highlights (not stale closure).
+        const pr = highlightsRef.current?.processedRange;
+        if (pr && pr.length > 0) {
+          const lastProcessed = Math.max(...pr.map(r => r.end.line));
+          coqActionsRef.current?.interpretToPoint(lastProcessed, 9999);
+        }
+        // If nothing was processed yet, just send the change — user will step manually
       }, 600);
     });
 
@@ -436,6 +444,8 @@ export default function ChapterPage() {
   blockStartLinesRef.current = blockStartLines;
   coqActionsRef.current = coqActions;
   syncThenDoRef.current = syncThenDo;
+  const highlightsRef = useRef(coqState.highlights);
+  highlightsRef.current = coqState.highlights;
 
   // Save the rebuilt document, auto-grade, and show results
   const handleSave = useCallback(async () => {
