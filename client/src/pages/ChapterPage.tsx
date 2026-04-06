@@ -295,25 +295,17 @@ export default function ChapterPage() {
         return next;
       });
 
-      // Debounce: rebuild full document, send change, then re-check
-      // up to the CURRENT processed point (not to end).
-      // This lets vscoqtop know about edits without running past where
-      // the user is manually stepping — so Alt+Down still works.
+      // Debounce: rebuild full document and send didChange to vscoqtop.
+      // Do NOT auto-interpret — just let vscoqtop know the document changed.
+      // The user steps manually with Alt+Down when they're done typing.
+      // This avoids: (1) errors on incomplete tactics, (2) cursor jumps,
+      // (3) line number glitches from updateOptions during typing.
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
         const newDoc = rebuildDocument();
         coqActions.sendChange(newDoc);
         originalDocRef.current = newDoc;
-
-        // Re-interpret up to where we were already processed (not to end).
-        // Uses ref to get the latest highlights (not stale closure).
-        const pr = highlightsRef.current?.processedRange;
-        if (pr && pr.length > 0) {
-          const lastProcessed = Math.max(...pr.map(r => r.end.line));
-          coqActionsRef.current?.interpretToPoint(lastProcessed, 9999);
-        }
-        // If nothing was processed yet, just send the change — user will step manually
-      }, 600);
+      }, 500);
     });
 
     editor.onDidFocusEditorText(() => {
@@ -326,6 +318,14 @@ export default function ChapterPage() {
       });
       if (editHistoryRef.current.length > 100) editHistoryRef.current.shift();
       setActivityVersion(v => v + 1);
+    });
+
+    // When editor loses focus, update its line numbers (they were skipped during typing)
+    editor.onDidBlurEditorText(() => {
+      const start = blockStartLinesRef.current.get(blockId) || 1;
+      editor.updateOptions({
+        lineNumbers: ((n: number) => String(start + n - 1)) as any,
+      });
     });
 
     // Track cursor position — throttled to avoid re-rendering on every keystroke/arrow
