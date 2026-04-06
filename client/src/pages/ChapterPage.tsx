@@ -559,19 +559,21 @@ export default function ChapterPage() {
     setActiveBlockId(blockId);
   };
 
-  // Run to end of a specific block
-  /** Compute the 0-indexed line range of a block in the Coq document
-   * (which may have auto-injected Admitted. lines shifting positions). */
-  const getCoqDocEndLine = useCallback((targetBlockId: number): number => {
-    let coqLine = 0; // 0-indexed cumulative line counter
+  /** Compute the 0-indexed Coq doc line for the START of the block AFTER targetBlockId.
+   * This accounts for auto-injected Admitted. lines from rebuildDocument(true). */
+  const getCoqDocLineAfterBlock = useCallback((targetBlockId: number): number => {
+    let coqLine = 0;
+    let found = false;
     for (const b of blocks) {
       const content = blockContentsRef.current.get(b.id) || b.content;
       const lineCount = content.split('\n').length;
+      if (found) {
+        return coqLine; // start of the block after target (0-indexed)
+      }
       if (b.id === targetBlockId) {
-        return coqLine + lineCount - 1; // last line of this block (0-indexed)
+        found = true;
       }
       coqLine += lineCount;
-      // Account for auto-injected Admitted. lines (mirrors rebuildDocument(true))
       if (b.kind === 'exercise') {
         const stripped = content.replace(/\(\*[\s\S]*?\*\)/g, '');
         const starts = (stripped.match(/\bProof\b/g) || []).length;
@@ -580,27 +582,36 @@ export default function ChapterPage() {
         if (unclosed > 0) coqLine += unclosed;
       }
     }
-    return coqLine;
+    return coqLine; // target is last block — return total doc length
   }, [blocks]);
 
   const runToBlock = useCallback((blockId: number) => {
     const block = blocks.find(b => b.id === blockId);
     if (!block) return;
-    const label = block.title || block.exercise_name || `block ${blockId}`;
     editHistoryRef.current.push({
       blockId, timestamp: Date.now(), action: 'run',
-      description: `Clicked 'run' on "${label}"`,
+      description: `Clicked 'run' on "${block.title || block.exercise_name || `block ${blockId}`}"`,
     });
     if (editHistoryRef.current.length > 100) editHistoryRef.current.shift();
     setActivityVersion(v => v + 1);
+    // Interpret to the start of the NEXT block to ensure this entire block is covered
+    const targetLine = getCoqDocLineAfterBlock(blockId);
+    coqActions.interpretToPoint(Math.max(0, targetLine), 0);
+  }, [blocks, coqActions, getCoqDocLineAfterBlock]);
 
-    const endLine = getCoqDocEndLine(blockId);
-    const displayStart = blockStartLines.get(blockId) || block.line_start;
-    const content = blockContentsRef.current.get(blockId) || block.content;
-    const displayEnd = displayStart + content.split('\n').length - 1;
-    console.log(`[runToBlock] block=${blockId} display=L${displayStart}-${displayEnd} coqEndLine=${endLine} (0-indexed)`);
-    coqActions.interpretToPoint(Math.max(0, endLine), 9999);
-  }, [blocks, coqActions, getCoqDocEndLine]);
+  /** Run all blocks from the beginning up to and including this block */
+  const runUntilBlock = useCallback((blockId: number) => {
+    const block = blocks.find(b => b.id === blockId);
+    if (!block) return;
+    editHistoryRef.current.push({
+      blockId, timestamp: Date.now(), action: 'run',
+      description: `Clicked 'run until' on "${block.title || block.exercise_name || `block ${blockId}`}"`,
+    });
+    if (editHistoryRef.current.length > 100) editHistoryRef.current.shift();
+    setActivityVersion(v => v + 1);
+    const targetLine = getCoqDocLineAfterBlock(blockId);
+    coqActions.interpretToPoint(Math.max(0, targetLine), 0);
+  }, [blocks, coqActions, getCoqDocLineAfterBlock]);
 
   // Determine if a block has any processed range
   const isBlockProcessed = useCallback((blockId: number): 'none' | 'partial' | 'full' => {
@@ -1154,8 +1165,14 @@ export default function ChapterPage() {
                       <div className="flex items-center px-2 py-0">
                         <span className="text-[10px] font-mono text-gray-300" />
                         <div className="ml-auto flex items-center gap-2">
+                          <button onClick={(e) => { e.stopPropagation(); syncThenDo(() => runUntilBlock(block.id)); }}
+                            disabled={!coqState.connected}
+                            className="text-[10px] text-gray-400 hover:text-blue-600 disabled:opacity-30 font-medium"
+                            title="Run all blocks from the beginning up to and including this one">
+                            &#9654;&#9654; until
+                          </button>
                           {status !== 'full' && (
-                            <button onClick={(e) => { e.stopPropagation(); /* cursor movement disabled */ syncThenDo(() => runToBlock(block.id)); }}
+                            <button onClick={(e) => { e.stopPropagation(); syncThenDo(() => runToBlock(block.id)); }}
                               disabled={!coqState.connected}
                               className="text-[10px] text-blue-500 hover:text-blue-700 disabled:opacity-30 font-medium">
                               &#9654; run {(() => { const s = blockStartLines.get(block.id); if (!s) return ''; const c = blockContentsRef.current.get(block.id) || block.content; return `L${s}-${s + c.split('\n').length - 1}`; })()}
@@ -1223,8 +1240,14 @@ export default function ChapterPage() {
                             return null;
                           })()}
                           <div className="ml-auto flex items-center gap-2">
+                            <button onClick={(e) => { e.stopPropagation(); syncThenDo(() => runUntilBlock(block.id)); }}
+                              disabled={!coqState.connected}
+                              className="text-[10px] text-gray-400 hover:text-blue-600 disabled:opacity-30 font-medium"
+                              title="Run all blocks from the beginning up to and including this one">
+                              &#9654;&#9654; until
+                            </button>
                             {status !== 'full' && (
-                              <button onClick={(e) => { e.stopPropagation(); /* cursor movement disabled */ syncThenDo(() => runToBlock(block.id)); }}
+                              <button onClick={(e) => { e.stopPropagation(); syncThenDo(() => runToBlock(block.id)); }}
                                 disabled={!coqState.connected}
                                 className="text-[10px] text-blue-500 hover:text-blue-700 disabled:opacity-30 font-medium">
                                 &#9654; run {(() => { const s = blockStartLines.get(block.id); if (!s) return ''; const c = blockContentsRef.current.get(block.id) || block.content; return `L${s}-${s + c.split('\n').length - 1}`; })()}
