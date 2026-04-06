@@ -88,6 +88,13 @@ export function useCoqWebSocket(
     ws.onclose = () => setConnected(false);
     ws.onerror = () => setConnected(false);
 
+    // Send keepalive ping every 5 minutes to prevent session idle timeout
+    const keepalive = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 5 * 60 * 1000);
+
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
@@ -128,6 +135,7 @@ export function useCoqWebSocket(
     };
 
     return () => {
+      clearInterval(keepalive);
       ws.close();
       wsRef.current = null;
       setConnected(false);

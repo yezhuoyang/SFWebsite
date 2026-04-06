@@ -46,9 +46,11 @@ async def create_session(req: CoqSessionCreate):
 
 @router.get("/coq/session/{session_id}/info")
 async def session_info(session_id: str):
-    """Get session status: remaining timeout, active session count."""
+    """Get session status: remaining timeout, active session count.
+    Does NOT touch the session — read-only query."""
     import time as _time
-    session = pool.get(session_id)
+    # Use _sessions dict directly to avoid _touch() resetting the timer
+    session = pool._sessions.get(session_id)
     remaining = 0
     if session:
         idle = _time.time() - session.last_activity
@@ -144,6 +146,9 @@ async def coq_websocket(ws: WebSocket, session_id: str):
                     await session.interpret_to_end()
                 elif msg_type == "change":
                     await session.update_document(msg["text"])
+                elif msg_type == "ping":
+                    session._touch()
+                    await ws.send_json({"type": "pong"})
                 elif msg_type == "interrupt":
                     await session.interrupt()
                 else:
