@@ -1822,100 +1822,137 @@ export default function ChapterPage() {
           )}
         </>
       )}
-      {/* Annotation popup — draggable */}
-      {annotationPopup && (
-        <div ref={annotationPopupRef} className="fixed z-50"
-          style={{ left: Math.min(annotationPopup.x - 160, window.innerWidth - 360), top: Math.min(annotationPopup.y, window.innerHeight - 260) }}>
-          <div className="bg-white border-2 rounded-lg shadow-2xl w-80" style={{ borderColor: annotationColor }}>
-            {/* Draggable header */}
-            <div className="flex items-center justify-between px-3 py-2 rounded-t-lg cursor-move select-none"
-              style={{ backgroundColor: annotationColor + '20' }}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                const box = annotationPopupRef.current;
-                if (!box) return;
-                const rect = box.getBoundingClientRect();
-                const offX = e.clientX - rect.left, offY = e.clientY - rect.top;
-                const onMove = (ev: MouseEvent) => { box.style.left = (ev.clientX - offX) + 'px'; box.style.top = (ev.clientY - offY) + 'px'; };
-                const onUp = () => { document.removeEventListener('pointermove', onMove); document.removeEventListener('pointerup', onUp); };
-                document.addEventListener('pointermove', onMove);
-                document.addEventListener('pointerup', onUp);
-              }}>
-              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: annotationColor }}>
-                {annotationPopup.mode === 'create' ? 'New Annotation' : 'Annotation'}
-              </span>
-              <button onClick={() => setAnnotationPopup(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
-            </div>
-            <div className="px-3 pb-3 pt-2">
-              {/* Color picker */}
-              <div className="flex items-center gap-1.5 mb-2">
-                <span className="text-[10px] text-gray-400">Color:</span>
-                {['#f59e0b', '#ef4444', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899'].map(c => (
-                  <button key={c} onClick={() => setAnnotationColor(c)}
-                    className={`w-5 h-5 rounded-full border-2 ${annotationColor === c ? 'border-gray-800 scale-110' : 'border-transparent'}`}
-                    style={{ backgroundColor: c }} />
-                ))}
-              </div>
-              <textarea
-                className="w-full border border-gray-200 rounded p-2 text-sm resize-none focus:outline-none focus:ring-1"
-                style={{ focusRingColor: annotationColor } as any}
-                rows={3}
-                placeholder="Type your note here..."
-                value={annotationText}
-                onChange={e => setAnnotationText(e.target.value)}
-                autoFocus
+      {/* Annotation popup — draggable + resizable + arrow */}
+      {annotationPopup && (() => {
+        // Find the <mark> element for the arrow anchor
+        const annId = annotationPopup.annotation?.id;
+        const markEl = annId ? document.querySelector(`mark[data-ann-id="${annId}"]`) : null;
+        const markRect = markEl?.getBoundingClientRect();
+        const initLeft = Math.min(annotationPopup.x - 160, window.innerWidth - 360);
+        const initTop = Math.min(annotationPopup.y + 10, window.innerHeight - 280);
+        return (<>
+          {/* SVG arrow from mark to popup */}
+          {markRect && (
+            <svg className="fixed inset-0 z-40 pointer-events-none" style={{ width: '100vw', height: '100vh' }}>
+              <defs><marker id="ann-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill={annotationColor} />
+              </marker></defs>
+              <line
+                x1={markRect.left + markRect.width / 2} y1={markRect.bottom}
+                x2={initLeft + 160} y2={initTop}
+                stroke={annotationColor} strokeWidth="1.5" strokeDasharray="6,3"
+                markerEnd="url(#ann-arrow)" opacity="0.7"
+                ref={(el) => {
+                  // Update arrow endpoints when popup is dragged
+                  if (!el) return;
+                  const obs = new MutationObserver(() => {
+                    const box = annotationPopupRef.current;
+                    if (!box || !markEl) return;
+                    const br = box.getBoundingClientRect();
+                    const mr = markEl.getBoundingClientRect();
+                    el.setAttribute('x1', String(mr.left + mr.width / 2));
+                    el.setAttribute('y1', String(mr.bottom));
+                    el.setAttribute('x2', String(br.left + br.width / 2));
+                    el.setAttribute('y2', String(br.top));
+                  });
+                  const box = annotationPopupRef.current;
+                  if (box) obs.observe(box, { attributes: true, attributeFilter: ['style'] });
+                }}
               />
-              <div className="flex gap-2 mt-2">
-                <button
-                  onClick={() => {
-                    if (!annotationText.trim() || !volumeId || !chapterName) return;
-                    const newAnn: Annotation = {
-                      id: annotationPopup.annotation?.id || `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                      blockId: annotationPopup.blockId,
-                      selectedText: annotationPopup.selectedText || annotationPopup.annotation?.selectedText || '',
-                      color: annotationColor,
-                      startLine: annotationPopup.startLine,
-                      startCol: annotationPopup.startCol,
-                      endLine: annotationPopup.endLine,
-                      endCol: annotationPopup.endCol,
-                      text: annotationText.trim(),
-                      createdAt: annotationPopup.annotation?.createdAt || Date.now(),
-                    };
-                    const updated = annotationPopup.mode === 'create'
-                      ? [...annotations, newAnn]
-                      : annotations.map(a => a.id === newAnn.id ? newAnn : a);
-                    setAnnotations(updated);
-                    saveAnnotations(volumeId, chapterName, updated);
-                    setAnnotationPopup(null);
-                  }}
-                  className="flex-1 text-xs text-white py-1.5 rounded font-medium"
-                  style={{ backgroundColor: annotationColor }}
-                >
-                  {annotationPopup.mode === 'create' ? 'Save' : 'Update'}
-                </button>
-                {annotationPopup.mode === 'view' && annotationPopup.annotation && (
+            </svg>
+          )}
+          <div ref={annotationPopupRef} className="fixed z-50"
+            style={{ left: initLeft, top: initTop, minWidth: 280 }}>
+            <div className="bg-white border-2 rounded-lg shadow-2xl flex flex-col" style={{ borderColor: annotationColor, width: 320, minHeight: 180, resize: 'both', overflow: 'auto' }}>
+              {/* Draggable header */}
+              <div className="flex items-center justify-between px-3 py-2 rounded-t-lg cursor-move select-none shrink-0"
+                style={{ backgroundColor: annotationColor + '20' }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  const box = annotationPopupRef.current;
+                  if (!box) return;
+                  const rect = box.getBoundingClientRect();
+                  const offX = e.clientX - rect.left, offY = e.clientY - rect.top;
+                  const onMove = (ev: MouseEvent) => { box.style.left = (ev.clientX - offX) + 'px'; box.style.top = (ev.clientY - offY) + 'px'; };
+                  const onUp = () => { document.removeEventListener('pointermove', onMove); document.removeEventListener('pointerup', onUp); };
+                  document.addEventListener('pointermove', onMove);
+                  document.addEventListener('pointerup', onUp);
+                }}>
+                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: annotationColor }}>
+                  {annotationPopup.mode === 'create' ? 'New Annotation' : 'Annotation'}
+                </span>
+                <button onClick={() => setAnnotationPopup(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+              </div>
+              <div className="px-3 pb-3 pt-2 flex flex-col flex-1 min-h-0">
+                {/* Color picker */}
+                <div className="flex items-center gap-1.5 mb-2 shrink-0">
+                  <span className="text-[10px] text-gray-400">Color:</span>
+                  {['#f59e0b', '#ef4444', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899'].map(c => (
+                    <button key={c} onClick={() => setAnnotationColor(c)}
+                      className={`w-5 h-5 rounded-full border-2 transition-transform ${annotationColor === c ? 'border-gray-800 scale-110' : 'border-transparent'}`}
+                      style={{ backgroundColor: c }} />
+                  ))}
+                </div>
+                <textarea
+                  className="w-full flex-1 border border-gray-200 rounded p-2 text-sm focus:outline-none focus:ring-1"
+                  style={{ minHeight: 60 }}
+                  placeholder="Type your note here..."
+                  value={annotationText}
+                  onChange={e => setAnnotationText(e.target.value)}
+                  autoFocus
+                />
+                <div className="flex gap-2 mt-2 shrink-0">
                   <button
                     onClick={() => {
-                      if (!volumeId || !chapterName) return;
-                      const updated = annotations.filter(a => a.id !== annotationPopup.annotation!.id);
+                      if (!annotationText.trim() || !volumeId || !chapterName) return;
+                      const newAnn: Annotation = {
+                        id: annotationPopup.annotation?.id || `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                        blockId: annotationPopup.blockId,
+                        selectedText: annotationPopup.selectedText || annotationPopup.annotation?.selectedText || '',
+                        color: annotationColor,
+                        startLine: annotationPopup.startLine,
+                        startCol: annotationPopup.startCol,
+                        endLine: annotationPopup.endLine,
+                        endCol: annotationPopup.endCol,
+                        text: annotationText.trim(),
+                        createdAt: annotationPopup.annotation?.createdAt || Date.now(),
+                      };
+                      const updated = annotationPopup.mode === 'create'
+                        ? [...annotations, newAnn]
+                        : annotations.map(a => a.id === newAnn.id ? newAnn : a);
                       setAnnotations(updated);
                       saveAnnotations(volumeId, chapterName, updated);
                       setAnnotationPopup(null);
                     }}
-                    className="text-xs bg-red-100 text-red-600 px-3 py-1.5 rounded hover:bg-red-200 font-medium"
+                    className="flex-1 text-xs text-white py-1.5 rounded font-medium"
+                    style={{ backgroundColor: annotationColor }}
                   >
-                    Delete
+                    {annotationPopup.mode === 'create' ? 'Save' : 'Update'}
                   </button>
-                )}
-                <button onClick={() => setAnnotationPopup(null)}
-                  className="text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded hover:bg-gray-200 font-medium">
-                  Cancel
-                </button>
+                  {annotationPopup.mode === 'view' && annotationPopup.annotation && (
+                    <button
+                      onClick={() => {
+                        if (!volumeId || !chapterName) return;
+                        const updated = annotations.filter(a => a.id !== annotationPopup.annotation!.id);
+                        setAnnotations(updated);
+                        saveAnnotations(volumeId, chapterName, updated);
+                        setAnnotationPopup(null);
+                      }}
+                      className="text-xs bg-red-100 text-red-600 px-3 py-1.5 rounded hover:bg-red-200 font-medium"
+                    >
+                      Delete
+                    </button>
+                  )}
+                  <button onClick={() => setAnnotationPopup(null)}
+                    className="text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded hover:bg-gray-200 font-medium">
+                    Cancel
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        </>);
+      })()}
 
       {/* Keyboard shortcut reminder bar */}
       <div className="h-8 bg-gray-100 border-t border-gray-200 flex items-center justify-center gap-6 shrink-0 text-sm text-gray-500">
