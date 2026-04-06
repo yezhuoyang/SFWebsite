@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from server.config import VOLUMES
+from server.config import MAX_SESSIONS, SESSION_IDLE_TIMEOUT, VOLUMES
 from server.database import get_session
 from server.schemas import CoqSessionCreate, CoqSessionOut
 from server.services.vscoqtop_session import pool
