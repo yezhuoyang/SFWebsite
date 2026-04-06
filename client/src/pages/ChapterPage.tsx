@@ -426,9 +426,9 @@ export default function ChapterPage() {
     prevStartLinesRef.current = new Map(blockStartLines);
   }, [blockStartLines]);
 
-  /** Flush any pending edits and then run an action. vscoqtop processes
-   * LSP messages in order, so we can fire the action immediately after
-   * sending didChange — no artificial delay needed. */
+  /** Flush any pending edits and then run an action.
+   * If there was a pending edit, we need a short delay for vscoqtop
+   * to process the didChange before we send the step command. */
   const syncThenDo = useCallback((action: () => void) => {
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
@@ -436,8 +436,11 @@ export default function ChapterPage() {
       const newDoc = rebuildDocument();
       coqActions.sendChange(newDoc);
       originalDocRef.current = newDoc;
+      // Wait for vscoqtop to process the document change
+      setTimeout(action, 300);
+    } else {
+      action();
     }
-    action();
   }, [rebuildDocument, coqActions]);
 
   // Keep refs in sync — use assignment during render (not useEffect) for immediate availability
