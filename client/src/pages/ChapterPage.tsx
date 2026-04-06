@@ -26,6 +26,7 @@ import {
 } from '../api/client';
 import { useCoqWebSocket } from '../api/coqWebSocket';
 import type { Exercise } from '../types';
+import { saveBlockEdits, loadBlockEdits, clearBlockEdits, saveGradeResults, loadGradeResults, type StoredGrade } from '../utils/storage';
 
 export default function ChapterPage() {
   const { volumeId, chapterName } = useParams<{ volumeId: string; chapterName: string }>();
@@ -52,6 +53,7 @@ export default function ChapterPage() {
   const editorInstancesRef = useRef<Map<number, any>>(new Map());
   const monacoRef = useRef<any>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const localSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const originalDocRef = useRef<string>(''); // The full original .v file text
 
   // Activity tracking (not persisted — session only)
@@ -87,17 +89,38 @@ export default function ChapterPage() {
   // WebSocket connection to vscoqtop
   const [coqState, coqActions] = useCoqWebSocket(sessionId);
 
-  // Load blocks and exercises
+  // Load blocks, exercises, and restore any saved edits/grades from localStorage
   useEffect(() => {
     if (!volumeId || !chapterName) return;
     getChapterBlocks(volumeId, chapterName).then(data => {
-      setBlocks(data.blocks);
+      // Restore saved edits from localStorage
+      const savedEdits = loadBlockEdits(volumeId, chapterName);
+      const blocksWithEdits = savedEdits ? data.blocks.map(b => {
+        const saved = savedEdits.get(b.id);
+        return saved !== undefined ? { ...b, content: saved } : b;
+      }) : data.blocks;
+
+      setBlocks(blocksWithEdits);
       setToc(data.toc);
-      data.blocks.forEach(b => blockContentsRef.current.set(b.id, b.content));
-      // Build the canonical document from blocks — this is our source of truth
-      originalDocRef.current = data.blocks.map(b => b.content).join('\n');
+      blocksWithEdits.forEach(b => blockContentsRef.current.set(b.id, b.content));
+      originalDocRef.current = blocksWithEdits.map(b => b.content).join('\n');
     });
-    getExercises(volumeId, chapterName).then(setExercises).catch(console.error);
+    // Load exercises, then overlay with locally-stored grades
+    getExercises(volumeId, chapterName).then(serverExercises => {
+      const localGrades = loadGradeResults(volumeId, chapterName);
+      if (localGrades) {
+        const merged = serverExercises.map(ex => {
+          const local = localGrades[ex.name];
+          if (local && local.status === 'completed') {
+            return { ...ex, status: 'completed' as const };
+          }
+          return ex;
+        });
+        setExercises(merged);
+      } else {
+        setExercises(serverExercises);
+      }
+    }).catch(console.error);
   }, [volumeId, chapterName]);
 
   // Once session + blocks are both ready, sync the canonical document to vscoqtop
@@ -288,6 +311,14 @@ export default function ChapterPage() {
       // (e.g., typing a comment like "(*ANum*)" before a tactic).
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = 'dirty' as any;  // non-null sentinel = dirty
+
+      // Persist edits to localStorage (debounced — 1s after last keystroke)
+      if (localSaveTimerRef.current) clearTimeout(localSaveTimerRef.current);
+      localSaveTimerRef.current = setTimeout(() => {
+        if (volumeId && chapterName) {
+          saveBlockEdits(volumeId, chapterName, blockContentsRef.current);
+        }
+      }, 1000);
     });
 
     editor.onDidFocusEditorText(() => {
@@ -351,11 +382,22 @@ export default function ChapterPage() {
    * Rebuild the full document by splicing edited block contents
    * into the original document at their correct line positions.
    */
-  const rebuildDocument = useCallback((): string => {
+  const rebuildDocument = useCallback((forCoq = false): string => {
     const parts: string[] = [];
     for (const block of blocks) {
       const content = blockContentsRef.current.get(block.id) || block.content;
       parts.push(content);
+      // When building doc for vscoqtop, auto-close unclosed proofs in exercise
+      // blocks so downstream code (e.g. "End AExp.") doesn't hit proof mode.
+      if (forCoq && block.kind === 'exercise') {
+        const stripped = content.replace(/\(\*[\s\S]*?\*\)/g, '');
+        const proofStarts = (stripped.match(/\bProof\b/g) || []).length;
+        const proofEnds = (stripped.match(/\b(?:Qed|Admitted|Defined|Abort)\s*\./g) || []).length;
+        const unclosed = proofStarts - proofEnds;
+        for (let k = 0; k < unclosed; k++) {
+          parts.push('Admitted.');
+        }
+      }
     }
     return parts.join('\n');
   }, [blocks]);
@@ -369,6 +411,14 @@ export default function ChapterPage() {
       const content = blockContentsRef.current.get(block.id) || block.content;
       const lineCount = content.split('\n').length;
       currentLine += lineCount;
+      // Account for auto-injected Admitted. lines (same logic as rebuildDocument)
+      if (block.kind === 'exercise') {
+        const stripped = content.replace(/\(\*[\s\S]*?\*\)/g, '');
+        const proofStarts = (stripped.match(/\bProof\b/g) || []).length;
+        const proofEnds = (stripped.match(/\b(?:Qed|Admitted|Defined|Abort)\s*\./g) || []).length;
+        const unclosed = proofStarts - proofEnds;
+        if (unclosed > 0) currentLine += unclosed;
+      }
     }
     setBlockStartLines(map);
   }, [blocks]);
@@ -418,7 +468,7 @@ export default function ChapterPage() {
         clearTimeout(debounceTimerRef.current);
       }
       debounceTimerRef.current = null;
-      const newDoc = rebuildDocument();
+      const newDoc = rebuildDocument(true);
       coqActions.sendChange(newDoc);
       originalDocRef.current = newDoc;
     }
@@ -443,8 +493,33 @@ export default function ChapterPage() {
       const result = await saveChapterFile(volumeId, chapterName, doc);
       originalDocRef.current = doc;
       setSaveResult(result);
-      // Refresh exercises to update status badges
-      getExercises(volumeId, chapterName).then(setExercises).catch(console.error);
+
+      // Persist grades to localStorage
+      if (result.exercises) {
+        const grades: Record<string, StoredGrade> = {};
+        // Load existing grades first to preserve previous completions
+        const existing = loadGradeResults(volumeId, chapterName) || {};
+        for (const [k, v] of Object.entries(existing)) grades[k] = v;
+        for (const ex of result.exercises) {
+          grades[ex.name] = { status: ex.status, points: ex.points, gradedAt: Date.now() };
+        }
+        saveGradeResults(volumeId, chapterName, grades);
+      }
+      // Also persist current edits
+      saveBlockEdits(volumeId, chapterName, blockContentsRef.current);
+
+      // Refresh exercises to update status badges (merge with local grades)
+      getExercises(volumeId, chapterName).then(serverExercises => {
+        const localGrades = loadGradeResults(volumeId, chapterName);
+        if (localGrades) {
+          setExercises(serverExercises.map(ex => {
+            const local = localGrades[ex.name];
+            return (local?.status === 'completed') ? { ...ex, status: 'completed' as const } : ex;
+          }));
+        } else {
+          setExercises(serverExercises);
+        }
+      }).catch(console.error);
       // Clear save result notification after 5 seconds
       setTimeout(() => setSaveResult(null), 5000);
     } catch (e: any) {
@@ -460,6 +535,8 @@ export default function ChapterPage() {
     if (!confirm('Reset this chapter to its original code? Your changes will be lost.')) return;
     try {
       await resetChapterFile(volumeId, chapterName);
+      // Clear localStorage for this chapter
+      clearBlockEdits(volumeId, chapterName);
       // Reload the page to get fresh blocks
       window.location.reload();
     } catch (e: any) {
@@ -1009,7 +1086,7 @@ export default function ChapterPage() {
                               }}
                               className="text-[10px] text-purple-500 hover:text-purple-700 font-medium"
                             >
-                              {visibleSolution?.name === block.exercise_name ? 'Hide solution' : 'See solution'}
+                              {visibleSolution?.name === block.exercise_name ? 'Hide solution / APPLY' : 'See solution'}
                             </button>
                           </div>
                         </div>
@@ -1017,10 +1094,10 @@ export default function ChapterPage() {
                         {/* Sample solution panel */}
                         {visibleSolution?.name === block.exercise_name && (
                           <div className="border-t border-purple-200 bg-purple-50/50 px-4 py-3">
-                            <div className="flex items-center gap-2 mb-2">
+                            <div className="mb-2">
                               <span className="text-xs font-semibold text-purple-700">Sample Solution</span>
                               {visibleSolution.data.explanation && (
-                                <span className="text-[10px] text-purple-500">— {visibleSolution.data.explanation}</span>
+                                <span className="text-[10px] text-purple-500 ml-1">— {visibleSolution.data.explanation}</span>
                               )}
                             </div>
                             <pre className="text-xs font-mono text-purple-900 bg-white border border-purple-100 rounded p-3 overflow-x-auto whitespace-pre-wrap leading-relaxed">

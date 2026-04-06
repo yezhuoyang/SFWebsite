@@ -6,6 +6,14 @@
       "solution": "Fixpoint optimize_0plus_b (b : bexp) : bexp :=\n  match b with\n  | BTrue => BTrue\n  | BFalse => BFalse\n  | BEq a1 a2 => BEq (optimize_0plus a1) (optimize_0plus a2)\n  | BNeq a1 a2 => BNeq (optimize_0plus a1) (optimize_0plus a2)\n  | BLe a1 a2 => BLe (optimize_0plus a1) (optimize_0plus a2)\n  | BGt a1 a2 => BGt (optimize_0plus a1) (optimize_0plus a2)\n  | BNot b1 => BNot (optimize_0plus_b b1)\n  | BAnd b1 b2 => BAnd (optimize_0plus_b b1) (optimize_0plus_b b2)\n  end.\n\nTheorem optimize_0plus_b_sound : forall b,\n  beval (optimize_0plus_b b) = beval b.\nProof.\n  induction b; simpl;\n    try (rewrite optimize_0plus_sound; rewrite optimize_0plus_sound);\n    try reflexivity;\n    try (rewrite IHb; reflexivity);\n    try (rewrite IHb1; rewrite IHb2; reflexivity).\nQed.",
       "explanation": "Apply optimize_0plus to all arithmetic sub-expressions in a boolean expression. Soundness follows from optimize_0plus_sound."
     },
+    "optimize": {
+      "solution": "(* Example: optimize away multiplication by 1 *)\nFixpoint optimize_mult1 (a : aexp) : aexp :=\n  match a with\n  | ANum n => ANum n\n  | AId x => AId x\n  | APlus a1 a2 => APlus (optimize_mult1 a1) (optimize_mult1 a2)\n  | AMinus a1 a2 => AMinus (optimize_mult1 a1) (optimize_mult1 a2)\n  | AMult (ANum 1) a2 => optimize_mult1 a2\n  | AMult a1 (ANum 1) => optimize_mult1 a1\n  | AMult a1 a2 => AMult (optimize_mult1 a1) (optimize_mult1 a2)\n  end.\n\nTheorem optimize_mult1_sound : forall a st,\n  aeval st (optimize_mult1 a) = aeval st a.\nProof.\n  induction a; simpl; try reflexivity; try (rewrite IHa1; rewrite IHa2; reflexivity).\n  - (* AMult *) destruct a1; try (simpl; rewrite IHa2; destruct n; try reflexivity; simpl;\n      destruct n; try (simpl; rewrite Nat.add_0_r; reflexivity); simpl; rewrite IHa2; reflexivity);\n    try (simpl; rewrite IHa1; rewrite IHa2; reflexivity).\n    destruct a2; try (simpl; rewrite IHa1; reflexivity);\n    try (simpl; rewrite IHa1; reflexivity).\nQed.",
+      "explanation": "Design exercise: one possible optimization eliminates multiplication by 1. The proof proceeds by structural induction on the arithmetic expression, with case analysis on AMult."
+    },
+    "beval_rules": {
+      "solution": "Definition manual_grade_for_beval_rules : option (nat*string) := None.",
+      "explanation": "Informal exercise: write inference rules mirroring the beval function for BTrue, BFalse, BEq, BNeq, BLe, BGt, BNot, BAnd."
+    },
     "bevalR": {
       "solution": "Inductive bevalR: bexp -> bool -> Prop :=\n  | E_BTrue : bevalR BTrue true\n  | E_BFalse : bevalR BFalse false\n  | E_BEq : forall a1 a2 n1 n2,\n      a1 ==> n1 -> a2 ==> n2 -> bevalR (BEq a1 a2) (n1 =? n2)\n  | E_BNeq : forall a1 a2 n1 n2,\n      a1 ==> n1 -> a2 ==> n2 -> bevalR (BNeq a1 a2) (negb (n1 =? n2))\n  | E_BLe : forall a1 a2 n1 n2,\n      a1 ==> n1 -> a2 ==> n2 -> bevalR (BLe a1 a2) (n1 <=? n2)\n  | E_BGt : forall a1 a2 n1 n2,\n      a1 ==> n1 -> a2 ==> n2 -> bevalR (BGt a1 a2) (negb (n1 <=? n2))\n  | E_BNot : forall b bv,\n      bevalR b bv -> bevalR (BNot b) (negb bv)\n  | E_BAnd : forall b1 b2 bv1 bv2,\n      bevalR b1 bv1 -> bevalR b2 bv2 -> bevalR (BAnd b1 b2) (andb bv1 bv2)\nwhere \"e '==>b' b\" := (bevalR e b) : type_scope.\n\nLemma bevalR_iff_beval : forall b bv,\n  b ==>b bv <-> beval b = bv.\nProof.\n  split.\n  - intros H. induction H; simpl;\n      try (apply aevalR_iff_aeval in H; apply aevalR_iff_aeval in H0;\n           subst; reflexivity);\n      try (rewrite IHbevalR; reflexivity);\n      try (rewrite IHbevalR1; rewrite IHbevalR2; reflexivity);\n      try reflexivity.\n  - generalize dependent bv. induction b; simpl; intros; subst;\n      try constructor;\n      try (apply aevalR_iff_aeval; reflexivity);\n      try (apply IHb; reflexivity);\n      try (apply IHb1; reflexivity);\n      try (apply IHb2; reflexivity).\nQed.",
       "explanation": "Define bevalR as an inductive relation mirroring the beval function, then prove equivalence by induction in both directions."
@@ -50,7 +58,7 @@
       "solution": "Theorem while_break_true : forall b c st st',\n  st =[ CWhile b c ]=> st' / SContinue ->\n  beval st' b = true ->\n  exists st'', st'' =[ c ]=> st' / SBreak.\nProof.\n  intros b c st st' H Hb.\n  remember (CWhile b c) as cw eqn:Heqcw.\n  induction H; inversion Heqcw; subst.\n  - rewrite Hb in H. discriminate.\n  - apply IHceval2; try reflexivity; try assumption.\n  - exists st. assumption.\nQed.",
       "explanation": "By induction on the while evaluation derivation: if the loop terminates normally with guard true, then some iteration must have broken."
     },
-    "ceval_deterministic_break": {
+    "ceval_deterministic": {
       "solution": "Theorem ceval_deterministic: forall (c:com) st st1 st2 s1 s2,\n     st =[ c ]=> st1 / s1 ->\n     st =[ c ]=> st2 / s2 ->\n     st1 = st2 /\\ s1 = s2.\nProof.\n  intros c st st1 st2 s1 s2 E1 E2.\n  generalize dependent s2. generalize dependent st2.\n  induction E1; intros st2 s2 E2; inversion E2; subst;\n    try (split; reflexivity);\n    try discriminate.\n  - (* SeqBreak vs SeqBreak *)\n    apply IHE1 in H4. destruct H4. subst. split; reflexivity.\n  - (* SeqBreak vs SeqContinue *)\n    apply IHE1 in H1. destruct H1. discriminate.\n  - (* SeqContinue vs SeqBreak *)\n    apply IHE1_1 in H4. destruct H4. discriminate.\n  - (* SeqContinue vs SeqContinue *)\n    apply IHE1_1 in H1. destruct H1. subst.\n    apply IHE1_2 in H5. destruct H5. split; assumption.\n  - (* IfTrue vs IfTrue *)\n    apply IHE1 in H6. assumption.\n  - rewrite H in H5. discriminate.\n  - rewrite H in H5. discriminate.\n  - apply IHE1 in H6. assumption.\n  - rewrite H in H3. discriminate.\n  - rewrite H in H1. discriminate.\n  - apply IHE1_1 in H4. destruct H4. subst.\n    apply IHE1_2 in H7. assumption.\n  - apply IHE1 in H5. destruct H5. discriminate.\n  - rewrite H in H5. discriminate.\n  - apply IHE1 in H4. destruct H4. discriminate.\n  - apply IHE1 in H4. destruct H4. subst. split; reflexivity.\nQed.",
       "explanation": "Determinism for break_imp: by induction on one derivation, inverting the other, using IH to match signals and states."
     },
@@ -62,13 +70,9 @@
       "solution": "Theorem XtimesYinZ_spec : forall st n m st',\n  st X = n ->\n  st Y = m ->\n  st =[ XtimesYinZ ]=> st' ->\n  st' Z = n * m.\nProof.\n  intros st n m st' HX HY Heval.\n  inversion Heval. subst. simpl.\n  apply t_update_eq.\nQed.",
       "explanation": "XtimesYinZ assigns Z := X * Y. After inversion, st' Z equals aeval st (X * Y) = st X * st Y."
     },
-    "optimize_0plus_b_test1": {
-      "solution": "Example optimize_0plus_b_test1:\n  optimize_0plus_b (BNot (BGt (APlus (ANum 0) (ANum 4)) (ANum 8))) =\n                   (BNot (BGt (ANum 4) (ANum 8))).\nProof. reflexivity. Qed.",
-      "explanation": "Simple computation check."
-    },
-    "optimize_0plus_b_test2": {
-      "solution": "Example optimize_0plus_b_test2:\n  optimize_0plus_b (BAnd (BLe (APlus (ANum 0) (ANum 4)) (ANum 5)) BTrue) =\n                   (BAnd (BLe (ANum 4) (ANum 5)) BTrue).\nProof. reflexivity. Qed.",
-      "explanation": "Simple computation check."
+    "add_for_loop": {
+      "solution": "(* Design exercise: Add C-style for loops to Imp.\n\n   Syntax:\n     CFor (init : com) (guard : bexp) (update : com) (body : com)\n\n   Semantics (as a derived form):\n     for(init; guard; update) { body }\n   is equivalent to:\n     init; while guard do body; update end\n\n   Add to com:\n     | CFor (c_init : com) (b : bexp) (c_update : com) (c_body : com)\n\n   Add evaluation rules:\n     | E_For : forall st st' c_init b c_update c_body,\n         st =[ c_init; while b do c_body; c_update end ]=> st' ->\n         st =[ CFor c_init b c_update c_body ]=> st'\n*)",
+      "explanation": "Design exercise: C-style for loops can be desugared to init; while guard do body; update end. Add CFor to com and E_For that delegates to the sequence+while translation."
     }
   }
 }

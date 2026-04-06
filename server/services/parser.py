@@ -46,7 +46,8 @@ EXERCISE_HEADER_RE = re.compile(
 )
 
 # Exercise end marker
-EXERCISE_END_RE = re.compile(r'\(\*\*\s+\[\]\s+\*\)')
+# Exercise end marker: (** [] *) or (* ... [] *) — both single and double star
+EXERCISE_END_RE = re.compile(r'\(\*\*?\s+\[\]\s*\*\)|\[\]\s*\*\)')
 
 # Incomplete markers
 FILL_IN_HERE_RE = re.compile(r'\(\*\s+FILL IN HERE')
@@ -104,10 +105,16 @@ def parse_exercises(filepath: Path) -> list[ParsedExercise]:
         has_fill_in = bool(FILL_IN_HERE_RE.search(body))
         has_replace = bool(REPLACE_LINE_RE.search(body))
         has_admitted = bool(ADMITTED_RE.search(body))
+        has_qed = bool(re.search(r'\b(Qed|Defined)\s*\.', body))
 
-        if has_fill_in or has_replace or has_admitted:
+        if has_admitted:
+            # Admitted always means incomplete
+            status = "not_started"
+        elif (has_fill_in or has_replace) and not has_qed:
+            # Placeholder comment still present and no completed proof
             status = "not_started"
         else:
+            # Either no markers, or user wrote proof alongside the comment
             status = "completed"
 
         is_manual = name in manual_exercises
