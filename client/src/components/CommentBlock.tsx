@@ -36,16 +36,12 @@ export default function CommentBlock({ content }: Props) {
         // - Has lines starting with significant whitespace (4+ spaces after dedent)
         // - Has lines with --- or === (inference rule separators)
         // - Has lines with | (BNF alternatives)
-        // - Has very short lines (< 40 chars) that look like structured content
         const lines = dedented.split('\n');
-        const hasIndentedLines = lines.some(l => /^\s{2,}\S/.test(l));
         const hasRuleSeparators = lines.some(l => /^[\s]*[-]{3,}/.test(l) || /^[\s]*[=]{3,}/.test(l));
+        // BNF: 2+ lines starting with | (not inside prose)
         const hasBNFPipes = lines.filter(l => /^\s*\|/.test(l)).length >= 2;
-        const mostlyShortLines = lines.length >= 3 && lines.filter(l => l.trim().length > 0 && l.trim().length < 45).length > lines.length * 0.6;
-        const hasArrows = dedented.includes('==>') || dedented.includes('->') || dedented.includes(':=');
 
-        // List items — check BEFORE isFormatted to prevent lists with
-        // arrows/indentation from rendering as blue preformatted blocks
+        // List items — check FIRST to prevent lists from being rendered as blue code
         const reflowed = dedented.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
         if (dedented.match(/^\s*-\s/) || reflowed.match(/^\s*-\s/)) {
           const items = dedented.split(/\n\s*-\s/).map(s => s.replace(/^-\s*/, '').replace(/\s+/g, ' ').trim());
@@ -58,8 +54,11 @@ export default function CommentBlock({ content }: Props) {
           );
         }
 
-        const isFormatted = hasRuleSeparators || hasBNFPipes ||
-          (hasIndentedLines && !lines.some(l => /^\s*-\s/.test(l)) && (hasArrows || mostlyShortLines));
+        // Only treat as formatted (blue preformatted) for genuine structural content:
+        // - Inference rules (lines with --- or === separators)
+        // - BNF grammars (multiple lines starting with |)
+        // DO NOT trigger on prose that merely mentions arrows (->, ==>, :=)
+        const isFormatted = hasRuleSeparators || hasBNFPipes;
 
         if (isFormatted) {
           // Preserve line breaks — render as preformatted block
