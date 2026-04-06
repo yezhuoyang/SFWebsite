@@ -44,8 +44,22 @@ export default function CommentBlock({ content }: Props) {
         const mostlyShortLines = lines.length >= 3 && lines.filter(l => l.trim().length > 0 && l.trim().length < 45).length > lines.length * 0.6;
         const hasArrows = dedented.includes('==>') || dedented.includes('->') || dedented.includes(':=');
 
-        const isFormatted = hasIndentedLines || hasRuleSeparators || hasBNFPipes ||
-          (mostlyShortLines && (hasArrows || hasBNFPipes));
+        // List items — check BEFORE isFormatted to prevent lists with
+        // arrows/indentation from rendering as blue preformatted blocks
+        const reflowed = dedented.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+        if (dedented.match(/^\s*-\s/) || reflowed.match(/^\s*-\s/)) {
+          const items = dedented.split(/\n\s*-\s/).map(s => s.replace(/^-\s*/, '').replace(/\s+/g, ' ').trim());
+          return (
+            <ul key={i}>
+              {items.filter(Boolean).map((item, j) => (
+                <li key={j}>{renderInline(item)}</li>
+              ))}
+            </ul>
+          );
+        }
+
+        const isFormatted = hasRuleSeparators || hasBNFPipes ||
+          (hasIndentedLines && !lines.some(l => /^\s*-\s/.test(l)) && (hasArrows || mostlyShortLines));
 
         if (isFormatted) {
           // Preserve line breaks — render as preformatted block
@@ -58,21 +72,7 @@ export default function CommentBlock({ content }: Props) {
           );
         }
 
-        // Regular prose — reflow into a single paragraph
-        const reflowed = dedented.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
         if (!reflowed) return null;
-
-        // List items
-        if (reflowed.match(/^\s*-\s/)) {
-          const items = dedented.split(/\n\s*-\s/).map(s => s.replace(/^-\s*/, '').replace(/\s+/g, ' ').trim());
-          return (
-            <ul key={i}>
-              {items.filter(Boolean).map((item, j) => (
-                <li key={j}>{renderInline(item)}</li>
-              ))}
-            </ul>
-          );
-        }
 
         return <p key={i}>{renderInline(reflowed)}</p>;
       })}
