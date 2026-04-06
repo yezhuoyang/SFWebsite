@@ -49,7 +49,21 @@ for vol_id, vol_cfg in VOLUMES.items():
     if vol_path.exists():
         app.mount(f"/sf/{vol_id}", StaticFiles(directory=str(vol_path), html=True), name=f"sf_{vol_id}")
 
-# Mount the built frontend (production)
+# SPA fallback: serve index.html for any non-API, non-static path
+# This makes React Router work on hard refresh (Ctrl+Shift+R)
 client_dist = BASE_DIR / "client" / "dist"
 if client_dist.exists():
-    app.mount("/", StaticFiles(directory=str(client_dist), html=True), name="client")
+    from fastapi.responses import FileResponse
+
+    # Serve static assets (JS, CSS, images) directly
+    app.mount("/assets", StaticFiles(directory=str(client_dist / "assets")), name="assets")
+
+    # Catch-all: serve index.html for any other path (React Router handles routing)
+    @app.get("/{path:path}")
+    async def spa_fallback(path: str):
+        # If the file exists in dist, serve it (favicon, etc.)
+        file_path = client_dist / path
+        if path and file_path.is_file():
+            return FileResponse(str(file_path))
+        # Otherwise serve index.html (React Router will handle the route)
+        return FileResponse(str(client_dist / "index.html"))
