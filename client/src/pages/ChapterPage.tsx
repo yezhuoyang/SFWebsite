@@ -527,16 +527,34 @@ export default function ChapterPage() {
       // Also persist current edits
       saveBlockEdits(volumeId, chapterName, blockContentsRef.current);
 
-      // Update exercises state immediately from grade results (no server round-trip)
-      const localGrades = loadGradeResults(volumeId, chapterName) || {};
-      setExercises(prev => prev.map(ex => {
-        // Check grade result first, then localStorage
-        const graded = result.exercises?.find(e => e.name === ex.name);
-        if (graded?.status === 'completed') return { ...ex, status: 'completed' as const };
-        if (localGrades[ex.name]?.status === 'completed') return { ...ex, status: 'completed' as const };
-        if (graded) return { ...ex, status: graded.status as any };
-        return ex;
-      }));
+      // Update exercises state immediately from grade results
+      // Build from result.exercises as the authoritative source (parser-based, not DB)
+      if (result.exercises && result.exercises.length > 0) {
+        const localGrades = loadGradeResults(volumeId, chapterName) || {};
+        setExercises(prev => {
+          const byName = new Map(prev.map(ex => [ex.name, ex]));
+          // Merge: grade results are authoritative, fill in details from prev
+          const merged = result.exercises.map(g => {
+            const existing = byName.get(g.name);
+            const status = g.status === 'completed' || localGrades[g.name]?.status === 'completed'
+              ? 'completed' : g.status;
+            return {
+              id: existing?.id ?? 0,
+              name: g.name,
+              stars: existing?.stars ?? 0,
+              difficulty: existing?.difficulty ?? 'standard',
+              modifier: existing?.modifier ?? null,
+              is_manual: existing?.is_manual ?? false,
+              points: existing?.points ?? g.points,
+              line_start: existing?.line_start ?? 0,
+              line_end: existing?.line_end ?? null,
+              status,
+              points_earned: g.status === 'completed' ? g.points : 0,
+            } as Exercise;
+          });
+          return merged;
+        });
+      }
       // Clear save result notification after 5 seconds
       setTimeout(() => setSaveResult(null), 5000);
     } catch (e: any) {
