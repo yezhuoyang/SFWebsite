@@ -518,177 +518,26 @@ export default function ChapterPage() {
     prevStartLinesRef.current = new Map(blockStartLines);
   }, [blockStartLines]);
 
-  // Annotation overlay positioning — renders dashed underlines as absolutely-positioned
-  // divs in a separate overlay container. Immune to React re-renders.
-  const annotationsRef = useRef(annotations);
-  annotationsRef.current = annotations;
-  const annotationOverlayRef = useRef<HTMLDivElement>(null);
-
+  // Monaco decorations for code block annotations
   useEffect(() => {
-    // Apply Monaco decorations for code blocks
-    if (monacoRef.current) {
-      const annotationDecors = annotationDecorationsRef.current;
-      editorInstancesRef.current.forEach((editor, blockId) => {
-        const blockAnns = annotations.filter(a => a.blockId === blockId && a.startLine > 0);
-        const decorations = blockAnns.map(a => ({
-          range: new monacoRef.current.Range(a.startLine, a.startCol, a.endLine, a.endCol),
-          options: {
-            inlineClassName: 'annotation-underline',
-            hoverMessage: { value: `**Note:** ${a.text}` },
-          },
-        }));
-        const oldIds = annotationDecors.get(blockId) || [];
-        const newIds = editor.deltaDecorations(oldIds, decorations);
-        annotationDecors.set(blockId, newIds);
-      });
-    }
-  }, [annotations, blocks]);
-
-  // Position annotation overlays using text search + getClientRects
-  useEffect(() => {
-    const overlay = annotationOverlayRef.current;
-    if (!overlay) return;
-    if (annotations.length === 0) { overlay.innerHTML = ''; return; }
-
-    const positionOverlays = () => {
-      const anns = annotationsRef.current;
-      overlay.innerHTML = '';
-      for (const ann of anns) {
-        if (ann.startLine > 0) continue; // Monaco handles code blocks
-        if (!ann.selectedText) continue;
-        const blockEl = document.querySelector(`[data-block-id="${ann.blockId}"]`);
-        if (!blockEl) continue;
-
-        // Find the text across all text nodes using a concatenated approach
-        const textNodes: Text[] = [];
-        const walker = document.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT);
-        let tn: Text | null;
-        while ((tn = walker.nextNode() as Text | null)) textNodes.push(tn);
-
-        // Build full text and offset map
-        let fullText = '';
-        const offsets: { node: Text; start: number }[] = [];
-        for (const n of textNodes) {
-          offsets.push({ node: n, start: fullText.length });
-          fullText += n.textContent || '';
-        }
-
-        const idx = fullText.indexOf(ann.selectedText);
-        if (idx === -1) continue;
-
-        // Find start and end text nodes
-        const endIdx = idx + ann.selectedText.length;
-        let startNode: Text | null = null, startOffset = 0;
-        let endNode: Text | null = null, endOffset = 0;
-        for (let k = 0; k < offsets.length; k++) {
-          const o = offsets[k];
-          const nodeEnd = o.start + (o.node.textContent?.length || 0);
-          if (!startNode && idx < nodeEnd) { startNode = o.node; startOffset = idx - o.start; }
-          if (endIdx <= nodeEnd) { endNode = o.node; endOffset = endIdx - o.start; break; }
-        }
-        if (!startNode || !endNode) continue;
-
-        try {
-          const range = document.createRange();
-          range.setStart(startNode, startOffset);
-          range.setEnd(endNode, endOffset);
-          const rects = range.getClientRects();
-          for (let r = 0; r < rects.length; r++) {
-            const rect = rects[r];
-            const div = document.createElement('div');
-            div.setAttribute('data-ann-overlay', ann.id);
-            div.style.position = 'fixed';
-            div.style.left = rect.left + 'px';
-            div.style.top = (rect.bottom - 2) + 'px';
-            div.style.width = rect.width + 'px';
-            div.style.height = '3px';
-            div.style.borderBottom = `2px dashed ${ann.color || '#f59e0b'}`;
-            div.style.pointerEvents = 'auto';
-            div.style.cursor = 'pointer';
-            div.style.zIndex = '30';
-            div.title = `Note: ${ann.text}`;
-            div.onclick = (e) => {
-              e.stopPropagation();
-              setAnnotationPopup({
-                mode: 'view', annotation: ann, blockId: ann.blockId,
-                startLine: 0, startCol: 0, endLine: 0, endCol: 0,
-                x: e.clientX, y: e.clientY,
-              });
-              setAnnotationText(ann.text);
-              setAnnotationColor(ann.color || '#f59e0b');
-            };
-            overlay.appendChild(div);
-          }
-        } catch { /* range errors */ }
-      }
-    };
-
-    // Run on load + interval (handles scroll, resize, React re-renders)
-    positionOverlays();
-    const interval = setInterval(positionOverlays, 800);
-    // Also reposition on scroll
-    const scrollEl = document.querySelector('.flex-1.min-h-0.overflow-y-auto');
-    const onScroll = () => positionOverlays();
-    scrollEl?.addEventListener('scroll', onScroll);
-    window.addEventListener('resize', onScroll);
-    return () => { clearInterval(interval); scrollEl?.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onScroll); };
+    if (!monacoRef.current) return;
+    const annotationDecors = annotationDecorationsRef.current;
+    editorInstancesRef.current.forEach((editor, blockId) => {
+      const blockAnns = annotations.filter(a => a.blockId === blockId && a.startLine > 0);
+      const decorations = blockAnns.map(a => ({
+        range: new monacoRef.current.Range(a.startLine, a.startCol, a.endLine, a.endCol),
+        options: {
+          inlineClassName: 'annotation-underline',
+          hoverMessage: { value: `**Note:** ${a.text}` },
+        },
+      }));
+      const oldIds = annotationDecors.get(blockId) || [];
+      const newIds = editor.deltaDecorations(oldIds, decorations);
+      annotationDecors.set(blockId, newIds);
+    });
   }, [annotations.length]); // restart interval when annotation count changes
 
-  // Click handler for annotation marks
   const annotationDecorationsRef = useRef<Map<number, string[]>>(new Map());
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      // DOM marks
-      const mark = target.closest('mark[data-ann-id]') as HTMLElement | null;
-      if (mark) {
-        const annId = mark.getAttribute('data-ann-id');
-        const ann = annotations.find(a => a.id === annId);
-        if (ann) {
-          e.stopPropagation();
-          setAnnotationPopup({
-            mode: 'view', annotation: ann, blockId: ann.blockId,
-            startLine: 0, startCol: 0, endLine: 0, endCol: 0,
-            x: e.clientX, y: e.clientY,
-          });
-          setAnnotationText(ann.text);
-          setAnnotationColor(ann.color || '#f59e0b');
-        }
-        return;
-      }
-      // Monaco annotation underlines
-      if (target.classList.contains('annotation-underline')) {
-        for (const [blockId, editor] of editorInstancesRef.current.entries()) {
-          const domNode = editor.getDomNode();
-          if (domNode && domNode.contains(target)) {
-            const pos = editor.getTargetAtClientPoint(e.clientX, e.clientY);
-            if (!pos?.position) break;
-            const line = pos.position.lineNumber;
-            const col = pos.position.column;
-            const ann = annotations.find(a =>
-              a.blockId === blockId &&
-              (a.startLine < line || (a.startLine === line && a.startCol <= col)) &&
-              (a.endLine > line || (a.endLine === line && a.endCol >= col))
-            );
-            if (ann) {
-              e.stopPropagation();
-              setAnnotationPopup({
-                mode: 'view', annotation: ann, blockId,
-                startLine: ann.startLine, startCol: ann.startCol,
-                endLine: ann.endLine, endCol: ann.endCol,
-                x: e.clientX, y: e.clientY,
-              });
-              setAnnotationText(ann.text);
-              setAnnotationColor(ann.color || '#f59e0b');
-            }
-            break;
-          }
-        }
-      }
-    };
-    document.addEventListener('click', handler, true);
-    return () => document.removeEventListener('click', handler, true);
-  }, [annotations]);
 
   /** Sync document if dirty, then run action.
    * Only sends didChange when user explicitly steps — never auto during typing.
@@ -1182,8 +1031,6 @@ export default function ChapterPage() {
 
   return (
     <div className="h-screen flex flex-col bg-white" style={{ fontFamily: "'Open Sans', sans-serif" }}>
-      {/* Annotation overlay container — positioned dashed underlines */}
-      <div ref={annotationOverlayRef} className="pointer-events-none" style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
       {/* Top bar */}
       <div className="h-11 bg-white border-b border-gray-200 flex items-center px-4 gap-3 shrink-0 shadow-sm">
         <Link to={`/volume/${volumeId}`} className="text-sm text-gray-500 hover:text-gray-700">
@@ -1460,6 +1307,35 @@ export default function ChapterPage() {
                   {block.kind === 'comment' && (
                     <div className="px-1 py-2"><CommentBlock content={block.content} /></div>
                   )}
+
+                  {/* Annotation notes for this block */}
+                  {annotations.filter(a => a.blockId === block.id).map(ann => (
+                    <div key={ann.id}
+                      className="flex items-start gap-2 mx-2 my-1 px-3 py-1.5 rounded-md cursor-pointer text-xs"
+                      style={{ backgroundColor: (ann.color || '#f59e0b') + '15', borderLeft: `3px solid ${ann.color || '#f59e0b'}` }}
+                      title="Click to edit annotation"
+                      onClick={(e) => {
+                        setAnnotationPopup({
+                          mode: 'view', annotation: ann, blockId: block.id,
+                          startLine: ann.startLine, startCol: ann.startCol,
+                          endLine: ann.endLine, endCol: ann.endCol,
+                          x: e.clientX, y: e.clientY,
+                        });
+                        setAnnotationText(ann.text);
+                        setAnnotationColor(ann.color || '#f59e0b');
+                      }}
+                    >
+                      <span style={{ color: ann.color || '#f59e0b' }} className="text-sm mt-0.5">&#9998;</span>
+                      <div>
+                        {ann.selectedText && (
+                          <span className="font-mono text-gray-400 mr-1" style={{ borderBottom: `2px dashed ${ann.color || '#f59e0b'}` }}>
+                            "{ann.selectedText.length > 40 ? ann.selectedText.slice(0, 40) + '...' : ann.selectedText}"
+                          </span>
+                        )}
+                        <span className="text-gray-700">{ann.text}</span>
+                      </div>
+                    </div>
+                  ))}
 
                   {/* Code block */}
                   {block.kind === 'code' && (
@@ -1880,46 +1756,11 @@ export default function ChapterPage() {
           )}
         </>
       )}
-      {/* Annotation popup — draggable + resizable + arrow */}
+      {/* Annotation popup — draggable + resizable */}
       {annotationPopup && (() => {
-        // Find the <mark> element for the arrow anchor
-        const annId = annotationPopup.annotation?.id;
-        const markEl = annId ? document.querySelector(`mark[data-ann-id="${annId}"]`) : null;
         const initLeft = Math.min(annotationPopup.x - 160, window.innerWidth - 360);
         const initTop = Math.min(annotationPopup.y + 10, window.innerHeight - 280);
         return (<>
-          {/* SVG arrow from mark to popup — uses rAF to track positions */}
-          {markEl && (
-            <svg className="fixed inset-0 z-40 pointer-events-none" style={{ width: '100vw', height: '100vh' }}
-              ref={(svgEl) => {
-                if (!svgEl) return;
-                const line = svgEl.querySelector('line');
-                if (!line) return;
-                let rafId = 0;
-                const update = () => {
-                  const box = annotationPopupRef.current;
-                  const mk = document.querySelector(`mark[data-ann-id="${annId}"]`);
-                  if (!box || !mk) { cancelAnimationFrame(rafId); return; }
-                  const mr = mk.getBoundingClientRect();
-                  const br = box.getBoundingClientRect();
-                  line.setAttribute('x1', String(mr.left + mr.width / 2));
-                  line.setAttribute('y1', String(mr.bottom + 2));
-                  line.setAttribute('x2', String(br.left + br.width / 2));
-                  line.setAttribute('y2', String(br.top));
-                  rafId = requestAnimationFrame(update);
-                };
-                rafId = requestAnimationFrame(update);
-                // cleanup via ref unmount (React calls ref(null) on unmount)
-                (svgEl as any)._annRaf = rafId;
-              }}>
-              <defs><marker id="ann-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-                <path d="M0,0 L8,4 L0,8 Z" fill={annotationColor} />
-              </marker></defs>
-              <line x1="0" y1="0" x2="0" y2="0"
-                stroke={annotationColor} strokeWidth="1.5" strokeDasharray="6,3"
-                markerEnd="url(#ann-arrow)" opacity="0.7" />
-            </svg>
-          )}
           <div ref={annotationPopupRef} className="fixed z-50"
             style={{ left: initLeft, top: initTop, minWidth: 280 }}>
             <div className="bg-white border-2 rounded-lg shadow-2xl flex flex-col" style={{ borderColor: annotationColor, width: 320, minHeight: 180, resize: 'both', overflow: 'auto' }}>
