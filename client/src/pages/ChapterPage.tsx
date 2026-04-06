@@ -488,7 +488,7 @@ export default function ChapterPage() {
   // Run to end of a specific block
   const runToBlock = useCallback((blockId: number) => {
     const block = blocks.find(b => b.id === blockId);
-    if (!block || !block.line_end) return;
+    if (!block) return;
     const label = block.title || block.exercise_name || `block ${blockId}`;
     editHistoryRef.current.push({
       blockId, timestamp: Date.now(), action: 'run',
@@ -496,9 +496,23 @@ export default function ChapterPage() {
     });
     if (editHistoryRef.current.length > 100) editHistoryRef.current.shift();
     setActivityVersion(v => v + 1);
-    // interpretToPoint with the block's end position (0-indexed line)
-    coqActions.interpretToPoint(block.line_end - 1, 9999);
-  }, [blocks, coqActions]);
+
+    // Find the PREVIOUS block's end to use as start — run only THIS block
+    const blockIdx = blocks.findIndex(b => b.id === blockId);
+    // Find the next block's start line (dynamic) — that's where this block ends
+    let endLine: number;
+    if (blockIdx + 1 < blocks.length) {
+      const nextBlockStart = blockStartLines.get(blocks[blockIdx + 1].id) || blocks[blockIdx + 1].line_start;
+      endLine = nextBlockStart - 2; // -1 for 0-indexed, -1 for the gap between blocks
+    } else {
+      // Last block — use current content to compute end
+      const content = blockContentsRef.current.get(blockId) || block.content;
+      const startLine = blockStartLines.get(blockId) || block.line_start;
+      endLine = startLine + content.split('\n').length - 2; // 0-indexed
+    }
+
+    coqActions.interpretToPoint(Math.max(0, endLine), 9999);
+  }, [blocks, coqActions, blockStartLines]);
 
   // Determine if a block has any processed range
   const isBlockProcessed = useCallback((blockId: number): 'none' | 'partial' | 'full' => {
