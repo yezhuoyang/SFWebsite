@@ -169,6 +169,8 @@ async def save_chapter_file(
     if volume_id not in VOLUMES:
         raise HTTPException(status_code=404, detail=f"Unknown volume: {volume_id}")
     content = body.get("content", "")
+    if not content or len(content.strip()) < 10:
+        raise HTTPException(status_code=400, detail="Refusing to save empty or near-empty content")
     vol = VOLUMES[volume_id]
     v_file = Path(vol["path"]) / f"{chapter_name}.v"
     if not v_file.exists():
