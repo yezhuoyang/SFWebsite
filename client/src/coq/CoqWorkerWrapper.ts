@@ -103,11 +103,15 @@ export class CoqWorkerWrapper {
     // Worker created lazily in init()
   }
 
+  private jsonMode = false;
+
   /**
    * Create the Web Worker and set up message handling.
    * @param workerUrl URL to worker script
+   * @param jsonMode If true (WA backend), JSON-stringify commands before sending
    */
-  async createWorker(workerUrl: string): Promise<void> {
+  async createWorker(workerUrl: string, jsonMode = false): Promise<void> {
+    this.jsonMode = jsonMode;
     this.worker = new Worker(workerUrl);
     this.worker.addEventListener('message', (evt) => this.handleMessage(evt.data));
 
@@ -161,6 +165,12 @@ export class CoqWorkerWrapper {
     this.send(['LoadPkg', basePath, pkg]);
   }
 
+  /** Send a directive (raw postMessage, never JSON-stringified — for LoadPkg in WA mode) */
+  sendDirective(msg: unknown[]): void {
+    if (this.debug) console.log('[CoqWorker directive →]', msg);
+    this.worker?.postMessage(msg);
+  }
+
   register(filename: string): void {
     this.send(['Register', filename]);
   }
@@ -186,7 +196,9 @@ export class CoqWorkerWrapper {
 
   private send(msg: unknown[]): void {
     if (this.debug) console.log('[CoqWorker →]', msg);
-    this.worker?.postMessage(msg);
+    // WA backend requires JSON-stringified commands
+    const payload = this.jsonMode ? JSON.stringify(msg) : msg;
+    this.worker?.postMessage(payload);
   }
 
   private handleMessage(msg: unknown[]): void {

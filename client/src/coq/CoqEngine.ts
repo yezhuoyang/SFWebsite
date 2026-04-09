@@ -81,10 +81,9 @@ export class CoqEngine implements CoqObserver {
   }
 
   /**
-   * Initialize the Coq engine using the JS backend.
-   * Sends LoadPkg commands, then Init + NewDoc.
-   * The worker processes messages in order; when Init/NewDoc succeed,
-   * the Ready event fires (caught by coqReady → onReady).
+   * Initialize the Coq engine using the WASM backend.
+   * The WA worker handles package downloading, extraction, and load path setup.
+   * Messages are JSON-stringified for the WA backend.
    *
    * @param basePath Fully-resolved URL to jsCoq assets (e.g., 'https://host/jscoq/')
    * @param volumeId Volume being studied (e.g., 'lf', 'plf')
@@ -92,33 +91,77 @@ export class CoqEngine implements CoqObserver {
   async init(basePath: string, volumeId: string): Promise<void> {
     this.basePath = basePath.endsWith('/') ? basePath : basePath + '/';
 
-    console.log('[CoqEngine] Initializing JS backend, basePath:', this.basePath);
+    console.log('[CoqEngine] Initializing WA backend, basePath:', this.basePath);
 
-    // 1. Create JS worker
-    const workerUrl = this.basePath + 'backend/jsoo/jscoq_worker.bc.js';
+    // 1. Create WA worker (JSON-stringified messages)
+    const workerUrl = this.basePath + 'dist/wacoq_worker.js';
     console.log('[CoqEngine] Loading worker from:', workerUrl);
-    await this.worker.createWorker(workerUrl);
+    await this.worker.createWorker(workerUrl, true);
 
-    // 2. Send LoadPkg for each package — the JS worker downloads .coq-pkg
-    //    files via XHR, extracts them to /lib, and sets up load paths internally.
+    // 2. Wait for Boot event (WASM binary loaded)
+    console.log('[CoqEngine] Waiting for WASM boot...');
+    await new Promise<void>((resolve) => {
+      this._bootResolve = resolve;
+    });
+    console.log('[CoqEngine] WASM boot complete');
+
+    // 3. Send LoadPkg for each package — WA worker fetches .coq-pkg URLs itself
+    //    LoadPkg is a directive (raw postMessage, not JSON-stringified)
     const packages = VOLUME_PACKAGES[volumeId] || VOLUME_PACKAGES.lf;
     const pkgBaseUrl = this.basePath + 'coq-pkgs/';
 
     for (const pkg of packages) {
-      console.log(`[CoqEngine] LoadPkg: ${pkg}`);
-      this.worker.loadPkg(pkgBaseUrl, pkg);
+      const pkgUrl = pkgBaseUrl + pkg + '.coq-pkg';
+      console.log(`[CoqEngine] LoadPkg: ${pkgUrl}`);
+      this.worker.sendDirective(['LoadPkg', pkgUrl]);
     }
 
-    // 3. Init Coq — messages are queued; the worker will process
-    //    LoadPkg commands first, then Init, then NewDoc.
-    //    The jscoq_options type only accepts {implicit_libs}.
-    //    lib_path is set up automatically by LoadPkg.
-    console.log('[CoqEngine] Sending Init + NewDoc (queued after LoadPkg)');
+    // 4. Wait for all packages to load
+    await new Promise<void>((resolve) => {
+      let loaded = 0;
+      this._pkgResolve = () => {
+        loaded++;
+        console.log(`[CoqEngine] Package loaded (${loaded}/${packages.length})`);
+        this.callbacks.onLoadProgress?.(loaded / packages.length, '');
+        if (loaded >= packages.length) resolve();
+      };
+    });
+    console.log('[CoqEngine] All packages loaded');
+
+    // 5. Init + NewDoc (WA backend accepts lib_path in Init)
+    console.log('[CoqEngine] Sending Init + NewDoc');
     this.worker.init(
-      { implicit_libs: true },
-      { lib_init: ['Coq.Init.Prelude'] }
+      {
+        implicit_libs: true,
+        lib_path: [],
+        top_name: 'Top',
+      },
+      {
+        lib_init: ['Coq.Init.Prelude'],
+      }
     );
-    // coqReady callback will fire onReady when everything succeeds
+    // coqReady callback will fire onReady
+  }
+
+  // Boot/Package resolve callbacks
+  private _bootResolve: (() => void) | null = null;
+  private _pkgResolve: (() => void) | null = null;
+
+  coqBoot(): void {
+    console.log('[CoqEngine] Boot event received');
+    this._bootResolve?.();
+    this._bootResolve = null;
+  }
+
+  // WA worker sends ['Feedback', {contents: ['LibLoaded', ...]}] for each loaded package
+  // or ['LoadedPkg', [...]] — need to handle both
+  coqLoadedPkg(_uris: unknown): void {
+    console.log('[CoqEngine] LoadedPkg event');
+    this._pkgResolve?.();
+  }
+
+  feedLibLoaded(): void {
+    // Alternative event name for package loaded
   }
 
   /**
