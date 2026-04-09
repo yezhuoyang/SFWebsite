@@ -83,11 +83,14 @@ async function test() {
 
   // Send Init with lib_path (JSON-stringified for WA backend)
   // The WA worker's jscoq_options accepts: implicit_libs, coq_options, debug, lib_path
+  // Every directory that contains .vo or .cma files needs an entry
   const lib_path = [
     [["Coq","Init"],["/lib"]],[["Coq","Bool"],["/lib"]],
     [["Coq","Unicode"],["/lib"]],[["Coq","btauto"],["/lib"]],
     [["Coq","ssr"],["/lib"]],[["Coq","ssrmatching"],["/lib"]],
-    [["Ltac2"],["/lib"]]
+    [["Coq","ltac"],["/lib"]],[["Coq","syntax"],["/lib"]],
+    [["Coq","cc"],["/lib"]],[["Coq","firstorder"],["/lib"]],
+    [["Ltac2"],["/lib"]],[["Coq","ltac2"],["/lib"]]
   ];
   L('--- Init (with lib_path: ' + lib_path.length + ' entries) ---');
   worker.postMessage(JSON.stringify(['Init', { implicit_libs: true, lib_path: lib_path }]));
