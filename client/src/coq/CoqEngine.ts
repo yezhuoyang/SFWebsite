@@ -614,17 +614,23 @@ function mergeRanges(ranges: HighlightRange[]): HighlightRange[] {
 /**
  * Build the lib_path array for Coq Init from module names.
  *
- * jsCoq expects: [[logical_path_components], [physical_paths]]
- * e.g., module "Coq.Init.Prelude" → prefix "Coq.Init" → [['Coq','Init'], ['/lib']]
+ * Format: [[logical_prefix_components], [physical_directory_path]]
  *
- * We extract unique prefixes (drop the last component = module name)
- * and map each to the /lib physical directory.
+ * Files are stored at /lib/Coq/Init/Prelude.vo, /lib/LF/Basics.vo, etc.
+ * Coq resolves "Coq.Init.Prelude" by finding prefix "Coq.Init" and looking
+ * for Prelude.vo in the mapped physical directory.
+ *
+ * So: prefix "Coq.Init" → physical "/lib/Coq/Init"
+ *     prefix "LF"       → physical "/lib/LF"
  */
 function buildLibPath(moduleNames: string[]): [string[], string[]][] {
   const prefixSet = new Set<string>();
 
   for (const mod of moduleNames) {
     // "Coq.Init.Prelude" → "Coq.Init"
+    // "LF.Basics" → "LF"
+    // Skip @cma entries
+    if (mod.includes('@')) continue;
     const parts = mod.split('.');
     if (parts.length >= 2) {
       const prefix = parts.slice(0, -1).join('.');
@@ -634,6 +640,9 @@ function buildLibPath(moduleNames: string[]): [string[], string[]][] {
 
   return [...prefixSet].map(prefix => {
     const components = prefix.split('.');
-    return [components, ['/lib']];
+    // Physical path = /lib/ + prefix components joined by /
+    // e.g., "Coq.Init" → "/lib/Coq/Init"
+    const physPath = '/lib/' + components.join('/');
+    return [components, [physPath]];
   });
 }
