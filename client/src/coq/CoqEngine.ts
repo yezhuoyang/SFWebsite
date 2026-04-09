@@ -102,8 +102,6 @@ export class CoqEngine implements CoqObserver {
 
     // 3. Send LoadPkg for each package — the WA worker fetches them itself
     const packages = VOLUME_PACKAGES[volumeId] || VOLUME_PACKAGES.lf;
-    this.packagesTotal = packages.length;
-    this.packagesLoaded = 0;
 
     const pkgBaseUrl = this.basePath + 'coq-pkgs/';
     for (const pkg of packages) {
@@ -155,7 +153,6 @@ export class CoqEngine implements CoqObserver {
       this.coqLoadedPkg = (uris: string[]) => {
         origLoaded?.(uris);
         loaded++;
-        this.packagesLoaded = loaded;
         this.callbacks.onLoadProgress?.(loaded / count, '');
         console.log(`[CoqEngine] Package loaded (${loaded}/${count})`);
         if (loaded >= count) resolve();
