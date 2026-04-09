@@ -97,7 +97,7 @@ export class CoqWorkerWrapper {
   private worker: Worker | null = null;
   private observers: CoqObserver[] = [];
   private intvec: Int32Array | null = null;
-  private debug = false;
+  private debug = true;
 
   constructor() {
     // Worker created lazily in init()

@@ -123,20 +123,19 @@ export class CoqEngine implements CoqObserver {
       }
     }
 
-    // 3. Register .cma plugin files
-    for (const cma of cmaFiles) {
-      console.log('[CoqEngine] Registering plugin:', cma);
-      this.worker.register(cma);
-    }
-
-    // 4. Build lib_path from module names
+    // 3. Build lib_path from module names (matching jsCoq classic frontend format)
     //    Format: [[logical_path_components], [physical_dir_paths]]
-    //    e.g., module "Coq.Init.Prelude" → [['Coq', 'Init'], ['/lib']]
-    //    We need unique prefixes (e.g., 'Coq.Init' not 'Coq.Init.Prelude')
+    //    e.g., module "Coq.Init.Prelude" → prefix "Coq.Init" → [['Coq','Init'], ['/lib']]
     const libPath = buildLibPath(allModuleNames);
-    console.log('[CoqEngine] lib_path entries:', libPath.length, libPath.slice(0, 5));
+    console.log('[CoqEngine] lib_path entries:', libPath.length);
+    console.log('[CoqEngine] lib_path sample:', JSON.stringify(libPath.slice(0, 5)));
+    console.log('[CoqEngine] cma files found:', cmaFiles);
+    console.log('[CoqEngine] total files put to worker VFS');
 
-    // 5. Init Coq (packages are already in the virtual FS)
+    // 4. Init Coq (packages are already in the virtual FS)
+    //    NOTE: Do NOT call Register for .cma files in the JS browser backend —
+    //    the classic frontend doesn't do it; the worker loads .cma.js files
+    //    automatically when Coq requires a plugin.
     console.log('[CoqEngine] Sending Init command');
     this.worker.init(
       {
@@ -476,7 +475,8 @@ export class CoqEngine implements CoqObserver {
     this.executing = false;
   }
 
-  coqCoqExn(info: { loc?: { bp?: number; ep?: number }; pp: Pp; sids?: number[] }): void {
+  coqCoqExn(info: { loc?: { bp?: number; ep?: number }; pp: Pp; msg?: string; sids?: number[] }): void {
+    console.error('[CoqEngine] CoqExn:', JSON.stringify(info));
     this.executing = false;
     this._executeTarget = -1;
 
