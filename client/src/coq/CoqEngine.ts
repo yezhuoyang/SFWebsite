@@ -177,7 +177,12 @@ export class CoqEngine implements CoqObserver {
       if (path.endsWith('/') || path === 'coq-pkg.json') continue;
 
       const vfsPath = '/lib/' + path;
-      this.worker.put(vfsPath, content.buffer as ArrayBuffer);
+      // IMPORTANT: content.buffer may be a shared backing buffer from fflate.
+      // We must slice out just this file's portion, otherwise we send corrupt data.
+      const fileBuf = content.buffer.slice(
+        content.byteOffset, content.byteOffset + content.byteLength
+      );
+      this.worker.put(vfsPath, fileBuf);
 
       // Track .cma files for registration
       if (path.endsWith('.cma')) {
