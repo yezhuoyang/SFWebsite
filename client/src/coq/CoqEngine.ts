@@ -181,7 +181,7 @@ export class CoqEngine implements CoqObserver {
       // We must slice out just this file's portion, otherwise we send corrupt data.
       const fileBuf = content.buffer.slice(
         content.byteOffset, content.byteOffset + content.byteLength
-      );
+      ) as ArrayBuffer;
       this.worker.put(vfsPath, fileBuf);
 
       // Track .cma files for registration
