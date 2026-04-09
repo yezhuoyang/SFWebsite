@@ -63,6 +63,11 @@ if client_dist.exists():
     if jscoq_dir.exists():
         app.mount("/jscoq", StaticFiles(directory=str(jscoq_dir)), name="jscoq")
 
+    # Serve WASM dependencies (ocaml-wasm, @ocaml-wasm) — requested by jsCoq WA worker
+    nm_dir = client_dist / "node_modules"
+    if nm_dir.exists():
+        app.mount("/node_modules", StaticFiles(directory=str(nm_dir)), name="node_modules")
+
     # Catch-all: serve index.html for any other path (React Router handles routing)
     @app.get("/{path:path}")
     async def spa_fallback(path: str):
