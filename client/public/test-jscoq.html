@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head><title>jsCoq WA Backend Test</title></head>
+<body>
+<h2>jsCoq WASM Backend Test</h2>
+<pre id="log" style="background:#111;color:#0f0;padding:16px;height:80vh;overflow:auto;font-size:13px;"></pre>
+<script>
+const log = document.getElementById('log');
+function L(msg) { log.textContent += msg + '\n'; log.scrollTop = log.scrollHeight; console.log(msg); }
+
+async function test() {
+  L('=== jsCoq WASM Backend Test ===');
+
+  // The WA worker is at /jscoq/dist/wacoq_worker.js
+  // It resolves relative paths from its own URL:
+  //   ../backend/wasm/wacoq_worker.bc
+  //   ../../../node_modules/ocaml-wasm/bin/ocamlrun.wasm
+  //   etc.
+
+  const workerUrl = '/jscoq/dist/wacoq_worker.js';
+  L('Creating worker: ' + workerUrl);
+  const worker = new Worker(workerUrl);
+
+  const events = [];
+
+  worker.onmessage = (evt) => {
+    const data = evt.data;
+    const tag = Array.isArray(data) ? data[0] : '?';
+    events.push(tag);
+
+    if (tag === 'Feedback') return; // too noisy
+    if (tag === 'Log') {
+      L('  Log: ' + JSON.stringify(data[2]).substring(0, 100));
+      return;
+    }
+    L('← ' + tag + ': ' + JSON.stringify(data).substring(0, 200));
+  };
+
+  worker.onerror = (e) => {
+    L('WORKER ERROR: ' + e.message);
+  };
+
+  // Wait for Boot event
+  L('\n--- Waiting for Boot ---');
+  await new Promise((resolve) => {
+    const origHandler = worker.onmessage;
+    worker.onmessage = (evt) => {
+      origHandler(evt);
+      if (Array.isArray(evt.data) && evt.data[0] === 'Boot') {
+        resolve();
+      }
+    };
+  });
+  L('Boot received!\n');
+
+  // Send LoadPkg for init and ltac2
+  const pkgBase = '/jscoq/coq-pkgs/';
+  const packages = ['init', 'ltac2'];
+
+  for (const pkg of packages) {
+    const url = pkgBase + pkg + '.coq-pkg';
+    L('--- LoadPkg: ' + url + ' ---');
+    // LoadPkg is a DIRECTIVE (raw postMessage, not JSON-stringified)
+    worker.postMessage(['LoadPkg', url]);
+  }
+
+  // Wait for LoadedPkg events
+  let pkgCount = 0;
+  await new Promise((resolve) => {
+    const origHandler = worker.onmessage;
+    worker.onmessage = (evt) => {
+      origHandler(evt);
+      if (Array.isArray(evt.data) && evt.data[0] === 'LoadedPkg') {
+        pkgCount++;
+        L('Package loaded (' + pkgCount + '/' + packages.length + ')');
+        if (pkgCount >= packages.length) resolve();
+      }
+    };
+    // Timeout after 30s
+    setTimeout(() => { L('TIMEOUT waiting for packages'); resolve(); }, 30000);
+  });
+  L('All packages loaded!\n');
+
+  // Send Init (JSON-stringified for WA backend)
+  L('--- Init ---');
+  worker.postMessage(JSON.stringify(['Init', { implicit_libs: true }]));
+
+  // Wait a moment for CoqInfo
+  await new Promise(r => setTimeout(r, 2000));
+
+  // Send NewDoc (JSON-stringified)
+  L('--- NewDoc ---');
+  worker.postMessage(JSON.stringify(['NewDoc', { lib_init: ['Coq.Init.Prelude'] }]));
+
+  // Wait for Ready
+  L('\n--- Waiting for Ready ---');
+  await new Promise((resolve) => {
+    const origHandler = worker.onmessage;
+    worker.onmessage = (evt) => {
+      origHandler(evt);
+      if (Array.isArray(evt.data) && evt.data[0] === 'Ready') {
+        resolve();
+      }
+    };
+    setTimeout(() => { L('TIMEOUT waiting for Ready'); resolve(); }, 30000);
+  });
+
+  // Test: Add a simple Coq command
+  L('\n--- Test: Check nat ---');
+  worker.postMessage(JSON.stringify(['Add', 1, 2, 'Check nat.', false]));
+
+  await new Promise(r => setTimeout(r, 3000));
+
+  L('\n--- Test: Exec ---');
+  worker.postMessage(JSON.stringify(['Exec', 2]));
+
+  await new Promise(r => setTimeout(r, 3000));
+
+  L('\n--- Query Goals ---');
+  worker.postMessage(JSON.stringify(['Query', 2, 0, ['Goals']]));
+
+  await new Promise(r => setTimeout(r, 2000));
+
+  L('\n=== Done ===');
+  L('Events received: ' + events.join(', '));
+}
+
+test().catch(e => L('ERROR: ' + e.message));
+</script>
+</body>
+</html>
