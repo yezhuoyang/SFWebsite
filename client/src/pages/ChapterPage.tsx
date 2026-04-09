@@ -11,21 +11,19 @@ import { ppToString } from '../components/PpDisplay';
 import { registerCoqLanguage, COQ_LANGUAGE_ID, setCompletionContext } from '../components/coqLanguage';
 // import { getSectionIcon } from '../components/SectionIcons';
 import {
-  createCoqSession,
-  closeCoqSession,
   getChapterBlocks,
   saveChapterFile,
   resetChapterFile,
   getExercises,
   getExerciseSolution,
-  getSessionInfo,
   explainOutput,
   type BlockData,
   type TocEntry,
   type SaveResult,
   type SolutionData,
 } from '../api/client';
-import { useCoqWebSocket } from '../api/coqWebSocket';
+import { useCoqLocal } from '../coq/useCoqLocal';
+import type { CoqSessionActions } from '../api/coqWebSocket';
 import type { Exercise } from '../types';
 import { saveBlockEdits, loadBlockEdits, clearBlockEdits, saveGradeResults, loadGradeResults, type StoredGrade, loadAnnotations, saveAnnotations, clearAnnotations, type Annotation } from '../utils/storage';
 
@@ -34,7 +32,6 @@ export default function ChapterPage() {
   const [blocks, setBlocks] = useState<BlockData[]>([]);
   const [toc, setToc] = useState<TocEntry[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<SaveResult | null>(null);
   const [visibleSolution, setVisibleSolution] = useState<{ name: string; data: SolutionData } | null>(null);
@@ -64,11 +61,8 @@ export default function ChapterPage() {
   const [annotationColor, setAnnotationColor] = useState('#f59e0b');
   const annotationPopupRef = useRef<HTMLDivElement>(null);
 
-  // Timer & session info
+  // Timer
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [sessionRemaining, setSessionRemaining] = useState<number | null>(null);
-  const [activeSessions, setActiveSessions] = useState<number | null>(null);
-  const [maxSessions, setMaxSessions] = useState<number | null>(null);
 
   useEffect(() => {
     const handler = () => setIsFullscreen(!!document.fullscreenElement);
@@ -113,11 +107,11 @@ export default function ChapterPage() {
   const [blockStartLines, setBlockStartLines] = useState<Map<number, number>>(new Map());
   // Refs so editor-command closures see current values
   const blockStartLinesRef = useRef<Map<number, number>>(new Map());
-  const coqActionsRef = useRef<ReturnType<typeof useCoqWebSocket>[1] | null>(null);
+  const coqActionsRef = useRef<CoqSessionActions | null>(null);
   const syncThenDoRef = useRef<((action: () => void) => void) | null>(null);
 
-  // WebSocket connection to vscoqtop
-  const [coqState, coqActions] = useCoqWebSocket(sessionId);
+  // In-browser Coq via jsCoq Web Worker (replaces server-side vscoqtop)
+  const [coqState, coqActions] = useCoqLocal(volumeId ?? null, chapterName ?? null);
 
   // Load blocks, exercises, and restore any saved edits/grades from localStorage
   useEffect(() => {
@@ -161,21 +155,6 @@ export default function ChapterPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Poll session info every 10 seconds
-  useEffect(() => {
-    if (!sessionId) return;
-    const poll = () => {
-      getSessionInfo(sessionId).then(info => {
-        setSessionRemaining(info.remaining_seconds);
-        setActiveSessions(info.active_count);
-        setMaxSessions(info.max_sessions);
-      }).catch(() => {});
-    };
-    poll();
-    const interval = setInterval(poll, 10000);
-    return () => clearInterval(interval);
-  }, [sessionId]);
-
   // Disable Alt+Left (browser back) on this page — too easy to trigger accidentally
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -185,25 +164,15 @@ export default function ChapterPage() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // Once session + blocks are both ready, sync the canonical document to vscoqtop
+  // Once Coq engine + blocks are both ready, sync the canonical document
   useEffect(() => {
-    if (!sessionId || !coqState.connected || blocks.length === 0) return;
-    // Send the block-concatenated document so vscoqtop and frontend agree
+    if (!coqState.connected || blocks.length === 0) return;
+    // Send the block-concatenated document so Coq engine and frontend agree
     const canonicalDoc = blocks.map(b => blockContentsRef.current.get(b.id) || b.content).join('\n');
     coqActions.sendChange(canonicalDoc);
     originalDocRef.current = canonicalDoc;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, coqState.connected, blocks.length > 0]);
-
-  // Create vscoqtop session
-  useEffect(() => {
-    if (!volumeId || !chapterName) return;
-    let sid: string | null = null;
-    createCoqSession(volumeId, chapterName)
-      .then(s => { sid = s.session_id; setSessionId(s.session_id); })
-      .catch(e => console.error('Failed to create session:', e));
-    return () => { if (sid) closeCoqSession(sid).catch(() => {}); };
-  }, [volumeId, chapterName]);
+  }, [coqState.connected, blocks.length > 0]);
 
   // Auto-switch to Goals tab when errors appear
   useEffect(() => {
@@ -1163,19 +1132,10 @@ export default function ChapterPage() {
             <span title="Time on this page">
               {Math.floor(elapsedSeconds / 60)}:{String(elapsedSeconds % 60).padStart(2, '0')}
             </span>
-            {sessionRemaining !== null && (
-              <span title="Session expires in" className={sessionRemaining < 300 ? 'text-red-400' : ''}>
-                TTL {Math.floor(sessionRemaining / 60)}m
-              </span>
-            )}
-            {activeSessions !== null && (
-              <span title={`${activeSessions} of ${maxSessions} backend sessions active`}>
-                {activeSessions}/{maxSessions}
-              </span>
-            )}
+            <span className="text-gray-400">jsCoq</span>
           </div>
           <span className={`w-2 h-2 rounded-full ${coqState.connected ? 'bg-green-500' : 'bg-gray-300'}`}
-                title={coqState.connected ? 'vscoqtop connected' : 'Connecting...'} />
+                title={coqState.connected ? 'Coq ready (in-browser)' : 'Loading Coq engine...'} />
         </div>
       </div>
 

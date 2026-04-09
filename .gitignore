@@ -5,6 +5,7 @@ __pycache__/
 
 # Build outputs
 client/dist/
+client/public/jscoq/
 *.vo
 *.vos
 *.vok
