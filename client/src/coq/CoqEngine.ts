@@ -133,15 +133,17 @@ export class CoqEngine implements CoqObserver {
     console.log('[CoqEngine] total files put to worker VFS');
 
     // 4. Init Coq
-    //    jscoq_options type only has { implicit_libs: bool }
-    //    doc_options type has { lib_init, top_name, lib_path }
-    console.log('[CoqEngine] Sending Init + NewDoc');
-    this.worker.initCompat(
-      { implicit_libs: true },
+    //    Init takes { implicit_libs, lib_path, top_name }
+    //    NewDoc takes { lib_init }
+    console.log('[CoqEngine] Sending Init + NewDoc, lib_path has', libPath.length, 'entries');
+    this.worker.init(
       {
-        lib_init: ['Coq.Init.Prelude'],
+        implicit_libs: true,
         lib_path: libPath,
         top_name: 'Top',
+      },
+      {
+        lib_init: ['Coq.Init.Prelude'],
       }
     );
     // coqReady callback will fire onReady
