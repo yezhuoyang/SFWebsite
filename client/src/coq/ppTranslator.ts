@@ -34,7 +34,7 @@ const PP_TAG_MAP: Record<string, string> = {
  * Recursively rename Pp_* tags to Ppcmd_* tags.
  */
 export function ppToPpString(pp: Pp): PpString {
-  if (!Array.isArray(pp) || pp.length === 0) return ['Ppcmd_empty'];
+  if (!Array.isArray(pp)) return ['Ppcmd_empty'];
 
   const tag = pp[0] as string;
   const mappedTag = PP_TAG_MAP[tag];
@@ -78,7 +78,7 @@ export function ppToPpString(pp: Pp): PpString {
  * Convert Pp to plain text (for diagnostic messages).
  */
 export function ppToText(pp: Pp): string {
-  if (!Array.isArray(pp) || pp.length === 0) return '';
+  if (!Array.isArray(pp)) return '';
 
   const tag = pp[0] as string;
   switch (tag) {

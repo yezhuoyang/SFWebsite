@@ -32,10 +32,9 @@ export function useCoqLocal(
   const [proofView, setProofView] = useState<ProofViewNotification | null>(null);
   const [highlights, setHighlights] = useState<UpdateHighlights | null>(null);
   const [diagnostics, setDiagnostics] = useState<CoqDiagnostic[]>([]);
-  const [moveCursorTarget, setMoveCursorTarget] = useState<{
+  const [moveCursorTarget] = useState<{
     line: number; character: number; seq: number;
   } | null>(null);
-  const [loadProgress, setLoadProgress] = useState<number>(0);
 
   const engineRef = useRef<CoqEngine | null>(null);
 
@@ -52,9 +51,6 @@ export function useCoqLocal(
       },
       onError: (msg) => {
         console.error('[useCoqLocal] Engine error:', msg);
-      },
-      onLoadProgress: (ratio) => {
-        setLoadProgress(ratio);
       },
     });
 

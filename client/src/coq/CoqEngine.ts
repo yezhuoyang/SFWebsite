@@ -56,7 +56,6 @@ export class CoqEngine implements CoqObserver {
   private callbacks: CoqEngineCallbacks;
 
   // Document state
-  private documentText = '';
   private sentences: ManagedSentence[] = [];
   private nextSid = 2;  // sid 1 is the init state
 
@@ -71,7 +70,6 @@ export class CoqEngine implements CoqObserver {
   private diagnostics: CoqDiagnostic[] = [];
 
   // Package loading
-  private ready = false;
   private packagesLoaded = 0;
   private packagesTotal = 0;
 
@@ -125,7 +123,6 @@ export class CoqEngine implements CoqObserver {
    * Parses into sentences and diffs against current state.
    */
   setDocument(text: string): void {
-    this.documentText = text;
     const newSentences = parseSentences(text);
 
     // Find divergence point — where do old and new sentences differ?
@@ -320,7 +317,6 @@ export class CoqEngine implements CoqObserver {
   // --- CoqObserver Callbacks (called by CoqWorkerWrapper) ---
 
   coqReady(_sid: number): void {
-    this.ready = true;
     this.callbacks.onReady();
   }
 
@@ -464,7 +460,7 @@ export class CoqEngine implements CoqObserver {
     this.callbacks.onError(`Package '${bname}' is missing: ${msg}`);
   }
 
-  coqLibProgress(info: unknown): void {
+  coqLibProgress(_info: unknown): void {
     // Package loading progress
     this.callbacks.onLoadProgress?.(this.packagesLoaded / this.packagesTotal, '');
   }
