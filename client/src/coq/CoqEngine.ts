@@ -11,6 +11,7 @@ import type { CoqObserver, Pp, JsCoqGoals } from './CoqWorkerWrapper';
 import { parseSentences, offsetToLineChar } from './sentenceParser';
 import type { CoqSentence, LineCharPosition } from './sentenceParser';
 import { buildProofView, ppToPpString, ppToText, levelToSeverity } from './ppTranslator';
+import { unzipSync } from 'fflate';
 import type {
   ProofViewNotification,
   UpdateHighlights,
@@ -84,38 +85,89 @@ export class CoqEngine implements CoqObserver {
 
   /**
    * Initialize the Coq engine.
-   * @param basePath URL path to jsCoq assets (e.g., '/jscoq/')
+   * @param basePath Fully-resolved URL to jsCoq assets (e.g., 'https://host/sf-learn/jscoq/')
    * @param volumeId Volume being studied (e.g., 'lf', 'plf')
    */
   async init(basePath: string, volumeId: string): Promise<void> {
     this.basePath = basePath.endsWith('/') ? basePath : basePath + '/';
 
-    // Create worker
+    console.log('[CoqEngine] Initializing with basePath:', this.basePath);
+
+    // 1. Create worker
     const workerUrl = this.basePath + 'backend/jsoo/jscoq_worker.bc.js';
+    console.log('[CoqEngine] Loading worker from:', workerUrl);
     await this.worker.createWorker(workerUrl);
 
-    // Determine packages for this volume
+    // 2. Download and unpack all .coq-pkg files in the main thread
+    //    (jsCoq JS backend requires this — the main thread fetches, extracts,
+    //     and puts individual files into the worker's virtual FS)
     const packages = VOLUME_PACKAGES[volumeId] || VOLUME_PACKAGES.lf;
     this.packagesTotal = packages.length;
     this.packagesLoaded = 0;
+    const cmaFiles: string[] = [];
 
-    // Load packages - jsCoq js backend needs {base_path, pkg} objects
-    const coqPkgsBase = this.basePath + 'coq-pkgs/';
     for (const pkg of packages) {
-      this.worker.loadPkg(coqPkgsBase, pkg);
+      const pkgUrl = this.basePath + 'coq-pkgs/' + pkg + '.coq-pkg';
+      console.log(`[CoqEngine] Loading package: ${pkg} from ${pkgUrl}`);
+      try {
+        const loaded = await this.loadPackage(pkgUrl);
+        cmaFiles.push(...loaded.cmaFiles);
+        this.packagesLoaded++;
+        this.callbacks.onLoadProgress?.(this.packagesLoaded / this.packagesTotal, pkg);
+      } catch (e) {
+        console.error(`[CoqEngine] Failed to load package ${pkg}:`, e);
+        this.callbacks.onError(`Failed to load package '${pkg}': ${e}`);
+      }
     }
 
-    // Init Coq with appropriate options
+    // 3. Register .cma plugin files
+    for (const cma of cmaFiles) {
+      console.log('[CoqEngine] Registering plugin:', cma);
+      this.worker.register(cma);
+    }
+
+    // 4. Init Coq (packages are already in the virtual FS)
+    console.log('[CoqEngine] Sending Init command');
     this.worker.init(
       {
         implicit_libs: true,
-        lib_path: [],
+        lib_path: [['', ['/lib', '.']]],
         top_name: 'Top',
       },
       {
         lib_init: ['Coq.Init.Prelude'],
       }
     );
+    // coqReady callback will fire onReady
+  }
+
+  /**
+   * Download a .coq-pkg file, extract it, and put files into the worker's virtual FS.
+   */
+  private async loadPackage(url: string): Promise<{ cmaFiles: string[] }> {
+    // Fetch the .coq-pkg (it's a zip archive)
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
+    const buffer = await response.arrayBuffer();
+
+    // Unzip
+    const files = unzipSync(new Uint8Array(buffer));
+    const cmaFiles: string[] = [];
+
+    // Put each file into the worker's virtual filesystem under /lib/
+    for (const [path, content] of Object.entries(files)) {
+      if (path.endsWith('/')) continue; // skip directories
+
+      const vfsPath = '/lib/' + path;
+      this.worker.put(vfsPath, content.buffer);
+
+      // Track .cma files for registration
+      if (path.endsWith('.cma')) {
+        cmaFiles.push(vfsPath);
+      }
+    }
+
+    return { cmaFiles };
   }
 
   /**
@@ -456,18 +508,8 @@ export class CoqEngine implements CoqObserver {
     // Coq version info — ignored
   }
 
-  coqLibError(bname: string, msg: string): void {
-    this.callbacks.onError(`Package '${bname}' is missing: ${msg}`);
-  }
-
-  coqLibProgress(_info: unknown): void {
-    // Package loading progress
-    this.callbacks.onLoadProgress?.(this.packagesLoaded / this.packagesTotal, '');
-  }
-
-  coqLoadedPkg(_uris: string[]): void {
-    this.packagesLoaded++;
-    this.callbacks.onLoadProgress?.(this.packagesLoaded / this.packagesTotal, '');
+  coqLibError(_bname: string, _msg: string): void {
+    // Package errors handled in init() directly
   }
 
   feedFileLoaded(): void {}

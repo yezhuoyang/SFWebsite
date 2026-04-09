@@ -14,8 +14,25 @@ import type {
   CoqDiagnostic,
 } from '../api/coqWebSocket';
 
-/** Base path where jsCoq static assets are served (worker JS + coq-pkgs) */
-const JSCOQ_BASE_PATH = '/jscoq/';
+/**
+ * Compute the fully-resolved base URL for jsCoq assets.
+ * Works behind reverse proxies (e.g., nginx at /sf-learn/) by using
+ * import.meta.url to determine where the app's JS is served from.
+ *
+ * Dev:  http://localhost:5173/assets/index-xxx.js → http://localhost:5173/jscoq/
+ * Prod: https://host/sf-learn/assets/index-xxx.js → https://host/sf-learn/jscoq/
+ */
+function getJsCoqBasePath(): string {
+  const moduleUrl = import.meta.url;
+  // moduleUrl is like "https://host/sf-learn/assets/index-xxx.js"
+  // We want          "https://host/sf-learn/jscoq/"
+  const assetsIdx = moduleUrl.lastIndexOf('/assets/');
+  if (assetsIdx >= 0) {
+    return moduleUrl.substring(0, assetsIdx) + '/jscoq/';
+  }
+  // Fallback: dev mode (no /assets/ in URL)
+  return new URL('/jscoq/', moduleUrl).href;
+}
 
 /**
  * useCoqLocal — run Coq in the browser via jsCoq.
@@ -56,7 +73,9 @@ export function useCoqLocal(
 
     engineRef.current = engine;
 
-    engine.init(JSCOQ_BASE_PATH, volumeId).catch((err) => {
+    const basePath = getJsCoqBasePath();
+    console.log('[useCoqLocal] jsCoq base path:', basePath);
+    engine.init(basePath, volumeId).catch((err) => {
       console.error('[useCoqLocal] Init failed:', err);
       setConnected(false);
     });
