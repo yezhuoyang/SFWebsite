@@ -21,14 +21,16 @@ import type {
 } from '../api/coqWebSocket';
 
 /** Volume ID to jsCoq package name mapping.
- *  All volumes load the full Coq standard library (init, ltac2, coq-base,
- *  coq-collections, coq-arith) since SF chapters freely import from any part. */
+ *  All volumes load the full Coq standard library since SF chapters freely
+ *  import from any part (Arith, Lia, Lists, Strings, ZArith, etc.).
+ *  coq-reals includes Coq.micromega (Lia), Coq.Floats, Coq.Reals, Coq.nsatz. */
+const COQ_STDLIB = ['init', 'ltac2', 'coq-base', 'coq-collections', 'coq-arith', 'coq-reals'];
 const VOLUME_PACKAGES: Record<string, string[]> = {
-  lf:   ['init', 'ltac2', 'coq-base', 'coq-collections', 'coq-arith', 'sf-LF'],
-  plf:  ['init', 'ltac2', 'coq-base', 'coq-collections', 'coq-arith', 'sf-PLF'],
-  vfa:  ['init', 'ltac2', 'coq-base', 'coq-collections', 'coq-arith', 'sf-VFA'],
-  slf:  ['init', 'ltac2', 'coq-base', 'coq-collections', 'coq-arith', 'sf-SLF'],
-  secf: ['init', 'ltac2', 'coq-base', 'coq-collections', 'coq-arith'],
+  lf:   [...COQ_STDLIB, 'sf-LF'],
+  plf:  [...COQ_STDLIB, 'sf-PLF'],
+  vfa:  [...COQ_STDLIB, 'sf-VFA'],
+  slf:  [...COQ_STDLIB, 'sf-SLF'],
+  secf: [...COQ_STDLIB],
 };
 
 export type SentencePhase =
@@ -589,6 +591,8 @@ const PKG_DIRS: Record<string, string[][]> = {
                       ['Coq','Numbers','Natural','Peano'],['Coq','PArith'],['Coq','QArith'],
                       ['Coq','Strings'],['Coq','Wellfounded'],['Coq','ZArith'],
                       ['Coq','omega'],['Coq','ring'],['Coq','setoid_ring']],
+  'coq-reals':       [['Coq','Floats'],['Coq','Reals'],['Coq','Reals','Abstract'],
+                      ['Coq','Reals','Cauchy'],['Coq','micromega'],['Coq','nsatz']],
   'sf-LF':           [['LF']],
   'sf-PLF':          [['PLF']],
   'sf-VFA':          [['VFA']],

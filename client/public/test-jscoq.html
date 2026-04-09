@@ -55,7 +55,7 @@ async function test() {
 
   // Send LoadPkg for init and ltac2
   const pkgBase = '/jscoq/coq-pkgs/';
-  const packages = ['init', 'ltac2'];
+  const packages = ['init', 'ltac2', 'coq-base', 'coq-collections', 'coq-arith', 'coq-reals', 'sf-PLF'];
 
   for (const pkg of packages) {
     const url = pkgBase + pkg + '.coq-pkg';
@@ -85,12 +85,42 @@ async function test() {
   // The WA worker's jscoq_options accepts: implicit_libs, coq_options, debug, lib_path
   // Every directory that contains .vo or .cma files needs an entry
   const lib_path = [
+    // init
     [["Coq","Init"],["/lib"]],[["Coq","Bool"],["/lib"]],
     [["Coq","Unicode"],["/lib"]],[["Coq","btauto"],["/lib"]],
     [["Coq","ssr"],["/lib"]],[["Coq","ssrmatching"],["/lib"]],
     [["Coq","ltac"],["/lib"]],[["Coq","syntax"],["/lib"]],
     [["Coq","cc"],["/lib"]],[["Coq","firstorder"],["/lib"]],
-    [["Ltac2"],["/lib"]],[["Coq","ltac2"],["/lib"]]
+    // ltac2
+    [["Ltac2"],["/lib"]],[["Coq","ltac2"],["/lib"]],
+    // coq-base
+    [["Coq","Classes"],["/lib"]],[["Coq","Logic"],["/lib"]],
+    [["Coq","Program"],["/lib"]],[["Coq","Relations"],["/lib"]],
+    [["Coq","Setoids"],["/lib"]],[["Coq","Structures"],["/lib"]],
+    [["Coq","extraction"],["/lib"]],[["Coq","funind"],["/lib"]],
+    // coq-collections
+    [["Coq","FSets"],["/lib"]],[["Coq","Lists"],["/lib"]],
+    [["Coq","MSets"],["/lib"]],[["Coq","Sets"],["/lib"]],
+    [["Coq","Sorting"],["/lib"]],[["Coq","Vectors"],["/lib"]],
+    // coq-arith
+    [["Coq","Arith"],["/lib"]],[["Coq","Array"],["/lib"]],
+    [["Coq","NArith"],["/lib"]],[["Coq","Numbers"],["/lib"]],
+    [["Coq","Numbers","Cyclic","Abstract"],["/lib"]],[["Coq","Numbers","Cyclic","Int31"],["/lib"]],
+    [["Coq","Numbers","Cyclic","Int63"],["/lib"]],[["Coq","Numbers","Cyclic","ZModulo"],["/lib"]],
+    [["Coq","Numbers","Integer","Abstract"],["/lib"]],[["Coq","Numbers","Integer","Binary"],["/lib"]],
+    [["Coq","Numbers","Integer","NatPairs"],["/lib"]],[["Coq","Numbers","NatInt"],["/lib"]],
+    [["Coq","Numbers","Natural","Abstract"],["/lib"]],[["Coq","Numbers","Natural","Binary"],["/lib"]],
+    [["Coq","Numbers","Natural","Peano"],["/lib"]],[["Coq","PArith"],["/lib"]],
+    [["Coq","QArith"],["/lib"]],[["Coq","Strings"],["/lib"]],
+    [["Coq","Wellfounded"],["/lib"]],[["Coq","ZArith"],["/lib"]],
+    [["Coq","omega"],["/lib"]],[["Coq","ring"],["/lib"]],
+    [["Coq","setoid_ring"],["/lib"]],
+    // coq-reals (includes Lia/micromega)
+    [["Coq","Floats"],["/lib"]],[["Coq","Reals"],["/lib"]],
+    [["Coq","Reals","Abstract"],["/lib"]],[["Coq","Reals","Cauchy"],["/lib"]],
+    [["Coq","micromega"],["/lib"]],[["Coq","nsatz"],["/lib"]],
+    // sf-PLF
+    [["PLF"],["/lib"]]
   ];
   L('--- Init (with lib_path: ' + lib_path.length + ' entries) ---');
   worker.postMessage(JSON.stringify(['Init', { implicit_libs: true, lib_path: lib_path }]));
@@ -115,21 +145,57 @@ async function test() {
     setTimeout(() => { L('TIMEOUT waiting for Ready'); resolve(); }, 30000);
   });
 
-  // Test: Add a simple Coq command
-  L('\n--- Test: Check nat ---');
-  worker.postMessage(JSON.stringify(['Add', 1, 2, 'Check nat.', false]));
+  // Test: Run Imp.v's imports one by one
+  const impImports = [
+    'Set Warnings "-notation-overridden".',
+    'From Coq Require Import Bool.',
+    'From Coq Require Import Init.Nat.',
+    'From Coq Require Import Arith.',
+    'From Coq Require Import EqNat. Import Nat.',
+    'From Coq Require Import Lia.',
+    'From Coq Require Import List. Import ListNotations.',
+    'From Coq Require Import Strings.String.',
+    'From PLF Require Import Maps.',
+  ];
 
-  await new Promise(r => setTimeout(r, 3000));
+  let sid = 1;
+  for (const stmt of impImports) {
+    const newSid = sid + 1;
+    L('\n--- Add [' + newSid + ']: ' + stmt + ' ---');
+    worker.postMessage(JSON.stringify(['Add', sid, newSid, stmt, false]));
 
-  L('\n--- Test: Exec ---');
-  worker.postMessage(JSON.stringify(['Exec', 2]));
+    // Wait for Added
+    await new Promise(r => setTimeout(r, 500));
 
-  await new Promise(r => setTimeout(r, 3000));
+    L('--- Exec [' + newSid + '] ---');
+    worker.postMessage(JSON.stringify(['Exec', newSid]));
 
-  L('\n--- Query Goals ---');
-  worker.postMessage(JSON.stringify(['Query', 2, 0, ['Goals']]));
+    // Wait for Processed feedback
+    await new Promise((resolve) => {
+      const origHandler = worker.onmessage;
+      const timeout = setTimeout(() => { L('  TIMEOUT waiting for Processed'); resolve(undefined); }, 15000);
+      worker.onmessage = (evt) => {
+        origHandler(evt);
+        const data = evt.data;
+        if (Array.isArray(data)) {
+          if (data[0] === 'Feedback' && data[1]?.contents?.[0] === 'Processed') {
+            clearTimeout(timeout);
+            L('  Processed!');
+            resolve(undefined);
+          }
+          if (data[0] === 'CoqExn') {
+            clearTimeout(timeout);
+            L('  ERROR: ' + JSON.stringify(data[1]).substring(0, 200));
+            resolve(undefined);
+          }
+        }
+      };
+    });
 
-  await new Promise(r => setTimeout(r, 2000));
+    sid = newSid;
+  }
+
+  L('\n--- All Imp imports tested! ---');
 
   L('\n=== Done ===');
   L('Events received: ' + events.join(', '));
