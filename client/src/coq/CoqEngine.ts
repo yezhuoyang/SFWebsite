@@ -20,13 +20,14 @@ import type {
   RocqMessage,
 } from '../api/coqWebSocket';
 
-/** Volume ID to jsCoq package name mapping */
+/** Volume ID to jsCoq package name mapping.
+ *  ltac2 is required by init (Coq.Init.Prelude depends on Ltac2.Notations). */
 const VOLUME_PACKAGES: Record<string, string[]> = {
-  lf:   ['init', 'coq-base', 'coq-collections', 'sf-LF'],
-  plf:  ['init', 'coq-base', 'coq-collections', 'sf-PLF'],
-  vfa:  ['init', 'coq-base', 'coq-collections', 'coq-arith', 'sf-VFA'],
-  slf:  ['init', 'coq-base', 'coq-collections', 'sf-SLF'],
-  secf: ['init', 'coq-base', 'coq-collections'],
+  lf:   ['init', 'ltac2', 'coq-base', 'coq-collections', 'sf-LF'],
+  plf:  ['init', 'ltac2', 'coq-base', 'coq-collections', 'sf-PLF'],
+  vfa:  ['init', 'ltac2', 'coq-base', 'coq-collections', 'coq-arith', 'sf-VFA'],
+  slf:  ['init', 'ltac2', 'coq-base', 'coq-collections', 'sf-SLF'],
+  secf: ['init', 'ltac2', 'coq-base', 'coq-collections'],
 };
 
 export type SentencePhase =
