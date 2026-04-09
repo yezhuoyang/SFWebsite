@@ -103,11 +103,15 @@ export class CoqWorkerWrapper {
     // Worker created lazily in init()
   }
 
+  private backend: 'js' | 'wa' = 'js';
+
   /**
    * Create the Web Worker and set up message handling.
-   * @param workerUrl URL to jscoq_worker.bc.js (e.g., '/jscoq/backend/jsoo/jscoq_worker.bc.js')
+   * @param workerUrl URL to worker script
+   * @param backend 'js' (jsoo) or 'wa' (wasm) — default 'js'
    */
-  async createWorker(workerUrl: string): Promise<void> {
+  async createWorker(workerUrl: string, backend: 'js' | 'wa' = 'js'): Promise<void> {
+    this.backend = backend;
     this.worker = new Worker(workerUrl);
     this.worker.addEventListener('message', (evt) => this.handleMessage(evt.data));
 
@@ -115,6 +119,7 @@ export class CoqWorkerWrapper {
     if (typeof SharedArrayBuffer !== 'undefined') {
       try {
         this.intvec = new Int32Array(new SharedArrayBuffer(4));
+        // InterruptSetup is a directive (not JSON-stringified even for WA)
         this.worker.postMessage(['InterruptSetup', this.intvec]);
       } catch {
         console.warn('SharedArrayBuffer available but not serializable — interrupts disabled');
@@ -169,6 +174,12 @@ export class CoqWorkerWrapper {
     this.send(['LoadPkg', basePath, pkg]);
   }
 
+  /** WA backend: send package URL for the worker to fetch itself */
+  loadPkgWa(url: string): void {
+    // LoadPkg is a directive — NOT JSON-stringified even for WA
+    this.worker?.postMessage(['LoadPkg', url]);
+  }
+
   register(filename: string): void {
     this.send(['Register', filename]);
   }
@@ -194,7 +205,9 @@ export class CoqWorkerWrapper {
 
   private send(msg: unknown[]): void {
     if (this.debug) console.log('[CoqWorker →]', msg);
-    this.worker?.postMessage(msg);
+    // WA backend expects JSON-stringified commands; JS backend expects raw arrays
+    const payload = this.backend === 'wa' ? JSON.stringify(msg) : msg;
+    this.worker?.postMessage(payload);
   }
 
   private handleMessage(msg: unknown[]): void {
