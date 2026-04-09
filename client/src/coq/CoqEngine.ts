@@ -82,8 +82,9 @@ export class CoqEngine implements CoqObserver {
 
   /**
    * Initialize the Coq engine using the JS backend.
-   * Uses LoadPkg command — the worker downloads, extracts, and registers
-   * packages itself (including setting up load paths).
+   * Sends LoadPkg commands, then Init + NewDoc.
+   * The worker processes messages in order; when Init/NewDoc succeed,
+   * the Ready event fires (caught by coqReady → onReady).
    *
    * @param basePath Fully-resolved URL to jsCoq assets (e.g., 'https://host/jscoq/')
    * @param volumeId Volume being studied (e.g., 'lf', 'plf')
@@ -99,7 +100,7 @@ export class CoqEngine implements CoqObserver {
     await this.worker.createWorker(workerUrl);
 
     // 2. Send LoadPkg for each package — the JS worker downloads .coq-pkg
-    //    files via XHR, extracts them to /lib, and sets up load paths.
+    //    files via XHR, extracts them to /lib, and sets up load paths internally.
     const packages = VOLUME_PACKAGES[volumeId] || VOLUME_PACKAGES.lf;
     const pkgBaseUrl = this.basePath + 'coq-pkgs/';
 
@@ -108,35 +109,16 @@ export class CoqEngine implements CoqObserver {
       this.worker.loadPkg(pkgBaseUrl, pkg);
     }
 
-    // 3. Wait for all packages to be loaded
-    await this.waitForPackages(packages.length);
-    console.log('[CoqEngine] All packages loaded');
-
-    // 4. Init Coq — only implicit_libs (the jscoq_options type in this
-    //    worker version accepts ONLY this field; lib_path is set automatically
-    //    by LoadPkg)
-    console.log('[CoqEngine] Sending Init');
+    // 3. Init Coq — messages are queued; the worker will process
+    //    LoadPkg commands first, then Init, then NewDoc.
+    //    The jscoq_options type only accepts {implicit_libs}.
+    //    lib_path is set up automatically by LoadPkg.
+    console.log('[CoqEngine] Sending Init + NewDoc (queued after LoadPkg)');
     this.worker.init(
       { implicit_libs: true },
       { lib_init: ['Coq.Init.Prelude'] }
     );
-    // coqReady callback will fire onReady
-  }
-
-  private waitForPackages(count: number): Promise<void> {
-    return new Promise((resolve) => {
-      let loaded = 0;
-      this.coqLoadedPkg = (_uris: string[]) => {
-        loaded++;
-        this.callbacks.onLoadProgress?.(loaded / count, '');
-        console.log(`[CoqEngine] Package loaded (${loaded}/${count})`);
-        if (loaded >= count) resolve();
-      };
-    });
-  }
-
-  coqLoadedPkg(_uris: string[]): void {
-    // overridden in waitForPackages
+    // coqReady callback will fire onReady when everything succeeds
   }
 
   /**
