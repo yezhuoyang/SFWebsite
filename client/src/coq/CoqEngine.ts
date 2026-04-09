@@ -159,7 +159,7 @@ export class CoqEngine implements CoqObserver {
       if (path.endsWith('/')) continue; // skip directories
 
       const vfsPath = '/lib/' + path;
-      this.worker.put(vfsPath, content.buffer);
+      this.worker.put(vfsPath, content.buffer as ArrayBuffer);
 
       // Track .cma files for registration
       if (path.endsWith('.cma')) {
