@@ -105,6 +105,7 @@ export class CoqEngine implements CoqObserver {
     this.packagesTotal = packages.length;
     this.packagesLoaded = 0;
     const cmaFiles: string[] = [];
+    const allModuleNames: string[] = [];
 
     for (const pkg of packages) {
       const pkgUrl = this.basePath + 'coq-pkgs/' + pkg + '.coq-pkg';
@@ -112,6 +113,7 @@ export class CoqEngine implements CoqObserver {
       try {
         const loaded = await this.loadPackage(pkgUrl);
         cmaFiles.push(...loaded.cmaFiles);
+        allModuleNames.push(...loaded.moduleNames);
         this.packagesLoaded++;
         this.callbacks.onLoadProgress?.(this.packagesLoaded / this.packagesTotal, pkg);
       } catch (e) {
@@ -126,12 +128,19 @@ export class CoqEngine implements CoqObserver {
       this.worker.register(cma);
     }
 
-    // 4. Init Coq (packages are already in the virtual FS)
+    // 4. Build lib_path from module names
+    //    Format: [[logical_path_components], [physical_dir_paths]]
+    //    e.g., module "Coq.Init.Prelude" → [['Coq', 'Init'], ['/lib']]
+    //    We need unique prefixes (e.g., 'Coq.Init' not 'Coq.Init.Prelude')
+    const libPath = buildLibPath(allModuleNames);
+    console.log('[CoqEngine] lib_path entries:', libPath.length, libPath.slice(0, 5));
+
+    // 5. Init Coq (packages are already in the virtual FS)
     console.log('[CoqEngine] Sending Init command');
     this.worker.init(
       {
         implicit_libs: true,
-        lib_path: [['', ['/lib', '.']]],
+        lib_path: libPath,
         top_name: 'Top',
       },
       {
@@ -142,9 +151,10 @@ export class CoqEngine implements CoqObserver {
   }
 
   /**
-   * Download a .coq-pkg file, extract it, and put files into the worker's virtual FS.
+   * Download a .coq-pkg file, extract it, put files into worker's virtual FS,
+   * and return the module names from the manifest.
    */
-  private async loadPackage(url: string): Promise<{ cmaFiles: string[] }> {
+  private async loadPackage(url: string): Promise<{ cmaFiles: string[]; moduleNames: string[] }> {
     // Fetch the .coq-pkg (it's a zip archive)
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
@@ -153,10 +163,18 @@ export class CoqEngine implements CoqObserver {
     // Unzip
     const files = unzipSync(new Uint8Array(buffer));
     const cmaFiles: string[] = [];
+    let moduleNames: string[] = [];
+
+    // Read manifest for module names
+    const manifestBytes = files['coq-pkg.json'];
+    if (manifestBytes) {
+      const manifest = JSON.parse(new TextDecoder().decode(manifestBytes));
+      moduleNames = Object.keys(manifest.modules || {});
+    }
 
     // Put each file into the worker's virtual filesystem under /lib/
     for (const [path, content] of Object.entries(files)) {
-      if (path.endsWith('/')) continue; // skip directories
+      if (path.endsWith('/') || path === 'coq-pkg.json') continue;
 
       const vfsPath = '/lib/' + path;
       this.worker.put(vfsPath, content.buffer as ArrayBuffer);
@@ -167,7 +185,7 @@ export class CoqEngine implements CoqObserver {
       }
     }
 
-    return { cmaFiles };
+    return { cmaFiles, moduleNames };
   }
 
   /**
@@ -587,4 +605,31 @@ function mergeRanges(ranges: HighlightRange[]): HighlightRange[] {
     }
   }
   return merged;
+}
+
+/**
+ * Build the lib_path array for Coq Init from module names.
+ *
+ * jsCoq expects: [[logical_path_components], [physical_paths]]
+ * e.g., module "Coq.Init.Prelude" → prefix "Coq.Init" → [['Coq','Init'], ['/lib']]
+ *
+ * We extract unique prefixes (drop the last component = module name)
+ * and map each to the /lib physical directory.
+ */
+function buildLibPath(moduleNames: string[]): [string[], string[]][] {
+  const prefixSet = new Set<string>();
+
+  for (const mod of moduleNames) {
+    // "Coq.Init.Prelude" → "Coq.Init"
+    const parts = mod.split('.');
+    if (parts.length >= 2) {
+      const prefix = parts.slice(0, -1).join('.');
+      prefixSet.add(prefix);
+    }
+  }
+
+  return [...prefixSet].map(prefix => {
+    const components = prefix.split('.');
+    return [components, ['/lib']];
+  });
 }
