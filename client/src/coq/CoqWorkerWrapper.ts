@@ -135,8 +135,18 @@ export class CoqWorkerWrapper {
   // --- Commands to Worker ---
 
   init(coqOpts: object, docOpts?: object): void {
+    // Must match jsCoq's CoqWorker.init() exactly
     this.send(['Init', coqOpts]);
     if (docOpts) this.send(['NewDoc', docOpts]);
+  }
+
+  /**
+   * Alternative Init: send jscoq_options (just implicit_libs) and
+   * put lib_path + top_name in NewDoc as the protocol may expect.
+   */
+  initCompat(jscoqOpts: { implicit_libs: boolean }, docOpts: { lib_init: string[]; lib_path?: unknown; top_name?: string }): void {
+    this.send(['Init', jscoqOpts]);
+    this.send(['NewDoc', docOpts]);
   }
 
   add(tipSid: number, newSid: number, text: string, resolve = false): void {

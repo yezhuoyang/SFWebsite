@@ -132,19 +132,18 @@ export class CoqEngine implements CoqObserver {
     console.log('[CoqEngine] cma files found:', cmaFiles);
     console.log('[CoqEngine] total files put to worker VFS');
 
-    // 4. Init Coq — match the classic frontend's init_opts format exactly
-    const initOpts = {
-      implicit_libs: true,
-      coq_options: [],              // required field (empty = use defaults)
-      debug: { coq: true, stm: true },
-      lib_path: libPath,
-      top_name: 'Top',
-    };
-    const docOpts = {
-      lib_init: ['Coq.Init.Prelude'],
-    };
-    console.log('[CoqEngine] Sending Init:', JSON.stringify(initOpts).slice(0, 200));
-    this.worker.init(initOpts, docOpts);
+    // 4. Init Coq
+    //    jscoq_options type only has { implicit_libs: bool }
+    //    doc_options type has { lib_init, top_name, lib_path }
+    console.log('[CoqEngine] Sending Init + NewDoc');
+    this.worker.initCompat(
+      { implicit_libs: true },
+      {
+        lib_init: ['Coq.Init.Prelude'],
+        lib_path: libPath,
+        top_name: 'Top',
+      }
+    );
     // coqReady callback will fire onReady
   }
 
