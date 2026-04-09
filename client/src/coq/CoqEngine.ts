@@ -71,10 +71,6 @@ export class CoqEngine implements CoqObserver {
   private messages: RocqMessage[] = [];
   private diagnostics: CoqDiagnostic[] = [];
 
-  // Package loading
-  private packagesLoaded = 0;
-  private packagesTotal = 0;
-
   // Base path for worker and package assets
   private basePath = '';
 
