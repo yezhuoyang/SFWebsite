@@ -21,13 +21,14 @@ import type {
 } from '../api/coqWebSocket';
 
 /** Volume ID to jsCoq package name mapping.
- *  ltac2 is required by init (Coq.Init.Prelude depends on Ltac2.Notations). */
+ *  All volumes load the full Coq standard library (init, ltac2, coq-base,
+ *  coq-collections, coq-arith) since SF chapters freely import from any part. */
 const VOLUME_PACKAGES: Record<string, string[]> = {
-  lf:   ['init', 'ltac2', 'coq-base', 'coq-collections', 'sf-LF'],
-  plf:  ['init', 'ltac2', 'coq-base', 'coq-collections', 'sf-PLF'],
+  lf:   ['init', 'ltac2', 'coq-base', 'coq-collections', 'coq-arith', 'sf-LF'],
+  plf:  ['init', 'ltac2', 'coq-base', 'coq-collections', 'coq-arith', 'sf-PLF'],
   vfa:  ['init', 'ltac2', 'coq-base', 'coq-collections', 'coq-arith', 'sf-VFA'],
-  slf:  ['init', 'ltac2', 'coq-base', 'coq-collections', 'sf-SLF'],
-  secf: ['init', 'ltac2', 'coq-base', 'coq-collections'],
+  slf:  ['init', 'ltac2', 'coq-base', 'coq-collections', 'coq-arith', 'sf-SLF'],
+  secf: ['init', 'ltac2', 'coq-base', 'coq-collections', 'coq-arith'],
 };
 
 export type SentencePhase =
