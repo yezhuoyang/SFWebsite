@@ -103,15 +103,11 @@ export class CoqWorkerWrapper {
     // Worker created lazily in init()
   }
 
-  private backend: 'js' | 'wa' = 'js';
-
   /**
    * Create the Web Worker and set up message handling.
    * @param workerUrl URL to worker script
-   * @param backend 'js' (jsoo) or 'wa' (wasm) — default 'js'
    */
-  async createWorker(workerUrl: string, backend: 'js' | 'wa' = 'js'): Promise<void> {
-    this.backend = backend;
+  async createWorker(workerUrl: string): Promise<void> {
     this.worker = new Worker(workerUrl);
     this.worker.addEventListener('message', (evt) => this.handleMessage(evt.data));
 
@@ -145,15 +141,6 @@ export class CoqWorkerWrapper {
     if (docOpts) this.send(['NewDoc', docOpts]);
   }
 
-  /**
-   * Alternative Init: send jscoq_options (just implicit_libs) and
-   * put lib_path + top_name in NewDoc as the protocol may expect.
-   */
-  initCompat(jscoqOpts: { implicit_libs: boolean }, docOpts: { lib_init: string[]; lib_path?: unknown; top_name?: string }): void {
-    this.send(['Init', jscoqOpts]);
-    this.send(['NewDoc', docOpts]);
-  }
-
   add(tipSid: number, newSid: number, text: string, resolve = false): void {
     this.send(['Add', tipSid, newSid, text, resolve]);
   }
@@ -172,12 +159,6 @@ export class CoqWorkerWrapper {
 
   loadPkg(basePath: string, pkg: string): void {
     this.send(['LoadPkg', basePath, pkg]);
-  }
-
-  /** WA backend: send package URL for the worker to fetch itself */
-  loadPkgWa(url: string): void {
-    // LoadPkg is a directive — NOT JSON-stringified even for WA
-    this.worker?.postMessage(['LoadPkg', url]);
   }
 
   register(filename: string): void {
@@ -205,9 +186,7 @@ export class CoqWorkerWrapper {
 
   private send(msg: unknown[]): void {
     if (this.debug) console.log('[CoqWorker →]', msg);
-    // WA backend expects JSON-stringified commands; JS backend expects raw arrays
-    const payload = this.backend === 'wa' ? JSON.stringify(msg) : msg;
-    this.worker?.postMessage(payload);
+    this.worker?.postMessage(msg);
   }
 
   private handleMessage(msg: unknown[]): void {

@@ -11,7 +11,7 @@ import type { CoqObserver, Pp, JsCoqGoals } from './CoqWorkerWrapper';
 import { parseSentences, offsetToLineChar } from './sentenceParser';
 import type { CoqSentence, LineCharPosition } from './sentenceParser';
 import { buildProofView, ppToPpString, ppToText, levelToSeverity } from './ppTranslator';
-// fflate no longer needed — WA backend downloads packages itself
+// Packages are loaded by the worker via LoadPkg (worker fetches + extracts)
 import type {
   ProofViewNotification,
   UpdateHighlights,
@@ -81,8 +81,9 @@ export class CoqEngine implements CoqObserver {
   }
 
   /**
-   * Initialize the Coq engine using the WASM backend.
-   * The WA worker handles package loading internally — we just send LoadPkg URLs.
+   * Initialize the Coq engine using the JS backend.
+   * Uses LoadPkg command — the worker downloads, extracts, and registers
+   * packages itself (including setting up load paths).
    *
    * @param basePath Fully-resolved URL to jsCoq assets (e.g., 'https://host/jscoq/')
    * @param volumeId Volume being studied (e.g., 'lf', 'plf')
@@ -90,68 +91,42 @@ export class CoqEngine implements CoqObserver {
   async init(basePath: string, volumeId: string): Promise<void> {
     this.basePath = basePath.endsWith('/') ? basePath : basePath + '/';
 
-    console.log('[CoqEngine] Initializing WASM backend, basePath:', this.basePath);
+    console.log('[CoqEngine] Initializing JS backend, basePath:', this.basePath);
 
-    // 1. Create WASM worker
-    const workerUrl = this.basePath + 'dist/wacoq_worker.js';
+    // 1. Create JS worker
+    const workerUrl = this.basePath + 'backend/jsoo/jscoq_worker.bc.js';
     console.log('[CoqEngine] Loading worker from:', workerUrl);
-    await this.worker.createWorker(workerUrl, 'wa');
+    await this.worker.createWorker(workerUrl);
 
-    // 2. Wait for Boot event (WASM worker signals when ready)
-    await this.waitForBoot();
-
-    // 3. Send LoadPkg for each package — the WA worker fetches them itself
+    // 2. Send LoadPkg for each package — the JS worker downloads .coq-pkg
+    //    files via XHR, extracts them to /lib, and sets up load paths.
     const packages = VOLUME_PACKAGES[volumeId] || VOLUME_PACKAGES.lf;
-
     const pkgBaseUrl = this.basePath + 'coq-pkgs/';
+
     for (const pkg of packages) {
-      const pkgUrl = pkgBaseUrl + pkg + '.coq-pkg';
-      console.log(`[CoqEngine] Loading package: ${pkgUrl}`);
-      this.worker.loadPkgWa(pkgUrl);
+      console.log(`[CoqEngine] LoadPkg: ${pkg}`);
+      this.worker.loadPkg(pkgBaseUrl, pkg);
     }
 
-    // 4. Wait for all packages to be loaded
+    // 3. Wait for all packages to be loaded
     await this.waitForPackages(packages.length);
     console.log('[CoqEngine] All packages loaded');
 
-    // 5. Build lib_path from loaded packages
-    const libPath = this.buildLibPathFromPackages(packages);
-    console.log('[CoqEngine] lib_path entries:', libPath.length);
-
-    // 6. Init Coq + NewDoc
+    // 4. Init Coq — only implicit_libs (the jscoq_options type in this
+    //    worker version accepts ONLY this field; lib_path is set automatically
+    //    by LoadPkg)
+    console.log('[CoqEngine] Sending Init');
     this.worker.init(
-      {
-        implicit_libs: true,
-        lib_path: libPath,
-        top_name: 'Top',
-      },
-      {
-        lib_init: ['Coq.Init.Prelude'],
-      }
+      { implicit_libs: true },
+      { lib_init: ['Coq.Init.Prelude'] }
     );
     // coqReady callback will fire onReady
-  }
-
-  private waitForBoot(): Promise<void> {
-    return new Promise((resolve) => {
-      const origBoot = this.coqBoot?.bind(this);
-      this.coqBoot = () => {
-        origBoot?.();
-        resolve();
-      };
-    });
-  }
-
-  coqBoot(): void {
-    console.log('[CoqEngine] WASM boot complete');
   }
 
   private waitForPackages(count: number): Promise<void> {
     return new Promise((resolve) => {
       let loaded = 0;
-      const origLoaded = this.coqLoadedPkg?.bind(this);
-      this.coqLoadedPkg = (uris: string[]) => {
-        origLoaded?.(uris);
+      this.coqLoadedPkg = (_uris: string[]) => {
         loaded++;
         this.callbacks.onLoadProgress?.(loaded / count, '');
         console.log(`[CoqEngine] Package loaded (${loaded}/${count})`);
@@ -162,14 +137,6 @@ export class CoqEngine implements CoqObserver {
 
   coqLoadedPkg(_uris: string[]): void {
     // overridden in waitForPackages
-  }
-
-  /**
-   * Build lib_path for known packages.
-   * Format: [[logical_prefix_components], [physical_dir_path]]
-   */
-  private buildLibPathFromPackages(packages: string[]): [string[], string[]][] {
-    return buildLibPath(packages);
   }
 
   /**
@@ -592,46 +559,4 @@ function mergeRanges(ranges: HighlightRange[]): HighlightRange[] {
   return merged;
 }
 
-/**
- * Known module prefixes for each package.
- * The WA backend loads packages itself so we can't read manifests;
- * these are the prefixes each .coq-pkg contains.
- */
-const PACKAGE_PREFIXES: Record<string, string[]> = {
-  'init':             ['Coq.Init', 'Coq.Bool', 'Coq.Unicode', 'Coq.ltac', 'Coq.btauto',
-                       'Coq.cc', 'Coq.firstorder', 'Coq.ssr', 'Coq.ssrmatching', 'Coq.syntax'],
-  'ltac2':            ['Ltac2', 'Coq.ltac2'],
-  'coq-base':         ['Coq.Arith', 'Coq.Classes', 'Coq.FSets', 'Coq.Floats', 'Coq.Init',
-                       'Coq.Lists', 'Coq.Logic', 'Coq.MSets', 'Coq.NArith', 'Coq.Numbers',
-                       'Coq.PArith', 'Coq.Program', 'Coq.Setoids', 'Coq.Sorting',
-                       'Coq.Strings', 'Coq.Structures', 'Coq.Vectors', 'Coq.Wellfounded',
-                       'Coq.ZArith', 'Coq.Bool', 'Coq.Relations', 'Coq.omega',
-                       'Coq.micromega', 'Coq.extraction', 'Coq.funind'],
-  'coq-collections':  ['Coq.Sets', 'Coq.Lists', 'Coq.Sorting'],
-  'coq-arith':        ['Coq.Arith', 'Coq.NArith', 'Coq.ZArith', 'Coq.QArith',
-                       'Coq.Numbers', 'Coq.Reals', 'Coq.Compat'],
-  'sf-LF':            ['LF'],
-  'sf-PLF':           ['PLF'],
-  'sf-VFA':           ['VFA'],
-  'sf-SLF':           ['SLF'],
-};
-
-/**
- * Build lib_path from package names.
- * Format: [[logical_prefix_components], [physical_dir_path]]
- */
-function buildLibPath(packageNames: string[]): [string[], string[]][] {
-  const prefixSet = new Set<string>();
-  for (const pkg of packageNames) {
-    const prefixes = PACKAGE_PREFIXES[pkg];
-    if (prefixes) {
-      for (const p of prefixes) prefixSet.add(p);
-    }
-  }
-
-  return [...prefixSet].map(prefix => {
-    const components = prefix.split('.');
-    const physPath = '/lib/' + components.join('/');
-    return [components, [physPath]];
-  });
-}
+// lib_path is handled automatically by the worker's LoadPkg command
