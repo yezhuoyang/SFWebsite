@@ -58,6 +58,11 @@ if client_dist.exists():
     # Serve static assets (JS, CSS, images) directly
     app.mount("/assets", StaticFiles(directory=str(client_dist / "assets")), name="assets")
 
+    # Serve jsCoq worker and packages (large binary files)
+    jscoq_dir = client_dist / "jscoq"
+    if jscoq_dir.exists():
+        app.mount("/jscoq", StaticFiles(directory=str(jscoq_dir)), name="jscoq")
+
     # Catch-all: serve index.html for any other path (React Router handles routing)
     @app.get("/{path:path}")
     async def spa_fallback(path: str):
