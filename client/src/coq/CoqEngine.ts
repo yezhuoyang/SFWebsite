@@ -82,86 +82,67 @@ export class CoqEngine implements CoqObserver {
 
   /**
    * Initialize the Coq engine using the WASM backend.
-   * The WA worker handles package downloading, extraction, and load path setup.
-   * Messages are JSON-stringified for the WA backend.
-   *
-   * @param basePath Fully-resolved URL to jsCoq assets (e.g., 'https://host/jscoq/')
-   * @param volumeId Volume being studied (e.g., 'lf', 'plf')
+   * Proven working sequence (verified via test-jscoq.html):
+   *   1. Create WA worker (JSON-stringified commands)
+   *   2. Wait for Boot event
+   *   3. LoadPkg directives (raw postMessage) for each package
+   *   4. Wait for LoadedPkg events
+   *   5. Init with { implicit_libs: true, lib_path: [...all dirs...] }
+   *   6. NewDoc with { lib_init: ['Coq.Init.Prelude'] }
+   *   7. Receive Ready event → onReady callback
    */
   async init(basePath: string, volumeId: string): Promise<void> {
     this.basePath = basePath.endsWith('/') ? basePath : basePath + '/';
-
     console.log('[CoqEngine] Initializing WA backend, basePath:', this.basePath);
 
     // 1. Create WA worker (JSON-stringified messages)
     const workerUrl = this.basePath + 'dist/wacoq_worker.js';
-    console.log('[CoqEngine] Loading worker from:', workerUrl);
     await this.worker.createWorker(workerUrl, true);
 
-    // 2. Wait for Boot event (WASM binary loaded)
-    console.log('[CoqEngine] Waiting for WASM boot...');
-    await new Promise<void>((resolve) => {
-      this._bootResolve = resolve;
-    });
-    console.log('[CoqEngine] WASM boot complete');
+    // 2. Wait for Boot
+    await new Promise<void>(resolve => { this._bootResolve = resolve; });
+    console.log('[CoqEngine] Boot complete');
 
-    // 3. Send LoadPkg for each package — WA worker fetches .coq-pkg URLs itself
-    //    LoadPkg is a directive (raw postMessage, not JSON-stringified)
+    // 3. LoadPkg for each package (raw directive, not JSON-stringified)
     const packages = VOLUME_PACKAGES[volumeId] || VOLUME_PACKAGES.lf;
     const pkgBaseUrl = this.basePath + 'coq-pkgs/';
-
     for (const pkg of packages) {
-      const pkgUrl = pkgBaseUrl + pkg + '.coq-pkg';
-      console.log(`[CoqEngine] LoadPkg: ${pkgUrl}`);
-      this.worker.sendDirective(['LoadPkg', pkgUrl]);
+      this.worker.sendDirective(['LoadPkg', pkgBaseUrl + pkg + '.coq-pkg']);
     }
 
-    // 4. Wait for all packages to load
-    await new Promise<void>((resolve) => {
+    // 4. Wait for all LoadedPkg events
+    await new Promise<void>(resolve => {
       let loaded = 0;
       this._pkgResolve = () => {
         loaded++;
-        console.log(`[CoqEngine] Package loaded (${loaded}/${packages.length})`);
         this.callbacks.onLoadProgress?.(loaded / packages.length, '');
         if (loaded >= packages.length) resolve();
       };
     });
     console.log('[CoqEngine] All packages loaded');
 
-    // 5. Init + NewDoc (WA backend accepts lib_path in Init)
-    console.log('[CoqEngine] Sending Init + NewDoc');
+    // 5. Init with lib_path covering ALL directories in the loaded packages
+    //    Each entry: [[logical_prefix_parts], ['/lib']]
+    const lib_path = buildLibPathForPackages(packages);
+    console.log('[CoqEngine] Init with', lib_path.length, 'lib_path entries');
     this.worker.init(
-      {
-        implicit_libs: true,
-        lib_path: [],
-        top_name: 'Top',
-      },
-      {
-        lib_init: ['Coq.Init.Prelude'],
-      }
+      { implicit_libs: true, lib_path },
+      { lib_init: ['Coq.Init.Prelude'] }
     );
-    // coqReady callback will fire onReady
+    // coqReady will fire onReady
   }
 
-  // Boot/Package resolve callbacks
+  // --- Boot / Package loading callbacks ---
   private _bootResolve: (() => void) | null = null;
   private _pkgResolve: (() => void) | null = null;
 
   coqBoot(): void {
-    console.log('[CoqEngine] Boot event received');
     this._bootResolve?.();
     this._bootResolve = null;
   }
 
-  // WA worker sends ['Feedback', {contents: ['LibLoaded', ...]}] for each loaded package
-  // or ['LoadedPkg', [...]] — need to handle both
   coqLoadedPkg(_uris: unknown): void {
-    console.log('[CoqEngine] LoadedPkg event');
     this._pkgResolve?.();
-  }
-
-  feedLibLoaded(): void {
-    // Alternative event name for package loaded
   }
 
   /**
@@ -584,4 +565,46 @@ function mergeRanges(ranges: HighlightRange[]): HighlightRange[] {
   return merged;
 }
 
-// lib_path is handled automatically by the worker's LoadPkg command
+/**
+ * All directory prefixes for each .coq-pkg package.
+ * Extracted from the actual zip contents of each package.
+ * Every directory containing .vo or .cma files needs an entry.
+ */
+const PKG_DIRS: Record<string, string[][]> = {
+  'init':            [['Coq','Init'],['Coq','Bool'],['Coq','Unicode'],['Coq','btauto'],
+                      ['Coq','ssr'],['Coq','ssrmatching'],['Coq','ltac'],['Coq','syntax'],
+                      ['Coq','cc'],['Coq','firstorder']],
+  'ltac2':           [['Ltac2'],['Coq','ltac2']],
+  'coq-base':        [['Coq','Classes'],['Coq','Logic'],['Coq','Program'],['Coq','Relations'],
+                      ['Coq','Setoids'],['Coq','Structures'],['Coq','extraction'],['Coq','funind']],
+  'coq-collections': [['Coq','FSets'],['Coq','Lists'],['Coq','MSets'],['Coq','Sets'],
+                      ['Coq','Sorting'],['Coq','Vectors']],
+  'coq-arith':       [['Coq','Arith'],['Coq','Array'],['Coq','NArith'],['Coq','Numbers'],
+                      ['Coq','Numbers','Cyclic','Abstract'],['Coq','Numbers','Cyclic','Int31'],
+                      ['Coq','Numbers','Cyclic','Int63'],['Coq','Numbers','Cyclic','ZModulo'],
+                      ['Coq','Numbers','Integer','Abstract'],['Coq','Numbers','Integer','Binary'],
+                      ['Coq','Numbers','Integer','NatPairs'],['Coq','Numbers','NatInt'],
+                      ['Coq','Numbers','Natural','Abstract'],['Coq','Numbers','Natural','Binary'],
+                      ['Coq','Numbers','Natural','Peano'],['Coq','PArith'],['Coq','QArith'],
+                      ['Coq','Strings'],['Coq','Wellfounded'],['Coq','ZArith'],
+                      ['Coq','omega'],['Coq','ring'],['Coq','setoid_ring']],
+  'sf-LF':           [['LF']],
+  'sf-PLF':          [['PLF']],
+  'sf-VFA':          [['VFA']],
+  'sf-SLF':          [['SLF']],
+};
+
+function buildLibPathForPackages(packageNames: string[]): [string[], string[]][] {
+  const seen = new Set<string>();
+  const result: [string[], string[]][] = [];
+  for (const pkg of packageNames) {
+    for (const dir of (PKG_DIRS[pkg] || [])) {
+      const key = dir.join('.');
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push([dir, ['/lib']]);
+      }
+    }
+  }
+  return result;
+}
