@@ -587,6 +587,51 @@ export default function ChapterPage() {
 
   const annotationDecorationsRef = useRef<Map<number, string[]>>(new Map());
 
+  // Highlight annotated text in prose/comment blocks by finding and wrapping
+  // the selected_text string in the DOM with a colored <mark> element.
+  useEffect(() => {
+    // Clean up previous highlights
+    document.querySelectorAll('mark[data-annotation-id]').forEach(el => {
+      const parent = el.parentNode;
+      if (parent) {
+        parent.replaceChild(document.createTextNode(el.textContent || ''), el);
+        parent.normalize(); // merge adjacent text nodes
+      }
+    });
+
+    // Apply highlights for annotations that have selected_text
+    for (const ann of serverAnnotations) {
+      if (!ann.selected_text) continue;
+      const blockEl = blockRefsMap.current.get(ann.block_id);
+      if (!blockEl) continue;
+
+      // Walk text nodes in this block to find the annotated string
+      const walker = document.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT);
+      const searchText = ann.selected_text;
+      let node: Text | null;
+      while ((node = walker.nextNode() as Text | null)) {
+        const idx = node.textContent?.indexOf(searchText) ?? -1;
+        if (idx === -1) continue;
+
+        // Split the text node and wrap the match in a <mark>
+        const before = node.splitText(idx);
+        const after = before.splitText(searchText.length);
+        const mark = document.createElement('mark');
+        mark.setAttribute('data-annotation-id', String(ann.id));
+        mark.style.backgroundColor = (ann.color || '#f59e0b') + '20';
+        mark.style.borderBottom = `2px solid ${ann.color || '#f59e0b'}`;
+        mark.style.padding = '0 1px';
+        mark.style.borderRadius = '2px';
+        mark.style.cursor = 'pointer';
+        mark.title = `${ann.display_name || ann.username}: ${ann.note}`;
+        before.parentNode?.replaceChild(mark, before);
+        mark.appendChild(document.createTextNode(searchText));
+        // Only highlight the first occurrence
+        break;
+      }
+    }
+  }, [serverAnnotations]);
+
   /** Sync document if dirty, then run action.
    * Only sends didChange when user explicitly steps — never auto during typing.
    * No artificial delays — vscoqtop processes messages in order. */
