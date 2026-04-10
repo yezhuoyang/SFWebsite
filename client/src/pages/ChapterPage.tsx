@@ -30,6 +30,7 @@ import type { Exercise } from '../types';
 import { saveBlockEdits, loadBlockEdits, clearBlockEdits, saveGradeResults, loadGradeResults, type StoredGrade } from '../utils/storage';
 import { getPublicAnnotations, createAnnotation as createServerAnnotation, deleteAnnotation as deleteServerAnnotation, type ServerAnnotation } from '../api/client';
 import { AnnotationCreatePopover, AnnotationOverlay } from '../components/AnnotationMargin';
+import LeaderboardWidget from '../components/LeaderboardWidget';
 
 export default function ChapterPage() {
   const { volumeId, chapterName } = useParams<{ volumeId: string; chapterName: string }>();
@@ -41,7 +42,7 @@ export default function ChapterPage() {
   const [visibleSolution, setVisibleSolution] = useState<{ name: string; data: SolutionData } | null>(null);
   const [activeBlockId, setActiveBlockId] = useState<number | null>(null);
   const [tocOpen, setTocOpen] = useState(true);
-  const [rightTab, setRightTab] = useState<'goals' | 'context' | 'tactics' | 'history'>('goals');
+  const [rightTab, setRightTab] = useState<'goals' | 'context' | 'tactics' | 'history' | 'leaders'>('goals');
   const [tocWidth, setTocWidth] = useState(208);   // default 13rem (w-52)
   const [rightWidth, setRightWidth] = useState(384); // default 24rem (w-96)
   const tocAsideRef = useRef<HTMLElement>(null);
@@ -1751,14 +1752,14 @@ export default function ChapterPage() {
           style={{ width: rightWidth }}
         >
           <div className="flex border-b border-gray-200 shrink-0">
-            {(['goals', 'context', 'tactics', 'history'] as const).map(tab => (
+            {(['goals', 'context', 'tactics', 'history', 'leaders'] as const).map(tab => (
               <button key={tab} onClick={() => setRightTab(tab)}
                 className={`flex-1 text-xs py-2.5 font-medium transition-colors ${
                   rightTab === tab
                     ? 'text-blue-700 border-b-2 border-blue-500 bg-blue-50/50'
                     : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
                 }`}>
-                {tab === 'goals' ? 'Goals' : tab === 'context' ? 'Context' : tab === 'tactics' ? 'Tactics' : 'History'}
+                {tab === 'goals' ? 'Goals' : tab === 'context' ? 'Context' : tab === 'tactics' ? 'Tactics' : tab === 'history' ? 'History' : '🏆 Leaders'}
               </button>
             ))}
           </div>
@@ -1822,6 +1823,28 @@ export default function ChapterPage() {
               <ContextPanel executedSentences={allExecutedTexts} />
             )}
             {rightTab === 'tactics' && <TacticsPanel />}
+            {rightTab === 'leaders' && volumeId && chapterName && (
+              <div className="h-full overflow-y-auto p-3 space-y-3 bg-gray-50">
+                <LeaderboardWidget
+                  scope="chapter"
+                  volumeId={volumeId}
+                  chapterName={chapterName}
+                  title={`Top in ${chapterName}`}
+                  limit={10}
+                />
+                <LeaderboardWidget
+                  scope="volume"
+                  volumeId={volumeId}
+                  title={`Top in ${volumeId.toUpperCase()}`}
+                  limit={10}
+                />
+                <LeaderboardWidget
+                  scope="global"
+                  title="Global Top"
+                  limit={10}
+                />
+              </div>
+            )}
             {rightTab === 'history' && (
               <div className="h-full flex flex-col bg-white">
                 <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center">

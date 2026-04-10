@@ -5,6 +5,7 @@ import type { Volume } from '../types';
 import { VOLUME_ILLUSTRATIONS } from '../components/VolumeIllustrations';
 import { PLSELogo, UCLACSLogo } from '../components/PLSELogo';
 import { countVolumeLocalCompleted } from '../utils/storage';
+import LeaderboardWidget from '../components/LeaderboardWidget';
 
 const VOLUME_META: Record<string, { gradient: string; accent: string; desc: string; topics: string[] }> = {
   lf: {
@@ -60,9 +61,9 @@ export default function Dashboard() {
   const overallPct = totalExercises > 0 ? Math.round((totalCompleted / totalExercises) * 100) : 0;
 
   return (
-    <div className="p-10 max-w-5xl mx-auto">
+    <div className="p-8 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="mb-12">
+      <div className="mb-8">
         {/* Institutional logos */}
         <div className="flex items-center gap-6 mb-6">
           <PLSELogo size={80} />
@@ -78,7 +79,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-5 mb-12">
+      <div className="grid grid-cols-3 gap-5 mb-8">
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Progress</p>
           <p className="text-4xl font-extrabold text-gray-900 mt-1">{overallPct}%</p>
@@ -100,8 +101,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Volume cards */}
-      <div className="space-y-5">
+      {/* 2-column layout: volumes left, leaderboard right */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+        {/* Left: Volume cards */}
+        <div className="space-y-5 min-w-0">
         {volumesWithLocal.map((v) => {
           const meta = VOLUME_META[v.id] || { gradient: 'from-gray-500 to-gray-600', accent: 'text-gray-600', desc: '', topics: [] };
           const pct = v.exercise_count > 0
@@ -154,13 +157,24 @@ export default function Dashboard() {
                 </div>
 
                 {/* Right: illustration */}
-                <div className="w-80 shrink-0 flex items-center justify-center p-2 bg-gray-50/80 border-l border-gray-100/80 group-hover:bg-gray-50 transition-colors">
+                <div className="w-64 shrink-0 flex items-center justify-center p-2 bg-gray-50/80 border-l border-gray-100/80 group-hover:bg-gray-50 transition-colors">
                   {Illustration && <Illustration />}
                 </div>
               </div>
             </Link>
           );
         })}
+        </div>
+
+        {/* Right: Global leaderboard (sticky) */}
+        <aside className="lg:sticky lg:top-6 lg:self-start space-y-4">
+          <LeaderboardWidget scope="global" limit={10} title="Top Solvers" />
+          <div className="text-center">
+            <Link to="/leaderboard" className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+              View full leaderboard &rarr;
+            </Link>
+          </div>
+        </aside>
       </div>
     </div>
   );

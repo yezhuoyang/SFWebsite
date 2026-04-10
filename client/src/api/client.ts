@@ -276,6 +276,12 @@ export const getLeaderboard = (sort: string = 'points', limit: number = 50) =>
 export const getMyRank = () =>
   fetchJSON<LeaderboardEntry>(`${BASE}/leaderboard/me`);
 
+export const getVolumeLeaderboard = (volumeId: string, limit: number = 20) =>
+  fetchJSON<LeaderboardEntry[]>(`${BASE}/leaderboard/volume/${volumeId}?limit=${limit}`);
+
+export const getChapterLeaderboard = (volumeId: string, chapterName: string, limit: number = 20) =>
+  fetchJSON<LeaderboardEntry[]>(`${BASE}/leaderboard/chapter/${volumeId}/${encodeURIComponent(chapterName)}?limit=${limit}`);
+
 // --- Live Presence ---
 
 export interface PresenceUser {
