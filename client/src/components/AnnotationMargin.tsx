@@ -9,7 +9,6 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { vote } from '../api/client';
 import type { ServerAnnotation } from '../api/client';
@@ -57,9 +56,10 @@ export default function AnnotationMargin({ annotations, onDelete, onRefresh }: A
 }
 
 /**
- * Floating annotation overlay — renders each card as a viewport-fixed widget
- * via portal. Cards are pinned to one location and DO NOT move with scroll.
- * Only user-initiated drag can change a card's position.
+ * Floating annotation overlay — renders cards in document space (absolutely
+ * positioned inside the scrollable container at the Y of their annotated block).
+ * Cards scroll WITH the page so they stay next to the relevant paragraph.
+ * Drag detaches a card to a custom in-document position.
  */
 export function AnnotationOverlay({
   annotations,
@@ -74,37 +74,43 @@ export function AnnotationOverlay({
 }) {
   const { user } = useAuth();
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  // Per-annotation viewport position, computed ONCE per annotation and frozen.
+  // Per-annotation document position (Y offset within scroll container).
+  // Computed once per annotation from block position, then frozen.
   const positionsRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const [, forceRender] = useState(0);
 
-  // Compute initial viewport positions for any annotation we haven't seen yet.
   useEffect(() => {
     const computeInitialPositions = () => {
+      const container = document.getElementById('chapter-scroll-container');
+      if (!container) return;
+      const containerRect = container.getBoundingClientRect();
+      const scrollTop = container.scrollTop;
       let changed = false;
-      const rightEdge = Math.max(window.innerWidth - 290, 20);
-      // Group by block to stack cards within same block
+
+      // Group by block to stack cards within the same block
       const byBlock = new Map<number, ServerAnnotation[]>();
       for (const ann of annotations) {
         const list = byBlock.get(ann.block_id) || [];
         list.push(ann);
         byBlock.set(ann.block_id, list);
       }
+
       for (const [blockId, anns] of byBlock) {
         const blockEl = blockRefs.get(blockId);
-        const baseY = blockEl ? blockEl.getBoundingClientRect().top : 100;
+        if (!blockEl) continue;
+        // Document Y position relative to scroll container content
+        const blockRect = blockEl.getBoundingClientRect();
+        const docY = blockRect.top - containerRect.top + scrollTop;
         let offset = 0;
         for (const ann of anns) {
           if (!positionsRef.current.has(ann.id)) {
-            positionsRef.current.set(ann.id, {
-              x: rightEdge,
-              y: Math.max(20, Math.min(baseY + offset, window.innerHeight - 80)),
-            });
+            positionsRef.current.set(ann.id, { x: 0, y: docY + offset });
             changed = true;
           }
           offset += 90;
         }
       }
+
       // Drop positions for annotations that no longer exist
       const currentIds = new Set(annotations.map(a => a.id));
       for (const id of [...positionsRef.current.keys()]) {
@@ -125,7 +131,10 @@ export function AnnotationOverlay({
   if (annotations.length === 0) return null;
 
   return (
-    <>
+    <div
+      className="absolute top-0 right-0 w-64 pointer-events-none"
+      style={{ transform: 'translateX(calc(100% + 12px))' }}
+    >
       {annotations.map(ann => {
         const pos = positionsRef.current.get(ann.id);
         if (!pos) return null;
@@ -143,14 +152,15 @@ export function AnnotationOverlay({
           />
         );
       })}
-    </>
+    </div>
   );
 }
 
 /**
  * Wrapper that makes an annotation card freely draggable.
- * Always rendered via portal as position:fixed (viewport-anchored).
- * Cards never move on scroll — only when the user drags them.
+ * Rendered as position:absolute INSIDE the overlay container (which lives in
+ * the scrollable content area), so cards scroll WITH the content and stay
+ * next to the paragraph they annotate. Drag updates the in-document position.
  */
 function DraggableCard(props: {
   initialPos: { x: number; y: number };
@@ -162,7 +172,8 @@ function DraggableCard(props: {
   onDelete?: (id: number) => void;
   onRefresh?: () => void;
 }) {
-  // Store position in a ref so it survives re-renders and never gets reset
+  // Position in document coordinates (inside the scroll container).
+  // Stored in ref so it survives re-renders and is only changed by drag.
   const posRef = useRef({ x: props.initialPos.x, y: props.initialPos.y });
   const [, forceUpdate] = useState(0);
 
@@ -178,14 +189,12 @@ function DraggableCard(props: {
     const origY = posRef.current.y;
 
     const onMove = (ev: MouseEvent) => {
-      let newX = origX + ev.clientX - startX;
-      let newY = origY + ev.clientY - startY;
-      // Clamp: don't let the card go off-screen or behind the right panel
-      const rightPanel = document.querySelector('[data-panel="right"]') as HTMLElement;
-      const maxX = (rightPanel ? rightPanel.getBoundingClientRect().left : window.innerWidth) - 260;
-      newX = Math.max(0, Math.min(newX, maxX));
-      newY = Math.max(0, Math.min(newY, window.innerHeight - 50));
-      posRef.current = { x: newX, y: newY };
+      // Drag delta in viewport pixels translates 1:1 to document coords
+      // (the overlay container scrolls with the content, so no scroll math needed)
+      posRef.current = {
+        x: origX + ev.clientX - startX,
+        y: origY + ev.clientY - startY,
+      };
       forceUpdate(n => n + 1);
     };
     const onUp = () => {
@@ -196,27 +205,27 @@ function DraggableCard(props: {
     document.addEventListener('mouseup', onUp);
   };
 
-  // Always render via portal as fixed — escapes any transformed ancestor
-  // and stays anchored to viewport (does not scroll with content).
-  return createPortal(
+  return (
     <div
-      className="fixed pointer-events-auto"
-      style={{ left: posRef.current.x, top: posRef.current.y, width: 256, zIndex: 10000 }}
+      className="absolute pointer-events-auto cursor-grab active:cursor-grabbing"
+      style={{
+        left: posRef.current.x,
+        top: posRef.current.y,
+        width: 256,
+        zIndex: 50,
+      }}
       onMouseDown={handleMouseDown}
     >
-      <div className="cursor-grab active:cursor-grabbing">
-        <AnnotationCard
-          annotation={props.annotation}
-          color={props.color}
-          isOwn={props.isOwn}
-          expanded={props.expanded}
-          onToggle={props.onToggle}
-          onDelete={props.onDelete}
-          onRefresh={props.onRefresh}
-        />
-      </div>
-    </div>,
-    document.body
+      <AnnotationCard
+        annotation={props.annotation}
+        color={props.color}
+        isOwn={props.isOwn}
+        expanded={props.expanded}
+        onToggle={props.onToggle}
+        onDelete={props.onDelete}
+        onRefresh={props.onRefresh}
+      />
+    </div>
   );
 }
 
