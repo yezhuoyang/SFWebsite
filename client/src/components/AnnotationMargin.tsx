@@ -43,7 +43,7 @@ export default function AnnotationMargin({ annotations, onDelete, onRefresh }: A
         <AnnotationCard
           key={ann.id}
           annotation={ann}
-          color={userColor(ann.user_id)}
+          color={ann.color || userColor(ann.user_id)}
           isOwn={user?.id === ann.user_id}
           expanded={expandedId === ann.id}
           onToggle={() => setExpandedId(expandedId === ann.id ? null : ann.id)}
@@ -144,7 +144,7 @@ export function AnnotationOverlay({
         >
           <AnnotationCard
             annotation={ann}
-            color={userColor(ann.user_id)}
+            color={ann.color || userColor(ann.user_id)}
             isOwn={user?.id === ann.user_id}
             expanded={expandedId === ann.id}
             onToggle={() => setExpandedId(expandedId === ann.id ? null : ann.id)}
@@ -281,7 +281,7 @@ function getTimeAgo(isoDate: string): string {
 }
 
 /**
- * Annotation creation popover — appears when user selects text and clicks "Annotate"
+ * Annotation creation popover — draggable, with color picker
  */
 export function AnnotationCreatePopover({
   selectedText,
@@ -298,9 +298,10 @@ export function AnnotationCreatePopover({
   const [color, setColor] = useState('#f59e0b');
   const [isPublic, setIsPublic] = useState(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    inputRef.current?.focus();
+    setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
 
   const colors = ['#f59e0b', '#ef4444', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899'];
@@ -310,19 +311,44 @@ export function AnnotationCreatePopover({
     onSave(note.trim(), color, isPublic);
   };
 
-  // Position near selection but stay in viewport
-  const left = Math.min(position.x, window.innerWidth - 320);
-  const top = Math.min(position.y + 10, window.innerHeight - 300);
+  const initLeft = Math.min(position.x - 150, window.innerWidth - 340);
+  const initTop = Math.min(position.y + 10, window.innerHeight - 350);
+
+  const handleDragStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const box = boxRef.current;
+    if (!box) return;
+    const rect = box.getBoundingClientRect();
+    const offX = e.clientX - rect.left;
+    const offY = e.clientY - rect.top;
+    const onMove = (ev: MouseEvent) => {
+      box.style.left = (ev.clientX - offX) + 'px';
+      box.style.top = (ev.clientY - offY) + 'px';
+    };
+    const onUp = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  };
 
   return (
     <div
-      className="fixed z-50 bg-white rounded-xl shadow-2xl border border-gray-200 w-[300px]"
-      style={{ left, top }}
+      ref={boxRef}
+      className="fixed z-50 bg-white rounded-xl shadow-2xl border-2 w-[320px]"
+      style={{ left: initLeft, top: initTop, borderColor: color }}
       onClick={e => e.stopPropagation()}
     >
-      {/* Header */}
-      <div className="px-4 pt-3 pb-2 border-b border-gray-100 flex items-center justify-between">
-        <span className="text-sm font-semibold text-gray-800">Add Note</span>
+      {/* Draggable header */}
+      <div
+        className="px-4 pt-3 pb-2 flex items-center justify-between cursor-move select-none rounded-t-xl"
+        style={{ backgroundColor: color + '18' }}
+        onMouseDown={handleDragStart}
+      >
+        <span className="text-xs font-bold uppercase tracking-wider" style={{ color }}>
+          Add Note
+        </span>
         <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
       </div>
 
@@ -345,7 +371,7 @@ export function AnnotationCreatePopover({
           placeholder="Write your note..."
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
           rows={3}
-          onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) handleSave(); }}
+          onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSave(); }}
         />
       </div>
 
@@ -355,7 +381,7 @@ export function AnnotationCreatePopover({
           {colors.map(c => (
             <button
               key={c}
-              className={`w-5 h-5 rounded-full transition-transform ${color === c ? 'ring-2 ring-offset-1 ring-gray-400 scale-110' : 'hover:scale-110'}`}
+              className={`w-5 h-5 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-1 ring-gray-400 scale-125' : 'hover:scale-110'}`}
               style={{ backgroundColor: c }}
               onClick={() => setColor(c)}
             />
@@ -374,10 +400,7 @@ export function AnnotationCreatePopover({
 
       {/* Actions */}
       <div className="px-4 py-3 flex justify-end gap-2">
-        <button
-          onClick={onCancel}
-          className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700"
-        >
+        <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700">
           Cancel
         </button>
         <button

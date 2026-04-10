@@ -549,24 +549,41 @@ export default function ChapterPage() {
     prevStartLinesRef.current = new Map(blockStartLines);
   }, [blockStartLines]);
 
-  // Monaco decorations for code block annotations (server-synced)
+  // Monaco decorations for code block annotations (server-synced, per-color underlines)
   useEffect(() => {
     if (!monacoRef.current) return;
+
+    // Inject dynamic CSS for each unique annotation color
+    let styleEl = document.getElementById('annotation-colors-style');
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'annotation-colors-style';
+      document.head.appendChild(styleEl);
+    }
+    const uniqueColors = [...new Set(serverAnnotations.map(a => a.color || '#f59e0b'))];
+    styleEl.textContent = uniqueColors.map(c => {
+      const cls = 'ann-color-' + c.replace('#', '');
+      return `.${cls} { border-bottom: 2px solid ${c}; background: ${c}15; cursor: pointer; }\n.${cls}:hover { background: ${c}30; }`;
+    }).join('\n');
+
     const annotationDecors = annotationDecorationsRef.current;
     editorInstancesRef.current.forEach((editor, blockId) => {
       const blockAnns = serverAnnotations.filter(a => a.block_id === blockId && a.start_line > 0);
-      const decorations = blockAnns.map(a => ({
-        range: new monacoRef.current.Range(a.start_line, a.start_col, a.end_line, a.end_col),
-        options: {
-          inlineClassName: 'annotation-underline',
-          hoverMessage: { value: `**${a.display_name || a.username}:** ${a.note}` },
-        },
-      }));
+      const decorations = blockAnns.map(a => {
+        const colorCls = 'ann-color-' + (a.color || '#f59e0b').replace('#', '');
+        return {
+          range: new monacoRef.current.Range(a.start_line, a.start_col, a.end_line, a.end_col),
+          options: {
+            inlineClassName: colorCls,
+            hoverMessage: { value: `**${a.display_name || a.username}:** ${a.note}` },
+          },
+        };
+      });
       const oldIds = annotationDecors.get(blockId) || [];
       const newIds = editor.deltaDecorations(oldIds, decorations);
       annotationDecors.set(blockId, newIds);
     });
-  }, [serverAnnotations.length]);
+  }, [serverAnnotations]);
 
   const annotationDecorationsRef = useRef<Map<number, string[]>>(new Map());
 
