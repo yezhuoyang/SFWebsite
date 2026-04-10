@@ -13,7 +13,9 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.config import MAX_SESSIONS, SESSION_IDLE_TIMEOUT, VOLUMES
+from server.routers.auth import get_optional_user
 from server.database import get_session
+get_db_session = get_session  # alias for clarity in solution endpoint
 from server.schemas import CoqSessionCreate, CoqSessionOut
 from server.services.vscoqtop_session import pool
 from server.services.block_parser import parse_blocks
@@ -253,8 +255,36 @@ async def reset_chapter_file(volume_id: str, chapter_name: str):
 
 
 @router.get("/coq/solution/{volume_id}/{chapter_name}/{exercise_name}")
-async def get_exercise_solution(volume_id: str, chapter_name: str, exercise_name: str):
-    """Get the sample solution for a specific exercise."""
+async def get_exercise_solution(
+    volume_id: str, chapter_name: str, exercise_name: str,
+    user: "User | None" = Depends(get_optional_user),
+    session: "AsyncSession" = Depends(get_db_session),
+):
+    """Get the sample solution — only if the user has solved the exercise."""
+    from server.models import Progress, Exercise, Chapter
+    from sqlalchemy import select
+
+    # Check if user has solved this exercise
+    if user:
+        ch = (await session.execute(
+            select(Chapter).where(Chapter.volume_id == volume_id, Chapter.name == chapter_name)
+        )).scalar_one_or_none()
+        if ch:
+            ex = (await session.execute(
+                select(Exercise).where(Exercise.chapter_id == ch.id, Exercise.name == exercise_name)
+            )).scalar_one_or_none()
+            if ex:
+                progress = (await session.execute(
+                    select(Progress).where(
+                        Progress.user_id == user.id, Progress.exercise_id == ex.id,
+                        Progress.status == "completed",
+                    )
+                )).scalar_one_or_none()
+                if not progress:
+                    raise HTTPException(status_code=403, detail="Solve this exercise first to see the solution")
+    else:
+        raise HTTPException(status_code=401, detail="Login required to view solutions")
+
     solutions_file = Path(__file__).resolve().parent.parent.parent / "solutions" / volume_id / f"{chapter_name}.json"
     if not solutions_file.exists():
         raise HTTPException(status_code=404, detail="No solutions available for this chapter")

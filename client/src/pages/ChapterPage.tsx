@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { sendPresenceHeartbeat, type PresenceUser } from '../api/client';
 import { type OnMount, type BeforeMount } from '@monaco-editor/react';
 import LazyEditor from '../components/LazyEditor';
 import GoalsPanel from '../components/GoalsPanel';
@@ -109,6 +111,23 @@ export default function ChapterPage() {
   const blockStartLinesRef = useRef<Map<number, number>>(new Map());
   const coqActionsRef = useRef<CoqSessionActions | null>(null);
   const syncThenDoRef = useRef<((action: () => void) => void) | null>(null);
+
+  // Auth + live presence
+  const { user: authUser } = useAuth();
+  const [presenceUsers, setPresenceUsers] = useState<PresenceUser[]>([]);
+
+  useEffect(() => {
+    if (!volumeId || !chapterName || !authUser) return;
+    // Send heartbeat every 15 seconds
+    const beat = () => {
+      sendPresenceHeartbeat(volumeId, chapterName)
+        .then(r => setPresenceUsers(r.users))
+        .catch(() => {});
+    };
+    beat();
+    const interval = setInterval(beat, 15000);
+    return () => clearInterval(interval);
+  }, [volumeId, chapterName, authUser]);
 
   // In-browser Coq via jsCoq Web Worker (replaces server-side vscoqtop)
   const [coqState, coqActions] = useCoqLocal(volumeId ?? null, chapterName ?? null);
@@ -1128,6 +1147,26 @@ export default function ChapterPage() {
             {isFullscreen ? 'Exit Present' : 'Present'}
           </button>
 
+          {/* Live presence avatars */}
+          {presenceUsers.length > 0 && (
+            <div className="flex items-center -space-x-1.5 mr-2">
+              {presenceUsers.slice(0, 8).map(u => (
+                <div
+                  key={u.user_id}
+                  className="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-[9px] font-bold text-white cursor-default"
+                  style={{ backgroundColor: u.color }}
+                  title={`${u.display_name} (@${u.username}) - editing now`}
+                >
+                  {u.display_name.charAt(0).toUpperCase()}
+                </div>
+              ))}
+              {presenceUsers.length > 8 && (
+                <div className="w-6 h-6 rounded-full border-2 border-white bg-gray-400 flex items-center justify-center text-[9px] font-bold text-white">
+                  +{presenceUsers.length - 8}
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-2 text-[10px] text-gray-400 font-mono">
             <span title="Time on this page">
               {Math.floor(elapsedSeconds / 60)}:{String(elapsedSeconds % 60).padStart(2, '0')}

@@ -1,10 +1,11 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { getVolumes } from '../api/client';
 import type { Volume } from '../types';
 import { SFLogo } from './VolumeIllustrations';
 import { PLSELogo } from './PLSELogo';
 import { countVolumeLocalCompleted } from '../utils/storage';
+import { useAuth } from '../contexts/AuthContext';
 
 const VOLUME_COLORS: Record<string, string> = {
   lf: 'bg-blue-500',
@@ -17,6 +18,8 @@ const VOLUME_COLORS: Record<string, string> = {
 export default function Layout() {
   const [volumes, setVolumes] = useState<Volume[]>([]);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     getVolumes().then(setVolumes).catch(console.error);
@@ -86,10 +89,49 @@ export default function Layout() {
             <span className="text-base">&#9672;</span>
             AI Tutor
           </Link>
+          <Link
+            to="/leaderboard"
+            className={`flex items-center gap-2 p-3 rounded-xl text-sm font-semibold transition-all ${
+              location.pathname === '/leaderboard'
+                ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200/60'
+                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+            }`}
+          >
+            <span className="text-base">&#9734;</span>
+            Leaderboard
+          </Link>
+
+          {/* User menu */}
+          {user ? (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-gray-50">
+              <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold shrink-0">
+                {(user.display_name || user.username).charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-gray-800 truncate">{user.display_name || user.username}</div>
+                <div className="text-[10px] text-gray-400">@{user.username}</div>
+              </div>
+              <button
+                onClick={() => { logout(); navigate('/login'); }}
+                className="text-[10px] text-gray-400 hover:text-red-500 font-medium"
+                title="Sign out"
+              >
+                Logout
+              </button>
+            </div>
+          ) : (
+            <Link
+              to="/login"
+              className="flex items-center gap-2 p-3 rounded-xl text-sm font-semibold text-blue-600 hover:bg-blue-50 transition-all"
+            >
+              Sign In
+            </Link>
+          )}
+
           <div className="px-3 py-2 flex justify-center">
             <PLSELogo size={80} />
           </div>
-          <p className="text-[10px] text-gray-300 px-3 pb-1 font-medium text-center">UCLA PLSE &middot; Rocq 8.20</p>
+          <p className="text-[10px] text-gray-300 px-3 pb-1 font-medium text-center">UCLA PLSE &middot; Rocq 8.17</p>
         </div>
       </aside>
 

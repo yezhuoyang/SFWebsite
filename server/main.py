@@ -43,6 +43,14 @@ app.include_router(coq_session.router, prefix="/api")
 from server.routers import auth  # noqa: E402
 app.include_router(auth.router, prefix="/api")
 
+# Social features
+from server.routers import discussions, leaderboard, solutions, annotations_api, presence  # noqa: E402
+app.include_router(discussions.router, prefix="/api")
+app.include_router(leaderboard.router, prefix="/api")
+app.include_router(solutions.router, prefix="/api")
+app.include_router(annotations_api.router, prefix="/api")
+app.include_router(presence.router, prefix="/api")
+
 # Mount SF HTML volumes for reading
 for vol_id, vol_cfg in VOLUMES.items():
     vol_path = vol_cfg["path"]

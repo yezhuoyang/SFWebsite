@@ -9,7 +9,7 @@ from server.models import Chapter, DailyActivity, Exercise, Progress
 from server.services.grader import GradeResult
 
 
-async def update_progress_from_grade(session: AsyncSession, grade_result: GradeResult) -> None:
+async def update_progress_from_grade(session: AsyncSession, grade_result: GradeResult, user_id: int | None = None) -> None:
     """Update exercise progress records based on grading results."""
     # Find the chapter
     ch = (await session.execute(
@@ -20,6 +20,9 @@ async def update_progress_from_grade(session: AsyncSession, grade_result: GradeR
     )).scalar_one_or_none()
     if not ch:
         return
+
+    # Default user_id=1 for backward compatibility (single-user mode)
+    uid = user_id or 1
 
     today_str = date.today().isoformat()
     new_completions = 0
@@ -36,13 +39,16 @@ async def update_progress_from_grade(session: AsyncSession, grade_result: GradeR
         if not exercise:
             continue
 
-        # Get or create progress record
+        # Get or create progress record (per user)
         progress = (await session.execute(
-            select(Progress).where(Progress.exercise_id == exercise.id)
+            select(Progress).where(
+                Progress.user_id == uid,
+                Progress.exercise_id == exercise.id,
+            )
         )).scalar_one_or_none()
 
         if not progress:
-            progress = Progress(exercise_id=exercise.id)
+            progress = Progress(user_id=uid, exercise_id=exercise.id)
             session.add(progress)
 
         old_status = progress.status
@@ -57,14 +63,17 @@ async def update_progress_from_grade(session: AsyncSession, grade_result: GradeR
             new_completions += 1
             new_points += ex_result.points_earned
 
-    # Update daily activity
+    # Update daily activity (per user)
     if new_completions > 0:
         activity = (await session.execute(
-            select(DailyActivity).where(DailyActivity.date == today_str)
+            select(DailyActivity).where(
+                DailyActivity.user_id == uid,
+                DailyActivity.date == today_str,
+            )
         )).scalar_one_or_none()
 
         if not activity:
-            activity = DailyActivity(date=today_str, exercises_completed=0, points_earned=0.0)
+            activity = DailyActivity(user_id=uid, date=today_str, exercises_completed=0, points_earned=0.0)
             session.add(activity)
 
         activity.exercises_completed = (activity.exercises_completed or 0) + new_completions
@@ -73,13 +82,12 @@ async def update_progress_from_grade(session: AsyncSession, grade_result: GradeR
     await session.commit()
 
 
-async def get_streak_info(session: AsyncSession) -> dict:
+async def get_streak_info(session: AsyncSession, user_id: int | None = None) -> dict:
     """Calculate current and longest streaks."""
-    result = await session.execute(
-        select(DailyActivity.date)
-        .where(DailyActivity.exercises_completed > 0)
-        .order_by(DailyActivity.date.desc())
-    )
+    q = select(DailyActivity.date).where(DailyActivity.exercises_completed > 0)
+    if user_id:
+        q = q.where(DailyActivity.user_id == user_id)
+    result = await session.execute(q.order_by(DailyActivity.date.desc()))
     active_dates = [row[0] for row in result.all()]
 
     if not active_dates:
@@ -112,11 +120,12 @@ async def get_streak_info(session: AsyncSession) -> dict:
             current_run = 1
 
     # Heatmap data (last 365 days)
-    all_activity = (await session.execute(
-        select(DailyActivity)
-        .where(DailyActivity.date >= (today - timedelta(days=365)).isoformat())
-        .order_by(DailyActivity.date)
-    )).scalars().all()
+    q_heat = select(DailyActivity).where(
+        DailyActivity.date >= (today - timedelta(days=365)).isoformat()
+    )
+    if user_id:
+        q_heat = q_heat.where(DailyActivity.user_id == user_id)
+    all_activity = (await session.execute(q_heat.order_by(DailyActivity.date))).scalars().all()
 
     heatmap = [
         {"date": a.date, "count": a.exercises_completed, "points": a.points_earned}
@@ -130,20 +139,23 @@ async def get_streak_info(session: AsyncSession) -> dict:
     }
 
 
-async def get_progress_summary(session: AsyncSession) -> dict:
-    """Get global progress statistics."""
+async def get_progress_summary(session: AsyncSession, user_id: int | None = None) -> dict:
+    """Get progress statistics, optionally for a specific user."""
     total = (await session.execute(select(func.count(Exercise.id)))).scalar() or 0
-    completed = (await session.execute(
-        select(func.count(Progress.id)).where(Progress.status == "completed")
-    )).scalar() or 0
-    pts = (await session.execute(
-        select(func.coalesce(func.sum(Progress.points_earned), 0.0))
-    )).scalar() or 0.0
+
+    q_comp = select(func.count(Progress.id)).where(Progress.status == "completed")
+    q_pts = select(func.coalesce(func.sum(Progress.points_earned), 0.0))
+    if user_id:
+        q_comp = q_comp.where(Progress.user_id == user_id)
+        q_pts = q_pts.where(Progress.user_id == user_id)
+
+    completed = (await session.execute(q_comp)).scalar() or 0
+    pts = (await session.execute(q_pts)).scalar() or 0.0
     total_pts = (await session.execute(
         select(func.coalesce(func.sum(Exercise.points), 0.0))
     )).scalar() or 0.0
 
-    streak = await get_streak_info(session)
+    streak = await get_streak_info(session, user_id)
 
     return {
         "total_exercises": total,
