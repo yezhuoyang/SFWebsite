@@ -27,7 +27,7 @@ import {
 import { useCoqLocal } from '../coq/useCoqLocal';
 import type { CoqSessionActions } from '../api/coqWebSocket';
 import type { Exercise } from '../types';
-import { saveBlockEdits, loadBlockEdits, clearBlockEdits, saveGradeResults, loadGradeResults, type StoredGrade, type Annotation } from '../utils/storage';
+import { saveBlockEdits, loadBlockEdits, clearBlockEdits, saveGradeResults, loadGradeResults, type StoredGrade } from '../utils/storage';
 import { getPublicAnnotations, createAnnotation as createServerAnnotation, deleteAnnotation as deleteServerAnnotation, type ServerAnnotation } from '../api/client';
 import AnnotationMargin, { AnnotationCreatePopover } from '../components/AnnotationMargin';
 
