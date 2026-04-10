@@ -297,13 +297,12 @@ export function AnnotationCreatePopover({
   const [note, setNote] = useState('');
   const [color, setColor] = useState('#f59e0b');
   const [isPublic, setIsPublic] = useState(true);
-  // Track position in state so React doesn't overwrite drag changes
-  const [pos, setPos] = useState(() => ({
+  const posRef = useRef({
     x: Math.min(position.x - 150, window.innerWidth - 340),
     y: Math.min(position.y + 10, window.innerHeight - 350),
-  }));
+  });
+  const [, forceUpdate] = useState(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const dragging = useRef(false);
 
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 100);
@@ -316,40 +315,36 @@ export function AnnotationCreatePopover({
     onSave(note.trim(), color, isPublic);
   };
 
-  const handleDragStart = (e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragging.current = true;
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startPosX = pos.x;
-    const startPosY = pos.y;
-    const onMove = (ev: PointerEvent) => {
-      setPos({
-        x: startPosX + ev.clientX - startX,
-        y: startPosY + ev.clientY - startY,
-      });
-    };
-    const onUp = () => {
-      dragging.current = false;
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-  };
-
   return (
     <div
       className="fixed z-50 bg-white rounded-xl shadow-2xl border-2 w-[320px]"
-      style={{ left: pos.x, top: pos.y, borderColor: color }}
+      style={{ left: posRef.current.x, top: posRef.current.y, borderColor: color }}
       onClick={e => e.stopPropagation()}
     >
-      {/* Draggable header */}
+      {/* Draggable header — large grab area */}
       <div
-        className="px-4 pt-3 pb-2 flex items-center justify-between cursor-move select-none rounded-t-xl"
+        className="px-4 pt-3 pb-2 flex items-center justify-between cursor-grab active:cursor-grabbing select-none rounded-t-xl"
         style={{ backgroundColor: color + '18', touchAction: 'none' }}
-        onPointerDown={handleDragStart}
+        onMouseDown={(e) => {
+          // Only drag on left mouse button, and not on the close button
+          if (e.button !== 0 || (e.target as HTMLElement).tagName === 'BUTTON') return;
+          e.preventDefault();
+          const startX = e.clientX;
+          const startY = e.clientY;
+          const origX = posRef.current.x;
+          const origY = posRef.current.y;
+          const onMove = (ev: MouseEvent) => {
+            posRef.current.x = origX + ev.clientX - startX;
+            posRef.current.y = origY + ev.clientY - startY;
+            forceUpdate(n => n + 1);
+          };
+          const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+          };
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        }}
       >
         <span className="text-xs font-bold uppercase tracking-wider" style={{ color }}>
           Add Note
