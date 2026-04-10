@@ -297,8 +297,13 @@ export function AnnotationCreatePopover({
   const [note, setNote] = useState('');
   const [color, setColor] = useState('#f59e0b');
   const [isPublic, setIsPublic] = useState(true);
+  // Track position in state so React doesn't overwrite drag changes
+  const [pos, setPos] = useState(() => ({
+    x: Math.min(position.x - 150, window.innerWidth - 340),
+    y: Math.min(position.y + 10, window.innerHeight - 350),
+  }));
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const boxRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
 
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 100);
@@ -311,36 +316,33 @@ export function AnnotationCreatePopover({
     onSave(note.trim(), color, isPublic);
   };
 
-  const initLeft = Math.min(position.x - 150, window.innerWidth - 340);
-  const initTop = Math.min(position.y + 10, window.innerHeight - 350);
-
   const handleDragStart = (e: React.PointerEvent) => {
-    const box = boxRef.current;
-    if (!box) return;
     e.preventDefault();
     e.stopPropagation();
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    dragging.current = true;
     const startX = e.clientX;
     const startY = e.clientY;
-    const startLeft = box.offsetLeft;
-    const startTop = box.offsetTop;
+    const startPosX = pos.x;
+    const startPosY = pos.y;
     const onMove = (ev: PointerEvent) => {
-      box.style.left = (startLeft + ev.clientX - startX) + 'px';
-      box.style.top = (startTop + ev.clientY - startY) + 'px';
+      setPos({
+        x: startPosX + ev.clientX - startX,
+        y: startPosY + ev.clientY - startY,
+      });
     };
     const onUp = () => {
-      document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', onUp);
+      dragging.current = false;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
     };
-    document.addEventListener('pointermove', onMove);
-    document.addEventListener('pointerup', onUp);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
   };
 
   return (
     <div
-      ref={boxRef}
       className="fixed z-50 bg-white rounded-xl shadow-2xl border-2 w-[320px]"
-      style={{ left: initLeft, top: initTop, borderColor: color }}
+      style={{ left: pos.x, top: pos.y, borderColor: color }}
       onClick={e => e.stopPropagation()}
     >
       {/* Draggable header */}
