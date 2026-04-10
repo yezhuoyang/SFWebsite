@@ -145,10 +145,16 @@ export default function ChapterPage() {
   // In-browser Coq via jsCoq Web Worker (replaces server-side vscoqtop)
   const [coqState, coqActions] = useCoqLocal(volumeId ?? null, chapterName ?? null);
 
+  // Pristine block contents from server (never modified) for per-block Reset
+  const originalBlockContentsRef = useRef<Map<number, string>>(new Map());
+
   // Load blocks, exercises, and restore any saved edits/grades from localStorage
   useEffect(() => {
     if (!volumeId || !chapterName) return;
     getChapterBlocks(volumeId, chapterName).then(data => {
+      // Capture pristine originals BEFORE applying saved edits
+      data.blocks.forEach(b => originalBlockContentsRef.current.set(b.id, b.content));
+
       // Restore saved edits from localStorage
       const savedEdits = loadBlockEdits(volumeId, chapterName);
       const blocksWithEdits = savedEdits ? data.blocks.map(b => {
@@ -473,22 +479,13 @@ export default function ChapterPage() {
    * Rebuild the full document by splicing edited block contents
    * into the original document at their correct line positions.
    */
-  const rebuildDocument = useCallback((forCoq = false): string => {
+  const rebuildDocument = useCallback((_forCoq = false): string => {
+    // Build the document EXACTLY from user content. Do NOT inject anything
+    // (no auto Admitted) — what users see must be what gets parsed/graded.
     const parts: string[] = [];
     for (const block of blocks) {
       const content = blockContentsRef.current.get(block.id) || block.content;
       parts.push(content);
-      // When building doc for vscoqtop, auto-close unclosed proofs in exercise
-      // blocks so downstream code (e.g. "End AExp.") doesn't hit proof mode.
-      if (forCoq && block.kind === 'exercise') {
-        const stripped = content.replace(/\(\*[\s\S]*?\*\)/g, '');
-        const proofStarts = (stripped.match(/\bProof\b/g) || []).length;
-        const proofEnds = (stripped.match(/\b(?:Qed|Admitted|Defined|Abort)\s*\./g) || []).length;
-        const unclosed = proofStarts - proofEnds;
-        for (let k = 0; k < unclosed; k++) {
-          parts.push('Admitted.');
-        }
-      }
     }
     return parts.join('\n');
   }, [blocks]);
@@ -502,14 +499,6 @@ export default function ChapterPage() {
       const content = blockContentsRef.current.get(block.id) || block.content;
       const lineCount = content.split('\n').length;
       currentLine += lineCount;
-      // Account for auto-injected Admitted. lines (same logic as rebuildDocument)
-      if (block.kind === 'exercise') {
-        const stripped = content.replace(/\(\*[\s\S]*?\*\)/g, '');
-        const proofStarts = (stripped.match(/\bProof\b/g) || []).length;
-        const proofEnds = (stripped.match(/\b(?:Qed|Admitted|Defined|Abort)\s*\./g) || []).length;
-        const unclosed = proofStarts - proofEnds;
-        if (unclosed > 0) currentLine += unclosed;
-      }
     }
     setBlockStartLines(map);
   }, [blocks]);
@@ -745,8 +734,7 @@ export default function ChapterPage() {
     setActiveBlockId(blockId);
   };
 
-  /** Compute the 0-indexed Coq doc line for the START of the block AFTER targetBlockId.
-   * This accounts for auto-injected Admitted. lines from rebuildDocument(true). */
+  /** Compute the 0-indexed Coq doc line for the START of the block AFTER targetBlockId. */
   const getCoqDocLineAfterBlock = useCallback((targetBlockId: number): number => {
     let coqLine = 0;
     let found = false;
@@ -760,13 +748,6 @@ export default function ChapterPage() {
         found = true;
       }
       coqLine += lineCount;
-      if (b.kind === 'exercise') {
-        const stripped = content.replace(/\(\*[\s\S]*?\*\)/g, '');
-        const starts = (stripped.match(/\bProof\b/g) || []).length;
-        const ends = (stripped.match(/\b(?:Qed|Admitted|Defined|Abort)\s*\./g) || []).length;
-        const unclosed = starts - ends;
-        if (unclosed > 0) coqLine += unclosed;
-      }
     }
     return coqLine; // target is last block — return total doc length
   }, [blocks]);
@@ -798,6 +779,43 @@ export default function ChapterPage() {
     const targetLine = getCoqDocLineAfterBlock(blockId);
     coqActions.interpretToPoint(Math.max(0, targetLine), 0);
   }, [blocks, coqActions, getCoqDocLineAfterBlock]);
+
+  /** Reset a single block to its original (server-fetched) content. */
+  const resetBlock = useCallback((blockId: number) => {
+    const original = originalBlockContentsRef.current.get(blockId);
+    if (original === undefined || !volumeId || !chapterName) return;
+    if (!confirm('Reset this block to its original content? Your edits in this block will be lost.')) return;
+
+    // Update in-memory content
+    blockContentsRef.current.set(blockId, original);
+
+    // Update the Monaco editor model if it exists
+    const editor = editorInstancesRef.current.get(blockId);
+    if (editor) {
+      const model = editor.getModel();
+      if (model) model.setValue(original);
+    }
+
+    // Update the block in state so React re-renders with the original content
+    setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, content: original } : b));
+
+    // Persist to localStorage
+    saveBlockEdits(volumeId, chapterName, blockContentsRef.current);
+
+    // Mark dirty so the document is re-synced to Coq on next action
+    setDirtyBlockIds(prev => {
+      const next = new Set(prev);
+      next.add(blockId);
+      return next;
+    });
+
+    editHistoryRef.current.push({
+      blockId, timestamp: Date.now(), action: 'edit',
+      description: `Reset block "${blocks.find(b => b.id === blockId)?.title || blocks.find(b => b.id === blockId)?.exercise_name || `block ${blockId}`}" to original`,
+    });
+    if (editHistoryRef.current.length > 100) editHistoryRef.current.shift();
+    setActivityVersion(v => v + 1);
+  }, [blocks, volumeId, chapterName]);
 
   // Determine if a block has any processed range
   const isBlockProcessed = useCallback((blockId: number): 'none' | 'partial' | 'full' => {
@@ -1532,6 +1550,11 @@ export default function ChapterPage() {
                       <div className="flex items-center px-2 py-0">
                         <span className="text-[10px] font-mono text-gray-300" />
                         <div className="ml-auto flex items-center gap-2">
+                          <button onClick={(e) => { e.stopPropagation(); resetBlock(block.id); }}
+                            className="text-[10px] text-gray-400 hover:text-red-500 font-medium"
+                            title="Reset this block to its original content">
+                            Reset
+                          </button>
                           <button onClick={(e) => { e.stopPropagation(); syncThenDo(() => runUntilBlock(block.id)); }}
                             disabled={!coqState.connected}
                             className="text-[10px] text-gray-400 hover:text-blue-600 disabled:opacity-30 font-medium"
@@ -1607,6 +1630,11 @@ export default function ChapterPage() {
                             return null;
                           })()}
                           <div className="ml-auto flex items-center gap-2">
+                            <button onClick={(e) => { e.stopPropagation(); resetBlock(block.id); }}
+                              className="text-[10px] text-gray-400 hover:text-red-500 font-medium"
+                              title="Reset this exercise to its original content">
+                              Reset
+                            </button>
                             <button onClick={(e) => { e.stopPropagation(); syncThenDo(() => runUntilBlock(block.id)); }}
                               disabled={!coqState.connected}
                               className="text-[10px] text-gray-400 hover:text-blue-600 disabled:opacity-30 font-medium"
