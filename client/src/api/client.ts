@@ -74,12 +74,21 @@ export const getCoqGoals = (sessionId: string) =>
 export const getChapterFile = (volumeId: string, chapterName: string) =>
   fetchJSON<{ content: string; filename: string }>(`${BASE}/coq/file/${volumeId}/${chapterName}`);
 
+export interface ExerciseGrade {
+  name: string;
+  status: 'completed' | 'not_started' | 'compile_error' | 'tampered';
+  points: number;
+  feedback?: string;
+  error_detail?: string | null;
+}
+
 export interface SaveResult {
   status: string;
   graded: boolean;
   completed: number;
   total: number;
-  exercises: { name: string; status: string; points: number }[];
+  exercises: ExerciseGrade[];
+  compile_output?: string | null;
 }
 
 export const saveChapterFile = (volumeId: string, chapterName: string, content: string) =>

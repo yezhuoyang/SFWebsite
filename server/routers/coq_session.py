@@ -189,6 +189,7 @@ async def get_chapter_file(volume_id: str, chapter_name: str):
 @router.put("/coq/file/{volume_id}/{chapter_name}")
 async def save_chapter_file(
     volume_id: str, chapter_name: str, body: dict,
+    user: "User | None" = Depends(get_optional_user),
     session: AsyncSession = Depends(get_session),
 ):
     """Save the chapter file, auto-grade, and update progress."""
@@ -212,15 +213,24 @@ async def save_chapter_file(
     # Save
     v_file.write_text(content, encoding="utf-8")
 
-    # Auto-grade after saving
-    from server.services.grader import quick_grade
+    # Auto-grade after saving — use full_grade for compile errors + tampering detection
+    from server.services.grader import full_grade
     from server.services.progress_tracker import update_progress_from_grade
-    grade_result = await quick_grade(volume_id, chapter_name)
-    await update_progress_from_grade(session, grade_result)
+    grade_result = await full_grade(volume_id, chapter_name)
 
-    # Build exercise status summary
+    # Save progress for the current user (if authenticated)
+    user_id = user.id if user else None
+    await update_progress_from_grade(session, grade_result, user_id)
+
+    # Build exercise status summary including detailed feedback
     exercises = [
-        {"name": ex.exercise_name, "status": ex.status, "points": ex.points_earned}
+        {
+            "name": ex.exercise_name,
+            "status": ex.status,
+            "points": ex.points_earned,
+            "feedback": ex.feedback,
+            "error_detail": ex.error_detail,
+        }
         for ex in grade_result.exercises
     ]
     completed = sum(1 for ex in grade_result.exercises if ex.status == "completed")
@@ -232,7 +242,10 @@ async def save_chapter_file(
         "completed": completed,
         "total": total,
         "exercises": exercises,
+        "compile_output": grade_result.compile_output,
     }
+
+
 
 
 @router.post("/coq/file/{volume_id}/{chapter_name}/reset")

@@ -717,8 +717,7 @@ export default function ChapterPage() {
           return merged;
         });
       }
-      // Clear save result notification after 5 seconds
-      setTimeout(() => setSaveResult(null), 5000);
+      // Modal stays open until user dismisses it
     } catch (e: any) {
       console.error('Save failed:', e);
     } finally {
@@ -1319,22 +1318,104 @@ export default function ChapterPage() {
         </div>
       )}
 
-      {/* Save result notification */}
-      {saveResult && (
-        <div className={`px-4 py-2 text-sm flex items-center gap-3 ${
-          saveResult.completed > 0 ? 'bg-green-50 text-green-800' : 'bg-blue-50 text-blue-800'
-        }`}>
-          <span className="font-semibold">
-            Saved & graded: {saveResult.completed}/{saveResult.total} exercises completed
-          </span>
-          {saveResult.exercises.filter(e => e.status === 'completed').map(e => (
-            <span key={e.name} className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-              {e.name} &#10003;
-            </span>
-          ))}
-          <button onClick={() => setSaveResult(null)} className="ml-auto text-xs opacity-50 hover:opacity-100">&#10005;</button>
-        </div>
-      )}
+      {/* Grading feedback modal */}
+      {saveResult && (() => {
+        const completed = saveResult.exercises.filter(e => e.status === 'completed');
+        const compileErr = saveResult.exercises.filter(e => e.status === 'compile_error');
+        const tampered = saveResult.exercises.filter(e => e.status === 'tampered');
+        const notStarted = saveResult.exercises.filter(e => e.status === 'not_started');
+
+        const overallTone =
+          compileErr.length > 0 ? 'error' :
+          tampered.length > 0 ? 'warn' :
+          completed.length > 0 ? 'success' : 'info';
+
+        const toneClass = {
+          success: 'border-green-400 bg-green-50',
+          warn:    'border-amber-400 bg-amber-50',
+          error:   'border-red-400 bg-red-50',
+          info:    'border-blue-400 bg-blue-50',
+        }[overallTone];
+
+        const headerText = {
+          success: `\u{1F389} ${completed.length}/${saveResult.total} exercise(s) graded as completed!`,
+          warn:    `\u26A0 Tampering detected — ${tampered.length} exercise(s) modified beyond proof body`,
+          error:   `\u274C Compile error — your code doesn't compile`,
+          info:    `\u{1F4DD} ${notStarted.length} exercise(s) still need work`,
+        }[overallTone];
+
+        return (
+          <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/30 p-4"
+               onClick={() => setSaveResult(null)}>
+            <div className={`max-w-2xl w-full rounded-xl border-2 ${toneClass} shadow-2xl bg-white max-h-[80vh] overflow-y-auto`}
+                 onClick={e => e.stopPropagation()}>
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h2 className="text-base font-bold text-gray-800">{headerText}</h2>
+                <button onClick={() => setSaveResult(null)}
+                        className="text-gray-400 hover:text-gray-700 text-xl leading-none">&times;</button>
+              </div>
+
+              <div className="px-5 py-4 space-y-3">
+                {/* Completed */}
+                {completed.map(e => (
+                  <div key={e.name} className="border-l-4 border-green-400 bg-green-50/50 px-3 py-2 rounded">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-green-800">{e.name}</span>
+                      <span className="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full">+{e.points} pts</span>
+                    </div>
+                    {e.feedback && <p className="text-xs text-green-700 mt-1">{e.feedback}</p>}
+                  </div>
+                ))}
+
+                {/* Tampered */}
+                {tampered.map(e => (
+                  <div key={e.name} className="border-l-4 border-amber-500 bg-amber-50/50 px-3 py-2 rounded">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-amber-800">{e.name}</span>
+                      <span className="text-xs bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full">tampered</span>
+                    </div>
+                    {e.feedback && <p className="text-xs text-amber-700 mt-1">{e.feedback}</p>}
+                  </div>
+                ))}
+
+                {/* Compile errors */}
+                {compileErr.map(e => (
+                  <div key={e.name} className="border-l-4 border-red-500 bg-red-50/50 px-3 py-2 rounded">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-red-800">{e.name}</span>
+                      <span className="text-xs bg-red-200 text-red-800 px-2 py-0.5 rounded-full">compile error</span>
+                    </div>
+                    {e.feedback && <p className="text-xs text-red-700 mt-1">{e.feedback}</p>}
+                    {e.error_detail && (
+                      <pre className="mt-2 text-[10px] font-mono bg-white border border-red-200 rounded p-2 overflow-x-auto whitespace-pre-wrap text-red-900">
+{e.error_detail}
+                      </pre>
+                    )}
+                  </div>
+                ))}
+
+                {/* Not started */}
+                {notStarted.map(e => (
+                  <div key={e.name} className="border-l-4 border-gray-400 bg-gray-50 px-3 py-2 rounded">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-gray-700">{e.name}</span>
+                      <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">not started</span>
+                    </div>
+                    {e.feedback && <p className="text-xs text-gray-600 mt-1">{e.feedback}</p>}
+                  </div>
+                ))}
+              </div>
+
+              <div className="px-5 py-3 border-t border-gray-100 flex justify-end">
+                <button onClick={() => setSaveResult(null)}
+                        className="px-4 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded font-medium">
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Main: TOC + Blocks + Goals */}
       <div className="flex-1 flex min-h-0">
