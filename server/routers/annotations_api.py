@@ -6,7 +6,7 @@ from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.database import get_session
-from server.models import Annotation, User
+from server.models import Annotation, Vote, User
 from server.routers.auth import get_current_user, get_optional_user
 
 router = APIRouter(tags=["annotations"])
@@ -26,7 +26,7 @@ class CreateAnnotation(BaseModel):
     is_public: bool = False
 
 
-def _annotation_dict(a: Annotation) -> dict:
+def _annotation_dict(a: Annotation, user_voted: bool = False) -> dict:
     return {
         "id": a.id, "user_id": a.user_id,
         "username": a.user.username, "display_name": a.user.display_name,
@@ -36,6 +36,7 @@ def _annotation_dict(a: Annotation) -> dict:
         "start_line": a.start_line, "start_col": a.start_col,
         "end_line": a.end_line, "end_col": a.end_col,
         "is_public": a.is_public, "upvotes": a.upvotes,
+        "user_voted": user_voted,
         "created_at": a.created_at.isoformat(),
     }
 
@@ -61,7 +62,16 @@ async def list_annotations(
     q = q.order_by(Annotation.created_at.desc()).limit(200)
 
     result = await session.execute(q)
-    return [_annotation_dict(a) for a in result.scalars().all()]
+    annotations = result.scalars().all()
+
+    voted_ids: set[int] = set()
+    if user:
+        vr = await session.execute(
+            select(Vote.target_id).where(Vote.user_id == user.id, Vote.target_type == "annotation")
+        )
+        voted_ids = {r[0] for r in vr}
+
+    return [_annotation_dict(a, a.id in voted_ids) for a in annotations]
 
 
 @router.get("/annotations/mine")

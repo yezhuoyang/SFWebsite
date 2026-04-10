@@ -305,6 +305,7 @@ export interface ServerAnnotation {
   end_col: number;
   is_public: boolean;
   upvotes: number;
+  user_voted: boolean;
   created_at: string;
 }
 

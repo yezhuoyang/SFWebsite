@@ -8,15 +8,13 @@
  * - Avatar circle + username + upvote/downvote + note text
  */
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { vote } from '../api/client';
 import type { ServerAnnotation } from '../api/client';
 
 interface AnnotationMarginProps {
   annotations: ServerAnnotation[];
-  /** container element to position cards relative to */
-  containerRef: React.RefObject<HTMLDivElement | null>;
   onDelete?: (id: number) => void;
   onRefresh?: () => void;
 }
@@ -31,7 +29,7 @@ function userColor(userId: number): string {
   return USER_COLORS[userId % USER_COLORS.length];
 }
 
-export default function AnnotationMargin({ annotations, containerRef, onDelete, onRefresh }: AnnotationMarginProps) {
+export default function AnnotationMargin({ annotations, onDelete, onRefresh }: AnnotationMarginProps) {
   const { user } = useAuth();
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
