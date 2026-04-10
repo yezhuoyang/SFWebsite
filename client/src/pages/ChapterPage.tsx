@@ -615,7 +615,7 @@ export default function ChapterPage() {
 
         // Split the text node and wrap the match in a <mark>
         const before = node.splitText(idx);
-        const after = before.splitText(searchText.length);
+        before.splitText(searchText.length);
         const mark = document.createElement('mark');
         mark.setAttribute('data-annotation-id', String(ann.id));
         mark.style.backgroundColor = (ann.color || '#f59e0b') + '20';
