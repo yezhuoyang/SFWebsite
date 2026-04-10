@@ -57,8 +57,9 @@ export default function AnnotationMargin({ annotations, onDelete, onRefresh }: A
 }
 
 /**
- * Floating annotation overlay — positions cards absolutely on the right margin,
- * aligned to the Y position of the block they belong to.
+ * Floating annotation overlay — renders each card as a viewport-fixed widget
+ * via portal. Cards are pinned to one location and DO NOT move with scroll.
+ * Only user-initiated drag can change a card's position.
  */
 export function AnnotationOverlay({
   annotations,
@@ -73,90 +74,86 @@ export function AnnotationOverlay({
 }) {
   const { user } = useAuth();
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [positions, setPositions] = useState<Map<number, number>>(new Map());
+  // Per-annotation viewport position, computed ONCE per annotation and frozen.
+  const positionsRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const [, forceRender] = useState(0);
 
-  // Compute Y positions from block DOM refs
+  // Compute initial viewport positions for any annotation we haven't seen yet.
   useEffect(() => {
-    const compute = () => {
-      const container = document.getElementById('chapter-scroll-container');
-      if (!container) return;
-      const containerRect = container.getBoundingClientRect();
-      const scrollTop = container.scrollTop;
-
-      const newPos = new Map<number, number>();
+    const computeInitialPositions = () => {
+      let changed = false;
+      const rightEdge = Math.max(window.innerWidth - 290, 20);
+      // Group by block to stack cards within same block
+      const byBlock = new Map<number, ServerAnnotation[]>();
       for (const ann of annotations) {
-        const blockEl = blockRefs.get(ann.block_id);
-        if (blockEl) {
-          const blockRect = blockEl.getBoundingClientRect();
-          // Position relative to the container's content (accounting for scroll)
-          const top = blockRect.top - containerRect.top + scrollTop;
-          newPos.set(ann.id, top);
+        const list = byBlock.get(ann.block_id) || [];
+        list.push(ann);
+        byBlock.set(ann.block_id, list);
+      }
+      for (const [blockId, anns] of byBlock) {
+        const blockEl = blockRefs.get(blockId);
+        const baseY = blockEl ? blockEl.getBoundingClientRect().top : 100;
+        let offset = 0;
+        for (const ann of anns) {
+          if (!positionsRef.current.has(ann.id)) {
+            positionsRef.current.set(ann.id, {
+              x: rightEdge,
+              y: Math.max(20, Math.min(baseY + offset, window.innerHeight - 80)),
+            });
+            changed = true;
+          }
+          offset += 90;
         }
       }
-      setPositions(newPos);
+      // Drop positions for annotations that no longer exist
+      const currentIds = new Set(annotations.map(a => a.id));
+      for (const id of [...positionsRef.current.keys()]) {
+        if (!currentIds.has(id)) {
+          positionsRef.current.delete(id);
+          changed = true;
+        }
+      }
+      if (changed) forceRender(n => n + 1);
     };
 
-    compute();
-    // Recompute on scroll and resize
-    const container = document.getElementById('chapter-scroll-container');
-    const onScroll = () => compute();
-    container?.addEventListener('scroll', onScroll);
-    window.addEventListener('resize', compute);
-    // Also recompute after a delay (for lazy-loaded editors)
-    const timer = setTimeout(compute, 2000);
-    return () => {
-      container?.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', compute);
-      clearTimeout(timer);
-    };
+    computeInitialPositions();
+    // Retry after lazy editors mount, so block positions are accurate
+    const timer = setTimeout(computeInitialPositions, 800);
+    return () => clearTimeout(timer);
   }, [annotations, blockRefs]);
 
   if (annotations.length === 0) return null;
 
-  // Group annotations by block to stack them if multiple per block
-  const byBlock = new Map<number, ServerAnnotation[]>();
-  for (const ann of annotations) {
-    const list = byBlock.get(ann.block_id) || [];
-    list.push(ann);
-    byBlock.set(ann.block_id, list);
-  }
-
-  // Build positioned cards
-  const cards: { ann: ServerAnnotation; top: number }[] = [];
-  for (const [, anns] of byBlock) {
-    const baseTop = positions.get(anns[0]?.id) ?? 0;
-    let offset = 0;
-    for (const ann of anns) {
-      cards.push({ ann, top: baseTop + offset });
-      offset += 90; // stack cards vertically within same block
-    }
-  }
-
   return (
-    <div
-      className="absolute top-0 right-0 w-64 pointer-events-none"
-      style={{ transform: 'translateX(calc(100% + 12px))' }}
-    >
-      {cards.map(({ ann, top }) => (
-        <DraggableCard
-          key={ann.id}
-          initialTop={top}
-          annotation={ann}
-          color={ann.color || userColor(ann.user_id)}
-          isOwn={user?.id === ann.user_id}
-          expanded={expandedId === ann.id}
-          onToggle={() => setExpandedId(expandedId === ann.id ? null : ann.id)}
-          onDelete={onDelete}
-          onRefresh={onRefresh}
-        />
-      ))}
-    </div>
+    <>
+      {annotations.map(ann => {
+        const pos = positionsRef.current.get(ann.id);
+        if (!pos) return null;
+        return (
+          <DraggableCard
+            key={ann.id}
+            initialPos={pos}
+            annotation={ann}
+            color={ann.color || userColor(ann.user_id)}
+            isOwn={user?.id === ann.user_id}
+            expanded={expandedId === ann.id}
+            onToggle={() => setExpandedId(expandedId === ann.id ? null : ann.id)}
+            onDelete={onDelete}
+            onRefresh={onRefresh}
+          />
+        );
+      })}
+    </>
   );
 }
 
-/** Wrapper that makes an annotation card freely draggable */
+/**
+ * Wrapper that makes an annotation card freely draggable.
+ * Always rendered via portal as position:fixed (viewport-anchored).
+ * Cards never move on scroll — only when the user drags them.
+ */
 function DraggableCard(props: {
-  initialTop: number;
+  initialPos: { x: number; y: number };
   annotation: ServerAnnotation;
   color: string;
   isOwn: boolean;
@@ -165,10 +162,8 @@ function DraggableCard(props: {
   onDelete?: (id: number) => void;
   onRefresh?: () => void;
 }) {
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [, setIsDragging] = useState(false);
-  // Store fixed-position coords (only used while dragging or after first drag)
-  const fixedPos = useRef<{ x: number; y: number } | null>(null);
+  // Store position in a ref so it survives re-renders and never gets reset
+  const posRef = useRef({ x: props.initialPos.x, y: props.initialPos.y });
   const [, forceUpdate] = useState(0);
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -177,19 +172,10 @@ function DraggableCard(props: {
     if (tag === 'BUTTON' || tag === 'SPAN') return;
     e.preventDefault();
 
-    // On first drag, convert from absolute (in-container) to fixed (viewport)
-    const el = cardRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    if (!fixedPos.current) {
-      fixedPos.current = { x: rect.left, y: rect.top };
-    }
-
-    setIsDragging(true);
     const startX = e.clientX;
     const startY = e.clientY;
-    const origX = fixedPos.current.x;
-    const origY = fixedPos.current.y;
+    const origX = posRef.current.x;
+    const origY = posRef.current.y;
 
     const onMove = (ev: MouseEvent) => {
       let newX = origX + ev.clientX - startX;
@@ -199,11 +185,10 @@ function DraggableCard(props: {
       const maxX = (rightPanel ? rightPanel.getBoundingClientRect().left : window.innerWidth) - 260;
       newX = Math.max(0, Math.min(newX, maxX));
       newY = Math.max(0, Math.min(newY, window.innerHeight - 50));
-      fixedPos.current = { x: newX, y: newY };
+      posRef.current = { x: newX, y: newY };
       forceUpdate(n => n + 1);
     };
     const onUp = () => {
-      setIsDragging(false);
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
     };
@@ -211,41 +196,12 @@ function DraggableCard(props: {
     document.addEventListener('mouseup', onUp);
   };
 
-  // Before first drag: render as absolute inside overlay container (in-place)
-  // After first drag: render via PORTAL into document.body as fixed
-  // (escapes any transformed ancestor's containing block)
-  const isFixed = fixedPos.current !== null;
-
-  if (!isFixed) {
-    // In-place absolute card
-    return (
-      <div
-        ref={cardRef}
-        className="absolute pointer-events-auto"
-        style={{ top: props.initialTop, left: 0, width: '100%', zIndex: 50 }}
-        onMouseDown={handleMouseDown}
-      >
-        <div className="cursor-grab active:cursor-grabbing">
-          <AnnotationCard
-            annotation={props.annotation}
-            color={props.color}
-            isOwn={props.isOwn}
-            expanded={props.expanded}
-            onToggle={props.onToggle}
-            onDelete={props.onDelete}
-            onRefresh={props.onRefresh}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  // Dragged card — rendered via portal into body, escaping all transforms
+  // Always render via portal as fixed — escapes any transformed ancestor
+  // and stays anchored to viewport (does not scroll with content).
   return createPortal(
     <div
-      ref={cardRef}
       className="fixed pointer-events-auto"
-      style={{ left: fixedPos.current!.x, top: fixedPos.current!.y, width: 256, zIndex: 10000 }}
+      style={{ left: posRef.current.x, top: posRef.current.y, width: 256, zIndex: 10000 }}
       onMouseDown={handleMouseDown}
     >
       <div className="cursor-grab active:cursor-grabbing">
