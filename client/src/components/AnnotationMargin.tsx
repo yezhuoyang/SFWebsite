@@ -191,10 +191,14 @@ function DraggableCard(props: {
     const origY = fixedPos.current.y;
 
     const onMove = (ev: MouseEvent) => {
-      fixedPos.current = {
-        x: origX + ev.clientX - startX,
-        y: origY + ev.clientY - startY,
-      };
+      let newX = origX + ev.clientX - startX;
+      let newY = origY + ev.clientY - startY;
+      // Clamp: don't let the card go off-screen or behind the right panel
+      const rightPanel = document.querySelector('[data-panel="right"]') as HTMLElement;
+      const maxX = (rightPanel ? rightPanel.getBoundingClientRect().left : window.innerWidth) - 260;
+      newX = Math.max(0, Math.min(newX, maxX));
+      newY = Math.max(0, Math.min(newY, window.innerHeight - 50));
+      fixedPos.current = { x: newX, y: newY };
       forceUpdate(n => n + 1);
     };
     const onUp = () => {
@@ -215,8 +219,8 @@ function DraggableCard(props: {
       ref={cardRef}
       className={`pointer-events-auto ${isFixed ? 'fixed' : 'absolute'}`}
       style={isFixed
-        ? { left: fixedPos.current!.x, top: fixedPos.current!.y, width: 256, zIndex: isDragging ? 9999 : 50 }
-        : { top: props.initialTop, left: 0, width: '100%', zIndex: 10 }
+        ? { left: fixedPos.current!.x, top: fixedPos.current!.y, width: 256, zIndex: 10000 }
+        : { top: props.initialTop, left: 0, width: '100%', zIndex: 10000 }
       }
       onMouseDown={handleMouseDown}
     >

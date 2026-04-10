@@ -1622,6 +1622,7 @@ export default function ChapterPage() {
         {/* Right panel */}
         <div
           ref={rightPanelRef}
+          data-panel="right"
           className="shrink-0 flex flex-col bg-white border-l border-gray-200"
           style={{ width: rightWidth }}
         >
