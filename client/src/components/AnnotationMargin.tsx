@@ -164,36 +164,61 @@ function DraggableCard(props: {
   onDelete?: (id: number) => void;
   onRefresh?: () => void;
 }) {
-  const posRef = useRef({ x: 0, y: props.initialTop });
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  // Store fixed-position coords (only used while dragging or after first drag)
+  const fixedPos = useRef<{ x: number; y: number } | null>(null);
   const [, forceUpdate] = useState(0);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === 'BUTTON' || tag === 'SPAN') return;
+    e.preventDefault();
+
+    // On first drag, convert from absolute (in-container) to fixed (viewport)
+    const el = cardRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    if (!fixedPos.current) {
+      fixedPos.current = { x: rect.left, y: rect.top };
+    }
+
+    setIsDragging(true);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const origX = fixedPos.current.x;
+    const origY = fixedPos.current.y;
+
+    const onMove = (ev: MouseEvent) => {
+      fixedPos.current = {
+        x: origX + ev.clientX - startX,
+        y: origY + ev.clientY - startY,
+      };
+      forceUpdate(n => n + 1);
+    };
+    const onUp = () => {
+      setIsDragging(false);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
+  // Before first drag: render as absolute inside overlay container
+  // After first drag: render as fixed (viewport-level, no container constraints)
+  const isFixed = fixedPos.current !== null;
 
   return (
     <div
-      className="absolute pointer-events-auto"
-      style={{ top: posRef.current.y, left: posRef.current.x, width: '100%', zIndex: 10 }}
-      onMouseDown={(e) => {
-        // Only drag on left button, skip if clicking buttons inside the card
-        if (e.button !== 0) return;
-        const tag = (e.target as HTMLElement).tagName;
-        if (tag === 'BUTTON' || tag === 'SPAN') return;
-
-        e.preventDefault();
-        const startX = e.clientX;
-        const startY = e.clientY;
-        const origX = posRef.current.x;
-        const origY = posRef.current.y;
-        const onMove = (ev: MouseEvent) => {
-          posRef.current.x = origX + ev.clientX - startX;
-          posRef.current.y = origY + ev.clientY - startY;
-          forceUpdate(n => n + 1);
-        };
-        const onUp = () => {
-          document.removeEventListener('mousemove', onMove);
-          document.removeEventListener('mouseup', onUp);
-        };
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
-      }}
+      ref={cardRef}
+      className={`pointer-events-auto ${isFixed ? 'fixed' : 'absolute'}`}
+      style={isFixed
+        ? { left: fixedPos.current!.x, top: fixedPos.current!.y, width: 256, zIndex: isDragging ? 9999 : 50 }
+        : { top: props.initialTop, left: 0, width: '100%', zIndex: 10 }
+      }
+      onMouseDown={handleMouseDown}
     >
       <div className="cursor-grab active:cursor-grabbing">
         <AnnotationCard
