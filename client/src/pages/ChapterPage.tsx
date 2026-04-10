@@ -51,20 +51,7 @@ export default function ChapterPage() {
   const tutorChatRef = useRef<TutorChatHandle>(null);
   const [celebration, setCelebration] = useState<{ names: string[] } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [annotations, setAnnotations] = useState<Annotation[]>([]); // legacy local
   const [serverAnnotations, setServerAnnotations] = useState<ServerAnnotation[]>([]);
-  const [annotationPopup, setAnnotationPopup] = useState<{
-    mode: 'create' | 'view';
-    annotation?: Annotation;
-    blockId: number;
-    selectedText?: string;
-    startLine: number; startCol: number;
-    endLine: number; endCol: number;
-    x: number; y: number;
-  } | null>(null);
-  const [annotationText, setAnnotationText] = useState('');
-  const [annotationColor, setAnnotationColor] = useState('#f59e0b');
-  const annotationPopupRef = useRef<HTMLDivElement>(null);
 
   // Timer
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -343,9 +330,10 @@ export default function ChapterPage() {
         if (!sel || sel.isEmpty()) return;
         const domNode = ed.getDomNode();
         const rect = domNode?.getBoundingClientRect();
-        setAnnotationPopup({
-          mode: 'create',
+        const selectedText = ed.getModel()?.getValueInRange(sel) || '';
+        setAnnotationCreate({
           blockId,
+          selectedText: selectedText.trim(),
           startLine: sel.startLineNumber,
           startCol: sel.startColumn,
           endLine: sel.endLineNumber,
@@ -353,7 +341,6 @@ export default function ChapterPage() {
           x: rect ? rect.left + rect.width / 2 : 400,
           y: rect ? rect.top + 60 : 200,
         });
-        setAnnotationText('');
       },
     });
 
@@ -562,24 +549,24 @@ export default function ChapterPage() {
     prevStartLinesRef.current = new Map(blockStartLines);
   }, [blockStartLines]);
 
-  // Monaco decorations for code block annotations
+  // Monaco decorations for code block annotations (server-synced)
   useEffect(() => {
     if (!monacoRef.current) return;
     const annotationDecors = annotationDecorationsRef.current;
     editorInstancesRef.current.forEach((editor, blockId) => {
-      const blockAnns = annotations.filter(a => a.blockId === blockId && a.startLine > 0);
+      const blockAnns = serverAnnotations.filter(a => a.block_id === blockId && a.start_line > 0);
       const decorations = blockAnns.map(a => ({
-        range: new monacoRef.current.Range(a.startLine, a.startCol, a.endLine, a.endCol),
+        range: new monacoRef.current.Range(a.start_line, a.start_col, a.end_line, a.end_col),
         options: {
           inlineClassName: 'annotation-underline',
-          hoverMessage: { value: `**Note:** ${a.text}` },
+          hoverMessage: { value: `**${a.display_name || a.username}:** ${a.note}` },
         },
       }));
       const oldIds = annotationDecors.get(blockId) || [];
       const newIds = editor.deltaDecorations(oldIds, decorations);
       annotationDecors.set(blockId, newIds);
     });
-  }, [annotations.length]); // restart interval when annotation count changes
+  }, [serverAnnotations.length]);
 
   const annotationDecorationsRef = useRef<Map<number, string[]>>(new Map());
 
@@ -1840,15 +1827,8 @@ export default function ChapterPage() {
         <span><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded text-xs font-mono shadow-sm">Alt+End</kbd> Run all</span>
         <span className="text-gray-300">|</span>
         <span><kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded text-xs font-mono shadow-sm">Ctrl+M</kbd> Annotate selection</span>
-        {annotations.length > 0 && (
-          <button onClick={() => {
-            if (!volumeId || !chapterName) return;
-            if (!confirm(`Clear all ${annotations.length} annotations for this chapter?`)) return;
-            clearAnnotations(volumeId, chapterName);
-            setAnnotations([]);
-          }} className="text-red-400 hover:text-red-600 text-xs font-medium">
-            Clear notes ({annotations.length})
-          </button>
+        {serverAnnotations.length > 0 && (
+          <span className="text-[10px] text-gray-400">{serverAnnotations.length} notes</span>
         )}
       </div>
     </div>
