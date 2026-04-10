@@ -165,7 +165,7 @@ function DraggableCard(props: {
   onRefresh?: () => void;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const [, setIsDragging] = useState(false);
   // Store fixed-position coords (only used while dragging or after first drag)
   const fixedPos = useRef<{ x: number; y: number } | null>(null);
   const [, forceUpdate] = useState(0);
