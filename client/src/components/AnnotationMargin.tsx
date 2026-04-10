@@ -137,22 +137,75 @@ export function AnnotationOverlay({
       style={{ transform: 'translateX(calc(100% + 12px))' }}
     >
       {cards.map(({ ann, top }) => (
-        <div
+        <DraggableCard
           key={ann.id}
-          className="absolute pointer-events-auto"
-          style={{ top, left: 0, width: '100%' }}
-        >
-          <AnnotationCard
-            annotation={ann}
-            color={ann.color || userColor(ann.user_id)}
-            isOwn={user?.id === ann.user_id}
-            expanded={expandedId === ann.id}
-            onToggle={() => setExpandedId(expandedId === ann.id ? null : ann.id)}
-            onDelete={onDelete}
-            onRefresh={onRefresh}
-          />
-        </div>
+          initialTop={top}
+          annotation={ann}
+          color={ann.color || userColor(ann.user_id)}
+          isOwn={user?.id === ann.user_id}
+          expanded={expandedId === ann.id}
+          onToggle={() => setExpandedId(expandedId === ann.id ? null : ann.id)}
+          onDelete={onDelete}
+          onRefresh={onRefresh}
+        />
       ))}
+    </div>
+  );
+}
+
+/** Wrapper that makes an annotation card freely draggable */
+function DraggableCard(props: {
+  initialTop: number;
+  annotation: ServerAnnotation;
+  color: string;
+  isOwn: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  onDelete?: (id: number) => void;
+  onRefresh?: () => void;
+}) {
+  const posRef = useRef({ x: 0, y: props.initialTop });
+  const [, forceUpdate] = useState(0);
+
+  return (
+    <div
+      className="absolute pointer-events-auto"
+      style={{ top: posRef.current.y, left: posRef.current.x, width: '100%', zIndex: 10 }}
+      onMouseDown={(e) => {
+        // Only drag on left button, skip if clicking buttons inside the card
+        if (e.button !== 0) return;
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag === 'BUTTON' || tag === 'SPAN') return;
+
+        e.preventDefault();
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const origX = posRef.current.x;
+        const origY = posRef.current.y;
+        const onMove = (ev: MouseEvent) => {
+          posRef.current.x = origX + ev.clientX - startX;
+          posRef.current.y = origY + ev.clientY - startY;
+          forceUpdate(n => n + 1);
+        };
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      }}
+    >
+      <div className="cursor-grab active:cursor-grabbing">
+        <AnnotationCard
+          annotation={props.annotation}
+          color={props.color}
+          isOwn={props.isOwn}
+          expanded={props.expanded}
+          onToggle={props.onToggle}
+          onDelete={props.onDelete}
+          onRefresh={props.onRefresh}
+        />
+      </div>
     </div>
   );
 }
