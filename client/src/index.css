@@ -125,15 +125,25 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.45); }
 
 /* ===================================================================
-   Annotation underlines
+   Annotation underlines (per-user colors via inline styles)
    =================================================================== */
 .annotation-underline {
-  border-bottom: 2px solid #f59e0b;
+  border-bottom: 2px solid currentColor;
   cursor: pointer;
-  background: rgba(245, 158, 11, 0.08);
+  background: color-mix(in srgb, currentColor 6%, transparent);
 }
 .annotation-underline:hover {
-  background: rgba(245, 158, 11, 0.18);
+  background: color-mix(in srgb, currentColor 15%, transparent);
+}
+
+/* Annotation margin cards */
+.annotation-card {
+  border-radius: 8px;
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+.annotation-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transform: translateX(-2px);
 }
 
 /* ===================================================================
