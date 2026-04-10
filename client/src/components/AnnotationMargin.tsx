@@ -122,7 +122,7 @@ export function AnnotationOverlay({
 
   // Build positioned cards
   const cards: { ann: ServerAnnotation; top: number }[] = [];
-  for (const [blockId, anns] of byBlock) {
+  for (const [, anns] of byBlock) {
     const baseTop = positions.get(anns[0]?.id) ?? 0;
     let offset = 0;
     for (const ann of anns) {
