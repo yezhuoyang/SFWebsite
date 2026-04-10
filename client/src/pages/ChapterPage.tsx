@@ -29,7 +29,7 @@ import type { CoqSessionActions } from '../api/coqWebSocket';
 import type { Exercise } from '../types';
 import { saveBlockEdits, loadBlockEdits, clearBlockEdits, saveGradeResults, loadGradeResults, type StoredGrade } from '../utils/storage';
 import { getPublicAnnotations, createAnnotation as createServerAnnotation, deleteAnnotation as deleteServerAnnotation, type ServerAnnotation } from '../api/client';
-import AnnotationMargin, { AnnotationCreatePopover } from '../components/AnnotationMargin';
+import { AnnotationCreatePopover, AnnotationOverlay } from '../components/AnnotationMargin';
 
 export default function ChapterPage() {
   const { volumeId, chapterName } = useParams<{ volumeId: string; chapterName: string }>();
@@ -1340,8 +1340,15 @@ export default function ChapterPage() {
         )}
 
         {/* Blocks */}
-        <div className="flex-1 overflow-y-auto min-w-0">
-          <div className="max-w-4xl mx-auto py-6 px-4 space-y-1">
+        <div className="flex-1 overflow-y-auto min-w-0" id="chapter-scroll-container">
+          <div className="relative max-w-4xl mx-auto py-6 px-4 space-y-1">
+            {/* Floating annotation margin — absolutely positioned on the right */}
+            <AnnotationOverlay
+              annotations={serverAnnotations}
+              blockRefs={blockRefsMap.current}
+              onDelete={handleDeleteAnnotation}
+              onRefresh={refreshAnnotations}
+            />
             {blocks.map(block => {
               const status = isBlockProcessed(block.id);
 
@@ -1362,12 +1369,7 @@ export default function ChapterPage() {
                     <div className="px-1 py-2"><CommentBlock content={block.content} /></div>
                   )}
 
-                  {/* Collaborative annotation margin for this block */}
-                  <AnnotationMargin
-                    annotations={serverAnnotations.filter(a => a.block_id === block.id)}
-                    onDelete={handleDeleteAnnotation}
-                    onRefresh={refreshAnnotations}
-                  />
+                  {/* Annotations rendered in floating overlay (AnnotationOverlay above) */}
 
                   {/* Code block */}
                   {block.kind === 'code' && (

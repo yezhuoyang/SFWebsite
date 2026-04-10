@@ -35,7 +35,6 @@ export default function AnnotationMargin({ annotations, onDelete, onRefresh }: A
 
   if (annotations.length === 0) return null;
 
-  // Sort by start_line for vertical positioning
   const sorted = [...annotations].sort((a, b) => a.start_line - b.start_line || a.start_col - b.start_col);
 
   return (
@@ -51,6 +50,108 @@ export default function AnnotationMargin({ annotations, onDelete, onRefresh }: A
           onDelete={onDelete}
           onRefresh={onRefresh}
         />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Floating annotation overlay — positions cards absolutely on the right margin,
+ * aligned to the Y position of the block they belong to.
+ */
+export function AnnotationOverlay({
+  annotations,
+  blockRefs,
+  onDelete,
+  onRefresh,
+}: {
+  annotations: ServerAnnotation[];
+  blockRefs: Map<number, HTMLDivElement>;
+  onDelete?: (id: number) => void;
+  onRefresh?: () => void;
+}) {
+  const { user } = useAuth();
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [positions, setPositions] = useState<Map<number, number>>(new Map());
+
+  // Compute Y positions from block DOM refs
+  useEffect(() => {
+    const compute = () => {
+      const container = document.getElementById('chapter-scroll-container');
+      if (!container) return;
+      const containerRect = container.getBoundingClientRect();
+      const scrollTop = container.scrollTop;
+
+      const newPos = new Map<number, number>();
+      for (const ann of annotations) {
+        const blockEl = blockRefs.get(ann.block_id);
+        if (blockEl) {
+          const blockRect = blockEl.getBoundingClientRect();
+          // Position relative to the container's content (accounting for scroll)
+          const top = blockRect.top - containerRect.top + scrollTop;
+          newPos.set(ann.id, top);
+        }
+      }
+      setPositions(newPos);
+    };
+
+    compute();
+    // Recompute on scroll and resize
+    const container = document.getElementById('chapter-scroll-container');
+    const onScroll = () => compute();
+    container?.addEventListener('scroll', onScroll);
+    window.addEventListener('resize', compute);
+    // Also recompute after a delay (for lazy-loaded editors)
+    const timer = setTimeout(compute, 2000);
+    return () => {
+      container?.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', compute);
+      clearTimeout(timer);
+    };
+  }, [annotations, blockRefs]);
+
+  if (annotations.length === 0) return null;
+
+  // Group annotations by block to stack them if multiple per block
+  const byBlock = new Map<number, ServerAnnotation[]>();
+  for (const ann of annotations) {
+    const list = byBlock.get(ann.block_id) || [];
+    list.push(ann);
+    byBlock.set(ann.block_id, list);
+  }
+
+  // Build positioned cards
+  const cards: { ann: ServerAnnotation; top: number }[] = [];
+  for (const [blockId, anns] of byBlock) {
+    const baseTop = positions.get(anns[0]?.id) ?? 0;
+    let offset = 0;
+    for (const ann of anns) {
+      cards.push({ ann, top: baseTop + offset });
+      offset += 90; // stack cards vertically within same block
+    }
+  }
+
+  return (
+    <div
+      className="absolute top-0 right-0 w-64 pointer-events-none"
+      style={{ transform: 'translateX(calc(100% + 12px))' }}
+    >
+      {cards.map(({ ann, top }) => (
+        <div
+          key={ann.id}
+          className="absolute pointer-events-auto"
+          style={{ top, left: 0, width: '100%' }}
+        >
+          <AnnotationCard
+            annotation={ann}
+            color={userColor(ann.user_id)}
+            isOwn={user?.id === ann.user_id}
+            expanded={expandedId === ann.id}
+            onToggle={() => setExpandedId(expandedId === ann.id ? null : ann.id)}
+            onDelete={onDelete}
+            onRefresh={onRefresh}
+          />
+        </div>
       ))}
     </div>
   );
