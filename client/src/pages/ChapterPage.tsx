@@ -1415,9 +1415,6 @@ export default function ChapterPage() {
               const status = isBlockProcessed(block.id);
 
               const blockAnnotations = serverAnnotations.filter(a => a.block_id === block.id);
-              const hasAnnotations = blockAnnotations.length > 0;
-              const annotationColors = [...new Set(blockAnnotations.map(a => a.color || '#f59e0b'))];
-
               return (
                 <div key={block.id} data-block-id={block.id}
                   ref={el => { if (el) blockRefsMap.current.set(block.id, el); }}
