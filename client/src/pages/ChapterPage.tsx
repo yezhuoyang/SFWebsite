@@ -1154,8 +1154,9 @@ export default function ChapterPage() {
           <div className="w-px h-5 bg-gray-200" />
 
           <button onClick={handleSave} disabled={saving}
-            className="px-3 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white disabled:opacity-30 rounded font-medium shadow-sm">
-            {saving ? 'Saving...' : 'Save & Grade'}
+            className="px-3 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white disabled:opacity-30 rounded font-medium shadow-sm"
+            title="Save the file and grade ALL exercises in this chapter">
+            {saving ? 'Grading...' : 'Submit & Grade All'}
           </button>
           <button onClick={handleReset}
             className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded font-medium border border-gray-200"
@@ -1541,6 +1542,15 @@ export default function ChapterPage() {
                             {status === 'full' && (
                               <span className="text-xs text-green-600 font-medium">&#10003;</span>
                             )}
+                            {/* Per-exercise submit button */}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleSave(); }}
+                              disabled={saving}
+                              className="text-[10px] bg-green-600 hover:bg-green-700 text-white px-2 py-0.5 rounded font-medium disabled:opacity-30"
+                              title="Submit and grade this exercise"
+                            >
+                              {saving ? 'Grading…' : 'Submit & Grade'}
+                            </button>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1549,12 +1559,17 @@ export default function ChapterPage() {
                                 } else if (volumeId && chapterName && block.exercise_name) {
                                   getExerciseSolution(volumeId, chapterName, block.exercise_name)
                                     .then(data => setVisibleSolution({ name: block.exercise_name!, data }))
-                                    .catch(() => setVisibleSolution({ name: block.exercise_name!, data: { exercise_name: block.exercise_name!, solution: 'No solution available yet.', explanation: '' } }));
+                                    .catch(err => {
+                                      const msg = String(err).includes('403')
+                                        ? 'Solve this exercise first to see the sample solution.'
+                                        : 'No solution available yet.';
+                                      setVisibleSolution({ name: block.exercise_name!, data: { exercise_name: block.exercise_name!, solution: msg, explanation: '' } });
+                                    });
                                 }
                               }}
                               className="text-[10px] text-purple-500 hover:text-purple-700 font-medium"
                             >
-                              {visibleSolution?.name === block.exercise_name ? 'Hide solution / APPLY' : 'See solution'}
+                              {visibleSolution?.name === block.exercise_name ? 'Hide solution' : 'See solution'}
                             </button>
                           </div>
                         </div>
