@@ -9,6 +9,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { vote } from '../api/client';
 import type { ServerAnnotation } from '../api/client';
@@ -210,18 +211,41 @@ function DraggableCard(props: {
     document.addEventListener('mouseup', onUp);
   };
 
-  // Before first drag: render as absolute inside overlay container
-  // After first drag: render as fixed (viewport-level, no container constraints)
+  // Before first drag: render as absolute inside overlay container (in-place)
+  // After first drag: render via PORTAL into document.body as fixed
+  // (escapes any transformed ancestor's containing block)
   const isFixed = fixedPos.current !== null;
 
-  return (
+  if (!isFixed) {
+    // In-place absolute card
+    return (
+      <div
+        ref={cardRef}
+        className="absolute pointer-events-auto"
+        style={{ top: props.initialTop, left: 0, width: '100%', zIndex: 50 }}
+        onMouseDown={handleMouseDown}
+      >
+        <div className="cursor-grab active:cursor-grabbing">
+          <AnnotationCard
+            annotation={props.annotation}
+            color={props.color}
+            isOwn={props.isOwn}
+            expanded={props.expanded}
+            onToggle={props.onToggle}
+            onDelete={props.onDelete}
+            onRefresh={props.onRefresh}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Dragged card — rendered via portal into body, escaping all transforms
+  return createPortal(
     <div
       ref={cardRef}
-      className={`pointer-events-auto ${isFixed ? 'fixed' : 'absolute'}`}
-      style={isFixed
-        ? { left: fixedPos.current!.x, top: fixedPos.current!.y, width: 256, zIndex: 10000 }
-        : { top: props.initialTop, left: 0, width: '100%', zIndex: 10000 }
-      }
+      className="fixed pointer-events-auto"
+      style={{ left: fixedPos.current!.x, top: fixedPos.current!.y, width: 256, zIndex: 10000 }}
       onMouseDown={handleMouseDown}
     >
       <div className="cursor-grab active:cursor-grabbing">
@@ -235,7 +259,8 @@ function DraggableCard(props: {
           onRefresh={props.onRefresh}
         />
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
