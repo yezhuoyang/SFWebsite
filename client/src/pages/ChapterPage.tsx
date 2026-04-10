@@ -1414,7 +1414,6 @@ export default function ChapterPage() {
             {blocks.map(block => {
               const status = isBlockProcessed(block.id);
 
-              const blockAnnotations = serverAnnotations.filter(a => a.block_id === block.id);
               return (
                 <div key={block.id} data-block-id={block.id}
                   ref={el => { if (el) blockRefsMap.current.set(block.id, el); }}
