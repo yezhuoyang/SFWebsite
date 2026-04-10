@@ -1422,20 +1422,7 @@ export default function ChapterPage() {
                 <div key={block.id} data-block-id={block.id}
                   ref={el => { if (el) blockRefsMap.current.set(block.id, el); }}
                   className="relative"
-                  style={hasAnnotations ? {
-                    borderRight: `3px solid ${annotationColors[0]}`,
-                    borderRadius: '0 4px 4px 0',
-                  } : undefined}
                 >
-                  {/* Annotation indicator dots on the right edge */}
-                  {hasAnnotations && (
-                    <div className="absolute -right-1 top-1 flex flex-col gap-1">
-                      {annotationColors.map((c, i) => (
-                        <div key={i} className="w-2 h-2 rounded-full" style={{ backgroundColor: c }}
-                          title={`${blockAnnotations.filter(a => (a.color || '#f59e0b') === c).length} note(s)`} />
-                      ))}
-                    </div>
-                  )}
                   {/* Section header */}
                   {block.kind === 'section_header' && (
                     <div className="sf-section-header">{block.title}</div>
