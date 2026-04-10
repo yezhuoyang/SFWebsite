@@ -27,7 +27,9 @@ import {
 import { useCoqLocal } from '../coq/useCoqLocal';
 import type { CoqSessionActions } from '../api/coqWebSocket';
 import type { Exercise } from '../types';
-import { saveBlockEdits, loadBlockEdits, clearBlockEdits, saveGradeResults, loadGradeResults, type StoredGrade, loadAnnotations, saveAnnotations, clearAnnotations, type Annotation } from '../utils/storage';
+import { saveBlockEdits, loadBlockEdits, clearBlockEdits, saveGradeResults, loadGradeResults, type StoredGrade, type Annotation } from '../utils/storage';
+import { getPublicAnnotations, createAnnotation as createServerAnnotation, deleteAnnotation as deleteServerAnnotation, type ServerAnnotation } from '../api/client';
+import AnnotationMargin, { AnnotationCreatePopover } from '../components/AnnotationMargin';
 
 export default function ChapterPage() {
   const { volumeId, chapterName } = useParams<{ volumeId: string; chapterName: string }>();
@@ -49,7 +51,8 @@ export default function ChapterPage() {
   const tutorChatRef = useRef<TutorChatHandle>(null);
   const [celebration, setCelebration] = useState<{ names: string[] } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [annotations, setAnnotations] = useState<Annotation[]>([]); // legacy local
+  const [serverAnnotations, setServerAnnotations] = useState<ServerAnnotation[]>([]);
   const [annotationPopup, setAnnotationPopup] = useState<{
     mode: 'create' | 'view';
     annotation?: Annotation;
@@ -114,6 +117,29 @@ export default function ChapterPage() {
 
   // Auth + live presence
   const { user: authUser } = useAuth();
+
+  // Server annotation helpers
+  const refreshAnnotations = useCallback(() => {
+    if (volumeId && chapterName) {
+      getPublicAnnotations(volumeId, chapterName)
+        .then(setServerAnnotations)
+        .catch(() => {});
+    }
+  }, [volumeId, chapterName]);
+
+  const handleDeleteAnnotation = useCallback(async (id: number) => {
+    await deleteServerAnnotation(id);
+    refreshAnnotations();
+  }, [refreshAnnotations]);
+
+  // State for annotation create popover
+  const [annotationCreate, setAnnotationCreate] = useState<{
+    blockId: number;
+    selectedText: string;
+    startLine: number; startCol: number;
+    endLine: number; endCol: number;
+    x: number; y: number;
+  } | null>(null);
   const [presenceUsers, setPresenceUsers] = useState<PresenceUser[]>([]);
 
   useEffect(() => {
@@ -148,8 +174,10 @@ export default function ChapterPage() {
       blocksWithEdits.forEach(b => blockContentsRef.current.set(b.id, b.content));
       originalDocRef.current = blocksWithEdits.map(b => b.content).join('\n');
     });
-    // Load annotations from localStorage
-    setAnnotations(loadAnnotations(volumeId, chapterName));
+    // Load annotations from server
+    getPublicAnnotations(volumeId, chapterName)
+      .then(setServerAnnotations)
+      .catch(() => {});
     // Load exercises, then overlay with locally-stored grades
     getExercises(volumeId, chapterName).then(serverExercises => {
       const localGrades = loadGradeResults(volumeId, chapterName);
@@ -1095,34 +1123,31 @@ export default function ChapterPage() {
                 if (!selectedText.trim()) continue;
                 const domNode = editor.getDomNode();
                 const rect = domNode?.getBoundingClientRect();
-                setAnnotationPopup({
-                  mode: 'create', blockId, selectedText,
+                setAnnotationCreate({
+                  blockId, selectedText: selectedText.trim(),
                   startLine: sel.startLineNumber, startCol: sel.startColumn,
                   endLine: sel.endLineNumber, endCol: sel.endColumn,
                   x: rect ? rect.left + rect.width / 2 : 400,
                   y: rect ? rect.top + 60 : 200,
                 });
-                setAnnotationText('');
                 return;
               }
               // 2. Try browser text selection (for comments, headers, prose)
               const browserSel = window.getSelection();
               if (browserSel && browserSel.toString().trim()) {
                 const selectedText = browserSel.toString().trim();
-                // Find which block container holds this selection
                 const anchor = browserSel.anchorNode;
                 const blockEl = (anchor instanceof HTMLElement ? anchor : anchor?.parentElement)
                   ?.closest('[data-block-id]') as HTMLElement | null;
                 const blockId = blockEl ? Number(blockEl.getAttribute('data-block-id')) : -1;
                 const range = browserSel.getRangeAt(0);
                 const rect = range.getBoundingClientRect();
-                setAnnotationPopup({
-                  mode: 'create', blockId, selectedText,
+                setAnnotationCreate({
+                  blockId, selectedText,
                   startLine: 0, startCol: 0, endLine: 0, endCol: 0,
                   x: rect ? rect.left + rect.width / 2 : 400,
                   y: rect ? rect.bottom + 8 : 200,
                 });
-                setAnnotationText('');
                 return;
               }
               alert('Select some text first, then click Annotate.');
@@ -1350,34 +1375,12 @@ export default function ChapterPage() {
                     <div className="px-1 py-2"><CommentBlock content={block.content} /></div>
                   )}
 
-                  {/* Annotation notes for this block */}
-                  {annotations.filter(a => a.blockId === block.id).map(ann => (
-                    <div key={ann.id}
-                      className="flex items-start gap-2 mx-2 my-1 px-3 py-1.5 rounded-md cursor-pointer text-xs"
-                      style={{ backgroundColor: (ann.color || '#f59e0b') + '15', borderLeft: `3px solid ${ann.color || '#f59e0b'}` }}
-                      title="Click to edit annotation"
-                      onClick={(e) => {
-                        setAnnotationPopup({
-                          mode: 'view', annotation: ann, blockId: block.id,
-                          startLine: ann.startLine, startCol: ann.startCol,
-                          endLine: ann.endLine, endCol: ann.endCol,
-                          x: e.clientX, y: e.clientY,
-                        });
-                        setAnnotationText(ann.text);
-                        setAnnotationColor(ann.color || '#f59e0b');
-                      }}
-                    >
-                      <span style={{ color: ann.color || '#f59e0b' }} className="text-sm mt-0.5">&#9998;</span>
-                      <div>
-                        {ann.selectedText && (
-                          <span className="font-mono text-gray-400 mr-1" style={{ borderBottom: `2px dashed ${ann.color || '#f59e0b'}` }}>
-                            "{ann.selectedText.length > 40 ? ann.selectedText.slice(0, 40) + '...' : ann.selectedText}"
-                          </span>
-                        )}
-                        <span className="text-gray-700">{ann.text}</span>
-                      </div>
-                    </div>
-                  ))}
+                  {/* Collaborative annotation margin for this block */}
+                  <AnnotationMargin
+                    annotations={serverAnnotations.filter(a => a.block_id === block.id)}
+                    onDelete={handleDeleteAnnotation}
+                    onRefresh={refreshAnnotations}
+                  />
 
                   {/* Code block */}
                   {block.kind === 'code' && (
@@ -1798,103 +1801,36 @@ export default function ChapterPage() {
           )}
         </>
       )}
-      {/* Annotation popup — draggable + resizable */}
-      {annotationPopup && (() => {
-        const initLeft = Math.min(annotationPopup.x - 160, window.innerWidth - 360);
-        const initTop = Math.min(annotationPopup.y + 10, window.innerHeight - 280);
-        return (<>
-          <div ref={annotationPopupRef} className="fixed z-50"
-            style={{ left: initLeft, top: initTop, minWidth: 280 }}>
-            <div className="bg-white border-2 rounded-lg shadow-2xl flex flex-col" style={{ borderColor: annotationColor, width: 320, minHeight: 180, resize: 'both', overflow: 'auto' }}>
-              {/* Draggable header */}
-              <div className="flex items-center justify-between px-3 py-2 rounded-t-lg cursor-move select-none shrink-0"
-                style={{ backgroundColor: annotationColor + '20' }}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  const box = annotationPopupRef.current;
-                  if (!box) return;
-                  const rect = box.getBoundingClientRect();
-                  const offX = e.clientX - rect.left, offY = e.clientY - rect.top;
-                  const onMove = (ev: MouseEvent) => { box.style.left = (ev.clientX - offX) + 'px'; box.style.top = (ev.clientY - offY) + 'px'; };
-                  const onUp = () => { document.removeEventListener('pointermove', onMove); document.removeEventListener('pointerup', onUp); };
-                  document.addEventListener('pointermove', onMove);
-                  document.addEventListener('pointerup', onUp);
-                }}>
-                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: annotationColor }}>
-                  {annotationPopup.mode === 'create' ? 'New Annotation' : 'Annotation'}
-                </span>
-                <button onClick={() => setAnnotationPopup(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
-              </div>
-              <div className="px-3 pb-3 pt-2 flex flex-col flex-1 min-h-0">
-                {/* Color picker */}
-                <div className="flex items-center gap-1.5 mb-2 shrink-0">
-                  <span className="text-[10px] text-gray-400">Color:</span>
-                  {['#f59e0b', '#ef4444', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899'].map(c => (
-                    <button key={c} onClick={() => setAnnotationColor(c)}
-                      className={`w-5 h-5 rounded-full border-2 transition-transform ${annotationColor === c ? 'border-gray-800 scale-110' : 'border-transparent'}`}
-                      style={{ backgroundColor: c }} />
-                  ))}
-                </div>
-                <textarea
-                  className="w-full flex-1 border border-gray-200 rounded p-2 text-sm focus:outline-none focus:ring-1"
-                  style={{ minHeight: 60 }}
-                  placeholder="Type your note here..."
-                  value={annotationText}
-                  onChange={e => setAnnotationText(e.target.value)}
-                  autoFocus
-                />
-                <div className="flex gap-2 mt-2 shrink-0">
-                  <button
-                    onClick={() => {
-                      if (!annotationText.trim() || !volumeId || !chapterName) return;
-                      const newAnn: Annotation = {
-                        id: annotationPopup.annotation?.id || `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                        blockId: annotationPopup.blockId,
-                        selectedText: annotationPopup.selectedText || annotationPopup.annotation?.selectedText || '',
-                        color: annotationColor,
-                        startLine: annotationPopup.startLine,
-                        startCol: annotationPopup.startCol,
-                        endLine: annotationPopup.endLine,
-                        endCol: annotationPopup.endCol,
-                        text: annotationText.trim(),
-                        createdAt: annotationPopup.annotation?.createdAt || Date.now(),
-                      };
-                      const updated = annotationPopup.mode === 'create'
-                        ? [...annotations, newAnn]
-                        : annotations.map(a => a.id === newAnn.id ? newAnn : a);
-                      setAnnotations(updated);
-                      saveAnnotations(volumeId, chapterName, updated);
-                      setAnnotationPopup(null);
-                    }}
-                    className="flex-1 text-xs text-white py-1.5 rounded font-medium"
-                    style={{ backgroundColor: annotationColor }}
-                  >
-                    {annotationPopup.mode === 'create' ? 'Save' : 'Update'}
-                  </button>
-                  {annotationPopup.mode === 'view' && annotationPopup.annotation && (
-                    <button
-                      onClick={() => {
-                        if (!volumeId || !chapterName) return;
-                        const updated = annotations.filter(a => a.id !== annotationPopup.annotation!.id);
-                        setAnnotations(updated);
-                        saveAnnotations(volumeId, chapterName, updated);
-                        setAnnotationPopup(null);
-                      }}
-                      className="text-xs bg-red-100 text-red-600 px-3 py-1.5 rounded hover:bg-red-200 font-medium"
-                    >
-                      Delete
-                    </button>
-                  )}
-                  <button onClick={() => setAnnotationPopup(null)}
-                    className="text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded hover:bg-gray-200 font-medium">
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>);
-      })()}
+      {/* Annotation create popover — server-synced */}
+      {annotationCreate && volumeId && chapterName && (
+        <AnnotationCreatePopover
+          selectedText={annotationCreate.selectedText}
+          position={{ x: annotationCreate.x, y: annotationCreate.y }}
+          onSave={async (note, color, isPublic) => {
+            try {
+              await createServerAnnotation({
+                volume_id: volumeId,
+                chapter_name: chapterName,
+                block_id: annotationCreate.blockId,
+                selected_text: annotationCreate.selectedText,
+                note,
+                color,
+                start_line: annotationCreate.startLine,
+                start_col: annotationCreate.startCol,
+                end_line: annotationCreate.endLine,
+                end_col: annotationCreate.endCol,
+                is_public: isPublic,
+              });
+              refreshAnnotations();
+            } catch (err) {
+              console.error('Failed to save annotation:', err);
+              alert('Failed to save annotation. Make sure you are logged in.');
+            }
+            setAnnotationCreate(null);
+          }}
+          onCancel={() => setAnnotationCreate(null)}
+        />
+      )}
 
       {/* Keyboard shortcut reminder bar */}
       <div className="h-8 bg-gray-100 border-t border-gray-200 flex items-center justify-center gap-6 shrink-0 text-sm text-gray-500">
