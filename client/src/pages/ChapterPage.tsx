@@ -1401,28 +1401,9 @@ export default function ChapterPage() {
                     <div className="sf-subsection-header">{block.title}</div>
                   )}
 
-                  {/* Comment — with annotation highlights */}
+                  {/* Comment */}
                   {block.kind === 'comment' && (
-                    <div className="px-1 py-2">
-                      <CommentBlock content={block.content} />
-                      {/* Overlay annotation underlines for prose text */}
-                      {blockAnnotations.filter(a => a.selected_text).length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {blockAnnotations.filter(a => a.selected_text).map(a => (
-                            <span key={a.id} className="text-[10px] font-mono px-1.5 py-0.5 rounded cursor-default"
-                              style={{
-                                borderBottom: `2px solid ${a.color || '#f59e0b'}`,
-                                backgroundColor: (a.color || '#f59e0b') + '12',
-                                color: '#666',
-                              }}
-                              title={`${a.display_name}: ${a.note}`}
-                            >
-                              "{a.selected_text.length > 30 ? a.selected_text.slice(0, 30) + '...' : a.selected_text}"
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <div className="px-1 py-2"><CommentBlock content={block.content} /></div>
                   )}
 
                   {/* Annotations rendered in floating overlay (AnnotationOverlay above) */}
