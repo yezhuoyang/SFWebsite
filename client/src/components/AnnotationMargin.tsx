@@ -314,16 +314,19 @@ export function AnnotationCreatePopover({
   const initLeft = Math.min(position.x - 150, window.innerWidth - 340);
   const initTop = Math.min(position.y + 10, window.innerHeight - 350);
 
-  const handleDragStart = (e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleDragStart = (e: React.PointerEvent) => {
     const box = boxRef.current;
     if (!box) return;
-    const rect = box.getBoundingClientRect();
-    const offX = e.clientX - rect.left;
-    const offY = e.clientY - rect.top;
-    const onMove = (ev: MouseEvent) => {
-      box.style.left = (ev.clientX - offX) + 'px';
-      box.style.top = (ev.clientY - offY) + 'px';
+    e.preventDefault();
+    e.stopPropagation();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startLeft = box.offsetLeft;
+    const startTop = box.offsetTop;
+    const onMove = (ev: PointerEvent) => {
+      box.style.left = (startLeft + ev.clientX - startX) + 'px';
+      box.style.top = (startTop + ev.clientY - startY) + 'px';
     };
     const onUp = () => {
       document.removeEventListener('pointermove', onMove);
@@ -343,8 +346,8 @@ export function AnnotationCreatePopover({
       {/* Draggable header */}
       <div
         className="px-4 pt-3 pb-2 flex items-center justify-between cursor-move select-none rounded-t-xl"
-        style={{ backgroundColor: color + '18' }}
-        onMouseDown={handleDragStart}
+        style={{ backgroundColor: color + '18', touchAction: 'none' }}
+        onPointerDown={handleDragStart}
       >
         <span className="text-xs font-bold uppercase tracking-wider" style={{ color }}>
           Add Note

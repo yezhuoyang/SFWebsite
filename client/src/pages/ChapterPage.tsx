@@ -1369,8 +1369,28 @@ export default function ChapterPage() {
             {blocks.map(block => {
               const status = isBlockProcessed(block.id);
 
+              const blockAnnotations = serverAnnotations.filter(a => a.block_id === block.id);
+              const hasAnnotations = blockAnnotations.length > 0;
+              const annotationColors = [...new Set(blockAnnotations.map(a => a.color || '#f59e0b'))];
+
               return (
-                <div key={block.id} data-block-id={block.id} ref={el => { if (el) blockRefsMap.current.set(block.id, el); }}>
+                <div key={block.id} data-block-id={block.id}
+                  ref={el => { if (el) blockRefsMap.current.set(block.id, el); }}
+                  className="relative"
+                  style={hasAnnotations ? {
+                    borderRight: `3px solid ${annotationColors[0]}`,
+                    borderRadius: '0 4px 4px 0',
+                  } : undefined}
+                >
+                  {/* Annotation indicator dots on the right edge */}
+                  {hasAnnotations && (
+                    <div className="absolute -right-1 top-1 flex flex-col gap-1">
+                      {annotationColors.map((c, i) => (
+                        <div key={i} className="w-2 h-2 rounded-full" style={{ backgroundColor: c }}
+                          title={`${blockAnnotations.filter(a => (a.color || '#f59e0b') === c).length} note(s)`} />
+                      ))}
+                    </div>
+                  )}
                   {/* Section header */}
                   {block.kind === 'section_header' && (
                     <div className="sf-section-header">{block.title}</div>
@@ -1381,9 +1401,28 @@ export default function ChapterPage() {
                     <div className="sf-subsection-header">{block.title}</div>
                   )}
 
-                  {/* Comment */}
+                  {/* Comment — with annotation highlights */}
                   {block.kind === 'comment' && (
-                    <div className="px-1 py-2"><CommentBlock content={block.content} /></div>
+                    <div className="px-1 py-2">
+                      <CommentBlock content={block.content} />
+                      {/* Overlay annotation underlines for prose text */}
+                      {blockAnnotations.filter(a => a.selected_text).length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {blockAnnotations.filter(a => a.selected_text).map(a => (
+                            <span key={a.id} className="text-[10px] font-mono px-1.5 py-0.5 rounded cursor-default"
+                              style={{
+                                borderBottom: `2px solid ${a.color || '#f59e0b'}`,
+                                backgroundColor: (a.color || '#f59e0b') + '12',
+                                color: '#666',
+                              }}
+                              title={`${a.display_name}: ${a.note}`}
+                            >
+                              "{a.selected_text.length > 30 ? a.selected_text.slice(0, 30) + '...' : a.selected_text}"
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   {/* Annotations rendered in floating overlay (AnnotationOverlay above) */}
