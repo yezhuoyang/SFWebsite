@@ -18,6 +18,7 @@ import type {
   CoqDiagnostic,
   HighlightRange,
   RocqMessage,
+  ActivityEntry,
 } from '../api/coqWebSocket';
 
 /** Volume ID to jsCoq package name mapping.
@@ -54,6 +55,10 @@ export interface CoqEngineCallbacks {
   onReady(): void;
   onError(message: string): void;
   onLoadProgress?(ratio: number, pkg: string): void;
+  /** Append a new entry to the persistent activity log. */
+  onActivityAppend?(entry: ActivityEntry): void;
+  /** Trim the activity log: remove any entries whose sid is in the given set. */
+  onActivityTrim?(cancelledSids: Set<number>): void;
 }
 
 export class CoqEngine implements CoqObserver {
@@ -73,6 +78,12 @@ export class CoqEngine implements CoqObserver {
   private currentGoals: JsCoqGoals | null = null;
   private messages: RocqMessage[] = [];
   private diagnostics: CoqDiagnostic[] = [];
+
+  // Monotonic counter for ActivityEntry.seq
+  private activitySeq = 0;
+  // Track which sids we've already produced a synthetic "foo is defined" for,
+  // to avoid duplicating on replay / multiple feedProcessed for same sid.
+  private syntheticFired = new Set<number>();
 
   // Base path for worker and package assets
   private basePath = '';
@@ -169,6 +180,12 @@ export class CoqEngine implements CoqObserver {
     if (divergeIdx < this.sentences.length) {
       const cancelSid = this.sentences[divergeIdx].sid;
       this.worker.cancel(cancelSid);
+      const trimSids = new Set<number>();
+      for (let i = divergeIdx; i < this.sentences.length; i++) {
+        trimSids.add(this.sentences[i].sid);
+        this.syntheticFired.delete(this.sentences[i].sid);
+      }
+      this.callbacks.onActivityTrim?.(trimSids);
       this.sentences = this.sentences.slice(0, divergeIdx);
       this.executionIndex = Math.min(this.executionIndex, divergeIdx - 1);
       this.executing = false;
@@ -218,9 +235,13 @@ export class CoqEngine implements CoqObserver {
       const sentence = this.sentences[this.executionIndex];
       this.worker.cancel(sentence.sid);
       // Mark all from this index forward as pending
+      const trimSids = new Set<number>();
       for (let i = this.executionIndex; i < this.sentences.length; i++) {
         this.sentences[i].phase = 'pending';
+        trimSids.add(this.sentences[i].sid);
+        this.syntheticFired.delete(this.sentences[i].sid);
       }
+      this.callbacks.onActivityTrim?.(trimSids);
       this.executionIndex--;
       this.messages = [];
       this.diagnostics = [];
@@ -324,9 +345,13 @@ export class CoqEngine implements CoqObserver {
       const cancelIdx = targetIdx + 1;
       if (cancelIdx < this.sentences.length) {
         this.worker.cancel(this.sentences[cancelIdx].sid);
+        const trimSids = new Set<number>();
         for (let i = cancelIdx; i < this.sentences.length; i++) {
           this.sentences[i].phase = 'pending';
+          trimSids.add(this.sentences[i].sid);
+          this.syntheticFired.delete(this.sentences[i].sid);
         }
+        this.callbacks.onActivityTrim?.(trimSids);
       }
       this.executionIndex = targetIdx;
       this.diagnostics = [];
@@ -376,6 +401,10 @@ export class CoqEngine implements CoqObserver {
     this.executionIndex = idx;
     this.executing = false;
 
+    // If Coq didn't emit any Notice/Info message for this vernacular, synthesize
+    // one so the activity log reflects what actually got added to the context.
+    this.maybeSynthesizeActivity(idx);
+
     // Request goals for this sentence
     this.worker.goals(sid);
     this.emitHighlights();
@@ -408,9 +437,24 @@ export class CoqEngine implements CoqObserver {
     this.messages.push([severity, ppToPpString(msg)]);
     this.emitProofView();
 
+    // Persistent activity log entry (Notice/Info/Warning/Error messages)
+    const sentence = this.sentences.find(s => s.sid === sid);
+    const text = ppToText(msg).trim();
+    if (text) {
+      this.appendActivity({
+        seq: ++this.activitySeq,
+        sid,
+        severity,
+        text,
+        sentencePreview: previewSentence(sentence?.text || ''),
+        line: sentence?.startPos.line ?? -1,
+        kind: 'message',
+        timestamp: Date.now(),
+      });
+    }
+
     // Also create diagnostic for errors
     if (severity === 'Error') {
-      const sentence = this.sentences.find(s => s.sid === sid);
       if (sentence) {
         this.diagnostics.push({
           range: {
@@ -423,6 +467,35 @@ export class CoqEngine implements CoqObserver {
         this.emitDiagnostics();
       }
     }
+  }
+
+  private appendActivity(entry: ActivityEntry): void {
+    this.callbacks.onActivityAppend?.(entry);
+  }
+
+  /**
+   * Emit a synthetic "foo is defined" / "proof complete" / etc. entry if Coq
+   * itself did not produce a message for this sentence. Keeps the activity log
+   * useful even when jsCoq is silent about successful commands.
+   */
+  private maybeSynthesizeActivity(idx: number): void {
+    const sentence = this.sentences[idx];
+    if (!sentence || this.syntheticFired.has(sentence.sid)) return;
+
+    const synthetic = describeVernacular(sentence.text);
+    if (!synthetic) return;
+    this.syntheticFired.add(sentence.sid);
+
+    this.appendActivity({
+      seq: ++this.activitySeq,
+      sid: sentence.sid,
+      severity: 'Information',
+      text: synthetic,
+      sentencePreview: previewSentence(sentence.text),
+      line: sentence.startPos.line,
+      kind: 'synthetic',
+      timestamp: Date.now(),
+    });
   }
 
   coqGoalInfo(_sid: number, goals: JsCoqGoals | null): void {
@@ -598,6 +671,61 @@ const PKG_DIRS: Record<string, string[][]> = {
   'sf-VFA':          [['VFA']],
   'sf-SLF':          [['SLF']],
 };
+
+/**
+ * Shorten a sentence for display in the activity log — strip leading comments,
+ * collapse whitespace, truncate with an ellipsis.
+ */
+function previewSentence(text: string): string {
+  if (!text) return '';
+  // Strip leading block comments (* ... *)
+  let s = text;
+  while (s.startsWith('(*')) {
+    let depth = 1;
+    let j = 2;
+    while (j < s.length && depth > 0) {
+      if (s[j] === '(' && s[j + 1] === '*') { depth++; j += 2; }
+      else if (s[j] === '*' && s[j + 1] === ')') { depth--; j += 2; }
+      else j++;
+    }
+    s = s.slice(j).trimStart();
+  }
+  s = s.replace(/\s+/g, ' ').trim();
+  return s.length > 80 ? s.slice(0, 77) + '\u2026' : s;
+}
+
+/**
+ * Heuristic: look at the sentence text and produce a user-facing description
+ * ("foo is defined", "Qed: proof complete", ...) for when Coq is silent about
+ * successful vernaculars. Returns null if the sentence is something like a
+ * plain tactic where emitting a synthetic message would be noisy.
+ */
+const VERNAC_RE_SIMPLE =
+  /^\s*(Definition|Fixpoint|CoFixpoint|Function|Let|Example|Theorem|Lemma|Fact|Remark|Corollary|Proposition|Inductive|CoInductive|Variant|Record|Structure|Class|Instance|Axiom|Hypothesis|Variable|Parameter|Notation|Module)\b\s+"?([A-Za-z_][\w']*)?/;
+
+function describeVernacular(text: string): string | null {
+  if (!text) return null;
+  // Strip a leading block comment
+  const cleaned = previewSentence(text);
+  const trimmed = cleaned.trim();
+  if (!trimmed) return null;
+
+  // Qed / Defined / Admitted — proof closers
+  if (/^(Qed|Defined|Admitted|Abort|Save)\s*\.?$/.test(trimmed)) {
+    const word = trimmed.replace(/\.$/, '');
+    if (word === 'Admitted') return 'proof admitted';
+    if (word === 'Abort') return 'proof aborted';
+    return 'proof complete';
+  }
+
+  const m = trimmed.match(VERNAC_RE_SIMPLE);
+  if (!m) return null;
+  const kind = m[1];
+  const name = m[2];
+  if (!name) return `${kind.toLowerCase()} registered`;
+  if (kind === 'Notation') return `notation ${name} registered`;
+  return `${name} is defined`;
+}
 
 function buildLibPathForPackages(packageNames: string[]): [string[], string[]][] {
   const seen = new Set<string>();

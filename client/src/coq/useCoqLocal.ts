@@ -12,6 +12,7 @@ import type {
   ProofViewNotification,
   UpdateHighlights,
   CoqDiagnostic,
+  ActivityEntry,
 } from '../api/coqWebSocket';
 
 /**
@@ -49,6 +50,7 @@ export function useCoqLocal(
   const [proofView, setProofView] = useState<ProofViewNotification | null>(null);
   const [highlights, setHighlights] = useState<UpdateHighlights | null>(null);
   const [diagnostics, setDiagnostics] = useState<CoqDiagnostic[]>([]);
+  const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
   const [moveCursorTarget] = useState<{
     line: number; character: number; seq: number;
   } | null>(null);
@@ -69,6 +71,18 @@ export function useCoqLocal(
       onError: (msg) => {
         console.error('[useCoqLocal] Engine error:', msg);
       },
+      onActivityAppend: (entry) => {
+        setActivityLog(prev => {
+          // Deduplicate by seq in case of double-fire
+          if (prev.length && prev[prev.length - 1].seq >= entry.seq) return prev;
+          // Cap history at 500 entries so it can't grow unbounded
+          const next = prev.length >= 500 ? prev.slice(prev.length - 499) : prev;
+          return [...next, entry];
+        });
+      },
+      onActivityTrim: (cancelledSids) => {
+        setActivityLog(prev => prev.filter(e => !cancelledSids.has(e.sid)));
+      },
     });
 
     engineRef.current = engine;
@@ -87,6 +101,7 @@ export function useCoqLocal(
       setProofView(null);
       setHighlights(null);
       setDiagnostics([]);
+      setActivityLog([]);
     };
   }, [volumeId, chapterName]);
 
@@ -122,6 +137,7 @@ export function useCoqLocal(
     highlights,
     diagnostics,
     moveCursorTarget,
+    activityLog,
   };
 
   return [state, actions];

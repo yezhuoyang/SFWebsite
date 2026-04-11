@@ -6,7 +6,8 @@ import { type OnMount, type BeforeMount } from '@monaco-editor/react';
 import LazyEditor from '../components/LazyEditor';
 import GoalsPanel from '../components/GoalsPanel';
 import CommentBlock from '../components/CommentBlock';
-import ContextPanel, { parseContextEntries, getContextNames } from '../components/ContextPanel';
+import ContextPanel, { parseBlockEntries, getContextNames, type ContextEntry } from '../components/ContextPanel';
+import { parseSentences } from '../coq/sentenceParser';
 import TacticsPanel from '../components/TacticsPanel';
 import TutorChat, { type GpsAnchor, type TutorChatHandle, renderMarkdown as renderTutorMarkdown } from '../components/TutorChat';
 import { ppToString } from '../components/PpDisplay';
@@ -840,23 +841,44 @@ export default function ChapterPage() {
     return 'none';
   }, [coqState.highlights, blocks, dirtyBlockIds]);
 
-  // Context panel: extract names from the processed portion of the document
-  const allExecutedTexts = useMemo(() => {
+  // Context panel: extract rich entries (kind, name, body, blockId, line)
+  // from every block that's been fully processed, so users can expand the
+  // body inline and jump to source.
+  const contextEntries = useMemo<ContextEntry[]>(() => {
     if (!coqState.highlights) return [];
     const processed = coqState.highlights.processedRange || [];
     if (processed.length === 0) return [];
-    const maxLine = Math.max(...processed.map(r => r.end.line));
-    const fullText = blocks.map(b => blockContentsRef.current.get(b.id) || b.content).join('\n\n');
-    const lines = fullText.split('\n');
-    const executedText = lines.slice(0, maxLine + 1).join('\n');
-    // Split on periods to get sentences
-    return executedText.split(/\.(?=\s|$)/).map(s => s.trim() + '.').filter(s => s.length > 2);
-  }, [coqState.highlights, blocks]);
+    const maxLine0 = Math.max(...processed.map(r => r.end.line));
+
+    const result: ContextEntry[] = [];
+    for (const block of blocks) {
+      if (block.kind === 'comment' || block.kind === 'section_header' || block.kind === 'subsection_header') continue;
+      const startLine1 = blockStartLines.get(block.id) || block.line_start;
+      const content = blockContentsRef.current.get(block.id) || block.content;
+      const endLine1 = startLine1 + content.split('\n').length - 1;
+      // Only include blocks whose start is within the processed region
+      if (startLine1 - 1 > maxLine0) continue;
+      // Truncate the block text at the processed boundary if partial
+      let effectiveText = content;
+      if (endLine1 - 1 > maxLine0) {
+        const keepLines = maxLine0 - (startLine1 - 1) + 1;
+        if (keepLines <= 0) continue;
+        effectiveText = content.split('\n').slice(0, keepLines).join('\n');
+      }
+      const blockEntries = parseBlockEntries(
+        effectiveText,
+        block.id,
+        startLine1 - 1,
+        parseSentences,
+      );
+      result.push(...blockEntries);
+    }
+    return result;
+  }, [coqState.highlights, blocks, blockStartLines]);
 
   useEffect(() => {
-    const entries = parseContextEntries(allExecutedTexts);
-    setCompletionContext(getContextNames(entries));
-  }, [allExecutedTexts]);
+    setCompletionContext(getContextNames(contextEntries));
+  }, [contextEntries]);
 
   // Disabled: never programmatically move the cursor.
   // The user controls their cursor position — vscoqtop's moveCursor
@@ -986,6 +1008,24 @@ export default function ChapterPage() {
     if (editHistoryRef.current.length > 100) editHistoryRef.current.shift();
     setActivityVersion(v => v + 1);
   }, []);
+
+  // Find which block contains a 0-indexed absolute line number (used by
+  // Activity Log click and Context panel jump-to-source).
+  const findBlockAtLine = useCallback((absLine0: number): number | null => {
+    const targetLine1 = absLine0 + 1;
+    let best: { id: number; start: number } | null = null;
+    for (const [id, start] of blockStartLines.entries()) {
+      if (start <= targetLine1 && (best === null || start > best.start)) {
+        best = { id, start };
+      }
+    }
+    return best?.id ?? null;
+  }, [blockStartLines]);
+
+  const jumpToAbsLine = useCallback((absLine0: number) => {
+    const bid = findBlockAtLine(absLine0);
+    if (bid !== null) navigateToBlock(bid);
+  }, [findBlockAtLine, navigateToBlock]);
 
   // Clear stale explanation when proof state changes
   useEffect(() => {
@@ -1855,13 +1895,18 @@ export default function ChapterPage() {
                 })()}
                 hint={hint}
                 hintLoading={hintLoading}
+                activityLog={coqState.activityLog}
                 renderMarkdown={(text) => renderTutorMarkdown(text, navigateToBlock, gpsAnchors)}
                 onExplain={handleExplain}
                 onHint={handleHint}
+                onJumpToLine={jumpToAbsLine}
               />
             )}
             {rightTab === 'context' && (
-              <ContextPanel executedSentences={allExecutedTexts} />
+              <ContextPanel
+                entries={contextEntries}
+                onJumpTo={(blockId, _line) => navigateToBlock(blockId)}
+              />
             )}
             {rightTab === 'tactics' && <TacticsPanel />}
             {rightTab === 'leaders' && volumeId && chapterName && (

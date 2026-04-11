@@ -1,5 +1,6 @@
+import { useEffect, useRef } from 'react';
 import PpDisplay from './PpDisplay';
-import type { ProofViewNotification, CoqDiagnostic } from '../api/coqWebSocket';
+import type { ProofViewNotification, CoqDiagnostic, ActivityEntry } from '../api/coqWebSocket';
 
 interface ActivityInfo {
   viewedLabel: string | null;
@@ -17,13 +18,21 @@ interface Props {
   hint: string | null;
   hintLoading: boolean;
   activityInfo: ActivityInfo;
+  activityLog: ActivityEntry[];
   renderMarkdown: (text: string) => React.ReactNode;
   onExplain: () => void;
   onHint: () => void;
+  onJumpToLine?: (line: number) => void;
 }
 
-export default function GoalsPanel({ proofView, diagnostics, loading, explanation, explainLoading, hint, hintLoading, activityInfo: _activityInfo, renderMarkdown, onExplain, onHint }: Props) {
+export default function GoalsPanel({ proofView, diagnostics, loading, explanation, explainLoading, hint, hintLoading, activityInfo: _activityInfo, activityLog, renderMarkdown, onExplain, onHint, onJumpToLine }: Props) {
   void _activityInfo; // Moved to History tab
+
+  // Auto-scroll activity log to the newest entry
+  const activityEndRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    activityEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [activityLog.length]);
   const proof = proofView?.proof;
   const messages = proofView?.messages || [];
   const goals = proof?.goals || [];
@@ -165,6 +174,62 @@ export default function GoalsPanel({ proofView, diagnostics, loading, explanatio
           <div className="mt-4 pt-4 border-t border-gray-200">
             <p className="text-xs text-gray-400 font-medium mb-2">Shelved ({shelved.length})</p>
             {shelved.map((g) => <div key={g.id} className="mb-2"><PpDisplay pp={g.goal} className="text-xs text-gray-500" /></div>)}
+          </div>
+        )}
+
+        {/* ============ ACTIVITY LOG ============ */}
+        {/* Persistent history of successful commands & Coq messages, shown below
+            the Goals. Unlike the messages above (which reset per sentence), this
+            accumulates so users can see "nandb is defined", "isred is defined",
+            etc. as they step through. */}
+        {activityLog.length > 0 && (
+          <div className="mt-5 pt-4 border-t border-gray-200">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                Activity Log
+              </div>
+              <span className="text-[10px] text-gray-400">{activityLog.length} event{activityLog.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg max-h-56 overflow-y-auto font-mono text-[11px] leading-snug">
+              {activityLog.map(entry => {
+                const color =
+                  entry.severity === 'Error' ? 'text-red-600'
+                  : entry.severity === 'Warning' ? 'text-amber-600'
+                  : entry.kind === 'synthetic' ? 'text-indigo-700'
+                  : 'text-gray-700';
+                const dotColor =
+                  entry.severity === 'Error' ? 'bg-red-500'
+                  : entry.severity === 'Warning' ? 'bg-amber-500'
+                  : 'bg-emerald-500';
+                const clickable = onJumpToLine && entry.line >= 0;
+                return (
+                  <div
+                    key={entry.seq}
+                    onClick={clickable ? () => onJumpToLine(entry.line) : undefined}
+                    className={`px-2.5 py-1.5 border-b border-gray-100 last:border-b-0 ${
+                      clickable ? 'cursor-pointer hover:bg-indigo-50' : ''
+                    }`}
+                    title={entry.sentencePreview || undefined}
+                  >
+                    <div className="flex items-start gap-1.5">
+                      <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
+                      <div className="min-w-0 flex-1">
+                        <div className={`whitespace-pre-wrap break-words ${color}`}>
+                          {entry.text}
+                        </div>
+                        {entry.sentencePreview && (
+                          <div className="text-[10px] text-gray-400 truncate mt-0.5">
+                            {entry.line >= 0 && <span className="mr-1">L{entry.line + 1}</span>}
+                            <span className="font-normal">{entry.sentencePreview}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={activityEndRef} />
+            </div>
           </div>
         )}
 

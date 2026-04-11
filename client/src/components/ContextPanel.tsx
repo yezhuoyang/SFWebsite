@@ -1,115 +1,126 @@
 /**
- * Shows all definitions, theorems, lemmas, etc. that have been
- * executed so far — the current Coq environment.
+ * Context panel: shows all definitions, theorems, lemmas, inductives, etc.
+ * that have been executed so far — i.e., the current Coq environment.
+ *
+ * Features:
+ *   - Grouped by kind (Types / Definitions / Theorems / Examples / Notations)
+ *   - Click a name to expand its body inline (no round-trip to the code area)
+ *   - "Jump" link scrolls the corresponding block into view
+ *   - Search box filters by name
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import CoqCodeBlock from './CoqCodeBlock';
 
-interface ContextEntry {
-  kind: string;       // "Definition", "Theorem", "Lemma", "Inductive", etc.
+export interface ContextEntry {
+  kind: string;         // "Definition", "Theorem", "Lemma", ...
   name: string;
-  signature: string;  // The full first line or type signature
-  blockId: number;
+  signature: string;    // first line (e.g. "Definition nandb (b1 b2:bool) : bool :=")
+  body: string;         // full text of the vernacular sentence
+  blockId: number;      // which block it belongs to (for jump-to-source)
+  line: number;         // 0-indexed absolute line number where it begins
 }
 
 interface Props {
-  executedSentences: string[];  // All sentences that have been executed
-  onJumpTo?: (blockId: number) => void;
+  entries: ContextEntry[];
+  onJumpTo?: (blockId: number, line: number) => void;
 }
 
-const DEFINITION_RE = /^(Definition|Fixpoint|CoFixpoint|Function|Let)\s+(\w+)/;
-const THEOREM_RE = /^(Theorem|Lemma|Fact|Remark|Corollary|Proposition)\s+(\w+)/;
-const INDUCTIVE_RE = /^(Inductive|CoInductive|Variant)\s+(\w+)/;
-const RECORD_RE = /^(Record|Structure|Class)\s+(\w+)/;
-const EXAMPLE_RE = /^(Example)\s+(\w+)/;
-const NOTATION_RE = /^(Notation)\s+"([^"]+)"/;
-const MODULE_RE = /^(Module)\s+(\w+)/;
-
-const KIND_COLORS: Record<string, string> = {
-  Definition: 'text-blue-700 bg-blue-50',
-  Fixpoint: 'text-blue-700 bg-blue-50',
-  Theorem: 'text-purple-700 bg-purple-50',
-  Lemma: 'text-purple-700 bg-purple-50',
-  Fact: 'text-purple-700 bg-purple-50',
-  Corollary: 'text-purple-700 bg-purple-50',
-  Proposition: 'text-purple-700 bg-purple-50',
-  Inductive: 'text-green-700 bg-green-50',
-  Record: 'text-green-700 bg-green-50',
-  Example: 'text-amber-700 bg-amber-50',
-  Notation: 'text-gray-600 bg-gray-100',
-  Module: 'text-red-700 bg-red-50',
+const KIND_COLORS: Record<string, { text: string; bg: string }> = {
+  Definition:   { text: 'text-blue-700',   bg: 'bg-blue-50' },
+  Fixpoint:     { text: 'text-blue-700',   bg: 'bg-blue-50' },
+  CoFixpoint:   { text: 'text-blue-700',   bg: 'bg-blue-50' },
+  Function:     { text: 'text-blue-700',   bg: 'bg-blue-50' },
+  Let:          { text: 'text-blue-700',   bg: 'bg-blue-50' },
+  Theorem:      { text: 'text-purple-700', bg: 'bg-purple-50' },
+  Lemma:        { text: 'text-purple-700', bg: 'bg-purple-50' },
+  Fact:         { text: 'text-purple-700', bg: 'bg-purple-50' },
+  Corollary:    { text: 'text-purple-700', bg: 'bg-purple-50' },
+  Proposition:  { text: 'text-purple-700', bg: 'bg-purple-50' },
+  Remark:       { text: 'text-purple-700', bg: 'bg-purple-50' },
+  Inductive:    { text: 'text-green-700',  bg: 'bg-green-50' },
+  CoInductive:  { text: 'text-green-700',  bg: 'bg-green-50' },
+  Variant:      { text: 'text-green-700',  bg: 'bg-green-50' },
+  Record:       { text: 'text-green-700',  bg: 'bg-green-50' },
+  Structure:    { text: 'text-green-700',  bg: 'bg-green-50' },
+  Class:        { text: 'text-green-700',  bg: 'bg-green-50' },
+  Instance:     { text: 'text-teal-700',   bg: 'bg-teal-50' },
+  Example:      { text: 'text-amber-700',  bg: 'bg-amber-50' },
+  Notation:     { text: 'text-gray-600',   bg: 'bg-gray-100' },
+  Module:       { text: 'text-red-700',    bg: 'bg-red-50' },
+  Axiom:        { text: 'text-rose-700',   bg: 'bg-rose-50' },
+  Hypothesis:   { text: 'text-rose-700',   bg: 'bg-rose-50' },
 };
 
-export function parseContextEntries(sentences: string[]): ContextEntry[] {
-  const entries: ContextEntry[] = [];
+const GROUP_OF: Record<string, string> = {
+  Definition: 'Definitions', Fixpoint: 'Definitions', CoFixpoint: 'Definitions', Function: 'Definitions', Let: 'Definitions',
+  Theorem: 'Theorems & Lemmas', Lemma: 'Theorems & Lemmas', Fact: 'Theorems & Lemmas',
+  Corollary: 'Theorems & Lemmas', Proposition: 'Theorems & Lemmas', Remark: 'Theorems & Lemmas',
+  Inductive: 'Types', CoInductive: 'Types', Variant: 'Types',
+  Record: 'Types', Structure: 'Types', Class: 'Types',
+  Instance: 'Instances',
+  Example: 'Examples',
+  Notation: 'Notations',
+  Module: 'Modules',
+  Axiom: 'Axioms', Hypothesis: 'Axioms',
+};
 
-  for (const sentence of sentences) {
-    const trimmed = sentence.trim();
-    const firstLine = trimmed.split('\n')[0];
+const GROUP_ORDER = [
+  'Types', 'Definitions', 'Theorems & Lemmas', 'Instances',
+  'Examples', 'Notations', 'Modules', 'Axioms', 'Other',
+];
 
-    for (const [re] of [
-      [DEFINITION_RE, null],
-      [THEOREM_RE, null],
-      [INDUCTIVE_RE, null],
-      [RECORD_RE, null],
-      [EXAMPLE_RE, null],
-      [NOTATION_RE, null],
-      [MODULE_RE, null],
-    ] as [RegExp, null][]) {
-      const m = firstLine.match(re);
-      if (m) {
-        entries.push({
-          kind: m[1],
-          name: m[2],
-          signature: firstLine,
-          blockId: 0,
-        });
-        break;
-      }
-    }
-  }
+export default function ContextPanel({ entries, onJumpTo }: Props) {
+  const [query, setQuery] = useState('');
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
 
-  return entries;
-}
+  const toggleExpand = (key: string) => {
+    setExpandedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
 
-/** Extract just the names for auto-completion */
-export function getContextNames(entries: ContextEntry[]): { name: string; kind: string }[] {
-  return entries.map(e => ({ name: e.name, kind: e.kind }));  // kind is used by consumers
-}
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return entries;
+    return entries.filter(e => e.name.toLowerCase().includes(q));
+  }, [entries, query]);
 
-export default function ContextPanel({ executedSentences }: Props) {
-  const entries = useMemo(() => parseContextEntries(executedSentences), [executedSentences]);
-
-  // Group by kind
   const groups = useMemo(() => {
     const map = new Map<string, ContextEntry[]>();
-    for (const e of entries) {
-      const group = ['Theorem', 'Lemma', 'Fact', 'Corollary', 'Proposition'].includes(e.kind)
-        ? 'Theorems & Lemmas'
-        : ['Definition', 'Fixpoint', 'CoFixpoint', 'Function', 'Let'].includes(e.kind)
-        ? 'Definitions'
-        : ['Inductive', 'CoInductive', 'Variant', 'Record', 'Structure', 'Class'].includes(e.kind)
-        ? 'Types'
-        : e.kind === 'Example'
-        ? 'Examples'
-        : e.kind === 'Notation'
-        ? 'Notations'
-        : 'Other';
+    for (const e of filtered) {
+      const group = GROUP_OF[e.kind] || 'Other';
       if (!map.has(group)) map.set(group, []);
       map.get(group)!.push(e);
     }
     return map;
-  }, [entries]);
-
-  const groupOrder = ['Types', 'Definitions', 'Theorems & Lemmas', 'Examples', 'Notations', 'Other'];
+  }, [filtered]);
 
   return (
     <div className="h-full flex flex-col">
-      <div className="px-4 py-3">
-        <p className="text-[10px] text-gray-500">{entries.length} definitions in scope</p>
+      {/* Header + search */}
+      <div className="px-3 py-2 border-b border-gray-100 bg-white">
+        <div className="flex items-center justify-between mb-1.5">
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+            Environment
+          </p>
+          <span className="text-[10px] text-gray-400">
+            {filtered.length} of {entries.length}
+          </span>
+        </div>
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filter by name&hellip;"
+          className="w-full text-xs px-2 py-1 border border-gray-200 rounded focus:outline-none focus:border-indigo-400"
+        />
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      {/* Entry list */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {entries.length === 0 && (
           <div className="p-6 text-center">
             <p className="text-gray-500 text-sm">No definitions yet</p>
@@ -117,34 +128,69 @@ export default function ContextPanel({ executedSentences }: Props) {
           </div>
         )}
 
-        {groupOrder.map(groupName => {
+        {entries.length > 0 && filtered.length === 0 && (
+          <div className="p-6 text-center text-xs text-gray-400">
+            No definitions match "{query}"
+          </div>
+        )}
+
+        {GROUP_ORDER.map(groupName => {
           const items = groups.get(groupName);
           if (!items || items.length === 0) return null;
           return (
             <div key={groupName} className="mb-1">
-              <div className="px-4 py-1.5">
+              <div className="px-3 py-1.5 sticky top-0 bg-gray-50/90 backdrop-blur-sm border-b border-gray-100">
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                   {groupName}
                 </span>
-                <span className="text-[10px] text-gray-600 ml-1">({items.length})</span>
+                <span className="text-[10px] text-gray-400 ml-1">({items.length})</span>
               </div>
-              <div className="px-2 py-0.5 space-y-px">
-                {items.map((e, i) => (
-                  <div
-                    key={`${e.name}-${i}`}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded hover:bg-gray-50 cursor-default"
-                    title={e.signature}
-                  >
-                    <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
-                      KIND_COLORS[e.kind] || 'text-gray-400 bg-gray-800'
-                    }`}>
-                      {e.kind.slice(0, 3)}
-                    </span>
-                    <span className="text-xs font-mono text-gray-700 truncate">
-                      {e.name}
-                    </span>
-                  </div>
-                ))}
+              <div className="py-0.5">
+                {items.map((e) => {
+                  const key = `${e.kind}-${e.name}-${e.line}`;
+                  const expanded = expandedKeys.has(key);
+                  const colors = KIND_COLORS[e.kind] || { text: 'text-gray-600', bg: 'bg-gray-100' };
+                  return (
+                    <div key={key} className="border-b border-gray-50 last:border-b-0">
+                      {/* Row: kind badge + name + jump button */}
+                      <div
+                        onClick={() => toggleExpand(key)}
+                        className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors ${
+                          expanded ? 'bg-indigo-50/40' : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className={`text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded shrink-0 ${colors.text} ${colors.bg}`}>
+                          {e.kind.slice(0, 3)}
+                        </span>
+                        <span className="text-xs font-mono text-gray-800 truncate flex-1" title={e.signature}>
+                          {e.name}
+                        </span>
+                        <span className="text-[10px] text-gray-300 shrink-0">
+                          {expanded ? '\u25B2' : '\u25BC'}
+                        </span>
+                        {onJumpTo && (
+                          <button
+                            onClick={(ev) => { ev.stopPropagation(); onJumpTo(e.blockId, e.line); }}
+                            className="text-[10px] text-indigo-500 hover:text-indigo-700 font-medium shrink-0"
+                            title="Jump to where this is defined"
+                          >
+                            jump
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Expanded body */}
+                      {expanded && (
+                        <div className="px-3 pb-2.5 pt-0.5 bg-indigo-50/20">
+                          <CoqCodeBlock code={e.body} maxLines={20} />
+                          <div className="text-[10px] text-gray-400 mt-1">
+                            defined at line {e.line + 1}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );
@@ -152,4 +198,76 @@ export default function ContextPanel({ executedSentences }: Props) {
       </div>
     </div>
   );
+}
+
+/** Extract just the names for auto-completion (consumed by coqLanguage) */
+export function getContextNames(entries: ContextEntry[]): { name: string; kind: string }[] {
+  return entries.map(e => ({ name: e.name, kind: e.kind }));
+}
+
+// --- Rich parsing: extract entries from fully-processed blocks ---
+
+const VERNAC_KIND_RE = new RegExp(
+  '^\\s*(Theorem|Lemma|Fact|Remark|Corollary|Proposition|' +
+  'Definition|Fixpoint|CoFixpoint|Function|Let|' +
+  'Inductive|CoInductive|Variant|Record|Structure|Class|Instance|' +
+  'Example|Notation|Module|Axiom|Hypothesis)\\b'
+);
+
+const NAME_RE = /^\s*\w+\s+(?:Local\s+|Global\s+|Polymorphic\s+)?([A-Za-z_][\w']*)/;
+const NOTATION_NAME_RE = /^\s*Notation\s+"([^"]+)"/;
+
+/**
+ * Parse a processed block's source into a list of top-level vernacular
+ * entries. Uses the same period-terminated sentence model as the Coq engine
+ * (via parseSentences from `coq/sentenceParser`), so comments and strings are
+ * handled correctly.
+ *
+ * @param text       Source text of the block
+ * @param blockId    ID to attach to each entry
+ * @param baseLine0  0-indexed absolute line number of the block's first line
+ *                   (so entries carry their true document-line for jump-to)
+ */
+export function parseBlockEntries(
+  text: string,
+  blockId: number,
+  baseLine0: number,
+  parseSentences: (src: string) => Array<{ text: string; startOffset: number; endOffset: number }>,
+): ContextEntry[] {
+  const entries: ContextEntry[] = [];
+  const sentences = parseSentences(text);
+
+  for (const s of sentences) {
+    const body = s.text.trim();
+    if (!body) continue;
+    const kindMatch = body.match(VERNAC_KIND_RE);
+    if (!kindMatch) continue;
+    const kind = kindMatch[1];
+
+    let name: string | null = null;
+    if (kind === 'Notation') {
+      const m = body.match(NOTATION_NAME_RE);
+      name = m ? m[1] : null;
+    } else {
+      const m = body.match(NAME_RE);
+      name = m ? m[1] : null;
+    }
+    if (!name) continue;
+
+    // Compute the absolute line of this sentence's start
+    const prefix = text.slice(0, s.startOffset);
+    const localLine = (prefix.match(/\n/g) || []).length;
+    const line = baseLine0 + localLine;
+
+    entries.push({
+      kind,
+      name,
+      signature: body.split('\n')[0],
+      body,
+      blockId,
+      line,
+    });
+  }
+
+  return entries;
 }

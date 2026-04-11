@@ -29,6 +29,23 @@ export interface ProofViewNotification {
   messages: RocqMessage[];
 }
 
+/**
+ * A single entry in the persistent activity log (below the Goals panel).
+ * Unlike `messages` inside ProofViewNotification which is reset each sentence,
+ * these accumulate for the whole session so users can see a history of what
+ * they ran: "isred is defined", "nandb is defined", etc.
+ */
+export interface ActivityEntry {
+  seq: number;               // monotonic counter for stable keys / ordering
+  sid: number;               // Coq sentence id that produced it
+  severity: MessageSeverity;
+  text: string;              // plain-text message body (e.g. "isred is defined")
+  sentencePreview: string;   // first ~80 chars of the sentence that produced it
+  line: number;              // 0-indexed absolute line of the sentence start
+  kind: 'message' | 'synthetic'; // synthetic = we generated it because Coq was silent
+  timestamp: number;
+}
+
 export interface HighlightRange {
   start: { line: number; character: number };
   end: { line: number; character: number };
@@ -55,6 +72,9 @@ export interface CoqSessionState {
   highlights: UpdateHighlights | null;
   diagnostics: CoqDiagnostic[];
   moveCursorTarget: { line: number; character: number; seq: number } | null;
+  /** Persistent activity log — accumulates Coq Notice/Info/Error messages as
+   *  the user steps forward. Trimmed on step-backward past the producing sid. */
+  activityLog: ActivityEntry[];
 }
 
 export interface CoqSessionActions {
@@ -158,5 +178,7 @@ export function useCoqWebSocket(
     interrupt: useCallback(() => send({ type: 'interrupt' }), [send]),
   };
 
-  return [{ connected, proofView, highlights, diagnostics, moveCursorTarget }, actions];
+  // Legacy WebSocket hook: activityLog is always empty (feature implemented
+  // in useCoqLocal for the jsCoq backend).
+  return [{ connected, proofView, highlights, diagnostics, moveCursorTarget, activityLog: [] }, actions];
 }
