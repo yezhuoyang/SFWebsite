@@ -6,7 +6,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.database import get_session
-from server.models import Discussion, DiscussionReply, Vote, User
+from server.models import Discussion, DiscussionReply, Vote, User, SharedSolution, Annotation
 from server.routers.auth import get_current_user, get_optional_user
 
 router = APIRouter(tags=["discussions"])
@@ -194,10 +194,11 @@ async def toggle_vote(
     model_map = {
         "discussion": Discussion,
         "reply": DiscussionReply,
-        "solution": None,  # SharedSolution — imported lazily
-        "annotation": None,  # Annotation
+        "solution": SharedSolution,
+        "annotation": Annotation,
     }
     model = model_map.get(req.target_type)
+    target = None
     if model:
         tr = await session.execute(select(model).where(model.id == req.target_id))
         target = tr.scalar_one_or_none()

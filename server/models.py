@@ -171,12 +171,32 @@ class SharedSolution(Base):
     code: Mapped[str] = mapped_column(Text, nullable=False)
     explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
     upvotes: Mapped[int] = mapped_column(Integer, default=0)
+    comment_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    __table_args__ = (UniqueConstraint("user_id", "exercise_id"),)
+    # Allow multiple submissions per user per exercise (LeetCode-style history)
+    __table_args__ = (Index("ix_shared_solutions_exercise", "exercise_id"),)
 
     user: Mapped["User"] = relationship()
     exercise: Mapped["Exercise"] = relationship()
+    comments: Mapped[list["SolutionComment"]] = relationship(
+        back_populates="solution", cascade="all, delete-orphan"
+    )
+
+
+class SolutionComment(Base):
+    __tablename__ = "solution_comments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    solution_id: Mapped[int] = mapped_column(ForeignKey("shared_solutions.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (Index("ix_solution_comments_solution", "solution_id"),)
+
+    solution: Mapped["SharedSolution"] = relationship(back_populates="comments")
+    user: Mapped["User"] = relationship()
 
 
 class Annotation(Base):

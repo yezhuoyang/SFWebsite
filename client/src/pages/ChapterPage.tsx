@@ -31,6 +31,7 @@ import { saveBlockEdits, loadBlockEdits, clearBlockEdits, saveGradeResults, load
 import { getPublicAnnotations, createAnnotation as createServerAnnotation, deleteAnnotation as deleteServerAnnotation, type ServerAnnotation } from '../api/client';
 import { AnnotationCreatePopover, AnnotationOverlay } from '../components/AnnotationMargin';
 import LeaderboardWidget from '../components/LeaderboardWidget';
+import SolutionsModal from '../components/SolutionsModal';
 
 export default function ChapterPage() {
   const { volumeId, chapterName } = useParams<{ volumeId: string; chapterName: string }>();
@@ -53,6 +54,7 @@ export default function ChapterPage() {
   const [celebration, setCelebration] = useState<{ names: string[] } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [serverAnnotations, setServerAnnotations] = useState<ServerAnnotation[]>([]);
+  const [solutionsModal, setSolutionsModal] = useState<{ exerciseId: number; exerciseName: string; currentCode: string } | null>(null);
 
   // Timer
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -1293,6 +1295,16 @@ export default function ChapterPage() {
         );
       })()}
 
+      {/* Community solutions modal */}
+      {solutionsModal && (
+        <SolutionsModal
+          exerciseId={solutionsModal.exerciseId}
+          exerciseName={solutionsModal.exerciseName}
+          currentCode={solutionsModal.currentCode}
+          onClose={() => setSolutionsModal(null)}
+        />
+      )}
+
       {/* Rocket celebration overlay */}
       {celebration && (
         <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
@@ -1681,6 +1693,35 @@ export default function ChapterPage() {
                             >
                               {visibleSolution?.name === block.exercise_name ? 'Hide solution' : 'See solution'}
                             </button>
+                            {/* Community solutions (LeetCode-style) — visible once solved */}
+                            {(() => {
+                              const ex = exercises.find(e => e.name === block.exercise_name);
+                              if (!ex) return null;
+                              const solved = ex.status === 'completed';
+                              return (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!solved) return;
+                                    const code = blockContentsRef.current.get(block.id) || block.content;
+                                    setSolutionsModal({
+                                      exerciseId: ex.id,
+                                      exerciseName: block.exercise_name!,
+                                      currentCode: code,
+                                    });
+                                  }}
+                                  disabled={!solved}
+                                  title={solved ? 'Browse community solutions and discuss' : 'Solve this exercise to unlock community solutions'}
+                                  className={`text-[10px] font-medium px-2 py-0.5 rounded flex items-center gap-1 ${
+                                    solved
+                                      ? 'text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600'
+                                      : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                                  }`}
+                                >
+                                  {solved ? '\u{1F4AC} Solutions' : '\u{1F512} Solutions'}
+                                </button>
+                              );
+                            })()}
                           </div>
                         </div>
 

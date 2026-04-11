@@ -233,29 +233,64 @@ export const vote = (targetType: string, targetId: number) =>
     body: JSON.stringify({ target_type: targetType, target_id: targetId }),
   });
 
-// --- Shared Solutions ---
+// --- Shared Solutions (LeetCode-style, multi-submission with comments) ---
 
 export interface SharedSolutionSummary {
   id: number;
   user_id: number;
   username: string;
   display_name: string;
+  exercise_id: number;
   exercise_name: string;
   code: string;
   explanation: string | null;
   upvotes: number;
+  comment_count: number;
   created_at: string;
   user_voted: boolean;
 }
 
-export const getSharedSolutions = (exerciseId: number) =>
-  fetchJSON<SharedSolutionSummary[]>(`${BASE}/solutions/shared?exercise_id=${exerciseId}`);
+export interface SolutionComment {
+  id: number;
+  solution_id: number;
+  user_id: number;
+  username: string;
+  display_name: string;
+  content: string;
+  created_at: string;
+}
+
+export type SolutionSort = 'upvotes' | 'newest' | 'oldest';
+
+export const getSharedSolutions = (exerciseId: number, sort: SolutionSort = 'upvotes') =>
+  fetchJSON<SharedSolutionSummary[]>(`${BASE}/solutions/shared?exercise_id=${exerciseId}&sort=${sort}`);
+
+export const getMySolutions = (exerciseId: number) =>
+  fetchJSON<SharedSolutionSummary[]>(`${BASE}/solutions/mine?exercise_id=${exerciseId}`);
+
+export const getSolutionDetail = (solutionId: number) =>
+  fetchJSON<{ solution: SharedSolutionSummary; comments: SolutionComment[] }>(
+    `${BASE}/solutions/shared/${solutionId}`
+  );
 
 export const shareSolution = (data: { exercise_id: number; code: string; explanation?: string }) =>
   fetchJSON<SharedSolutionSummary>(`${BASE}/solutions/share`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
+  });
+
+export const addSolutionComment = (solutionId: number, content: string) =>
+  fetchJSON<SolutionComment>(`${BASE}/solutions/shared/${solutionId}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+
+export const deleteSharedSolution = (solutionId: number) =>
+  fetch(`${BASE}/solutions/shared/${solutionId}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
   });
 
 // --- Leaderboard ---
