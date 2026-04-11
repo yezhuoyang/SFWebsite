@@ -23,6 +23,17 @@ class CommentRequest(BaseModel):
     content: str
 
 
+def _utc_iso(dt) -> str:
+    """Serialize a naive UTC datetime (from datetime.utcnow) with explicit 'Z' suffix.
+
+    The DB stores naive UTC; without the Z the browser's `new Date()` parses the
+    string as local time, producing wrong relative timestamps for non-UTC users.
+    """
+    if dt is None:
+        return None
+    return dt.isoformat() + ("" if dt.tzinfo else "Z")
+
+
 def _solution_dict(s: SharedSolution, user_voted: bool = False) -> dict:
     return {
         "id": s.id,
@@ -35,7 +46,7 @@ def _solution_dict(s: SharedSolution, user_voted: bool = False) -> dict:
         "explanation": s.explanation,
         "upvotes": s.upvotes,
         "comment_count": s.comment_count,
-        "created_at": s.created_at.isoformat(),
+        "created_at": _utc_iso(s.created_at),
         "user_voted": user_voted,
     }
 
@@ -48,7 +59,7 @@ def _comment_dict(c: SolutionComment) -> dict:
         "username": c.user.username,
         "display_name": c.user.display_name,
         "content": c.content,
-        "created_at": c.created_at.isoformat(),
+        "created_at": _utc_iso(c.created_at),
     }
 
 

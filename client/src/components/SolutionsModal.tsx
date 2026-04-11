@@ -25,19 +25,28 @@ interface Props {
 
 type Tab = 'browse' | 'mine' | 'submit';
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
+/**
+ * Parse the backend's ISO timestamp. The server emits `datetime.utcnow().isoformat()`
+ * which is naive UTC (no trailing 'Z'). Without the Z, `new Date(...)` parses it as
+ * *local* time, producing garbage offsets (e.g. negative "-24600s ago" for users ahead
+ * of UTC). Append 'Z' if no timezone info is present so the parse is unambiguous.
+ */
+function parseServerDate(iso: string): Date {
+  const hasTz = /Z|[+-]\d{2}:?\d{2}$/.test(iso);
+  return new Date(hasTz ? iso : iso + 'Z');
+}
+
+function formatDate(iso: string): string {
+  const date = parseServerDate(iso);
+  const diff = Date.now() - date.getTime();
   const sec = Math.floor(diff / 1000);
-  if (sec < 60) return `${sec}s ago`;
+  if (sec < 60) return 'just now';
   const min = Math.floor(sec / 60);
   if (min < 60) return `${min}m ago`;
   const hr = Math.floor(min / 60);
   if (hr < 24) return `${hr}h ago`;
-  const d = Math.floor(hr / 24);
-  if (d < 30) return `${d}d ago`;
-  const mo = Math.floor(d / 30);
-  if (mo < 12) return `${mo}mo ago`;
-  return `${Math.floor(mo / 12)}y ago`;
+  // Older than a day: show absolute date (e.g. "4/11/2026")
+  return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
 }
 
 export default function SolutionsModal({ exerciseId, exerciseName, currentCode, onClose }: Props) {
@@ -55,6 +64,14 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
   const [comments, setComments] = useState<SolutionComment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [posting, setPosting] = useState(false);
+
+  // Inline expand/collapse per list card — browsing-only, doesn't affect detail view
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const toggleExpand = (id: number) => setExpandedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   // Submit form
   const [submitCode, setSubmitCode] = useState(currentCode);
@@ -271,15 +288,24 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
                 <div className="divide-y divide-gray-50">
                   {list.map(s => {
                     const isOwn = user?.id === s.user_id;
+                    const expanded = expandedIds.has(s.id);
+                    // When sidebar mode (a detail is open), always clamp to 10 lines.
+                    // Otherwise collapsed=5 lines, expanded=full code.
+                    const maxLines = selectedId ? 10 : (expanded ? undefined : 5);
+                    const lineCount = s.code.split('\n').length;
+                    const canExpand = !selectedId && lineCount > 5;
                     return (
-                      <button
+                      <div
                         key={s.id}
-                        onClick={() => openSolution(s.id)}
-                        className={`w-full text-left p-4 hover:bg-indigo-50/40 transition-colors ${
+                        className={`p-4 hover:bg-indigo-50/30 transition-colors ${
                           selectedId === s.id ? 'bg-indigo-50' : ''
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-3 mb-2">
+                        {/* Header: click opens full detail view */}
+                        <div
+                          onClick={() => openSolution(s.id)}
+                          className="flex items-start justify-between gap-3 mb-2 cursor-pointer"
+                        >
                           <div className="flex items-center gap-2 min-w-0">
                             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
                               {(s.display_name || s.username).charAt(0).toUpperCase()}
@@ -289,7 +315,7 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
                                 {s.display_name || s.username}
                                 {isOwn && <span className="ml-1 text-[10px] text-indigo-500">(you)</span>}
                               </div>
-                              <div className="text-[11px] text-gray-400">{timeAgo(s.created_at)}</div>
+                              <div className="text-[11px] text-gray-400">{formatDate(s.created_at)}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
@@ -308,14 +334,23 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
                         {s.explanation && (
                           <p className="text-xs text-gray-600 mb-2 whitespace-pre-wrap">{s.explanation}</p>
                         )}
-                        {/* Full code with syntax highlighting — compact view clamps to 10 lines, expanded view shows all */}
-                        <CoqCodeBlock
-                          code={s.code}
-                          maxLines={selectedId ? 10 : undefined}
-                        />
+                        <CoqCodeBlock code={s.code} maxLines={maxLines} />
                         <div className="flex items-center gap-3 mt-2 text-[11px] text-gray-400">
                           <span>&#128172; {s.comment_count}</span>
-                          <span className="text-indigo-400">&rarr; click to open</span>
+                          {canExpand && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleExpand(s.id); }}
+                              className="text-indigo-600 hover:text-indigo-800 font-semibold"
+                            >
+                              {expanded ? '\u25B2 Collapse' : `\u25BC Expand (${lineCount} lines)`}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => openSolution(s.id)}
+                            className="text-indigo-500 hover:text-indigo-700 font-medium"
+                          >
+                            Open &amp; comment &rarr;
+                          </button>
                           {isOwn && (
                             <span
                               onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}
@@ -325,7 +360,7 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
                             </span>
                           )}
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -351,7 +386,7 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
                           {selectedSolution.display_name || selectedSolution.username}
                         </div>
                         <div className="text-xs text-gray-400">
-                          submitted {timeAgo(selectedSolution.created_at)}
+                          submitted {formatDate(selectedSolution.created_at)}
                         </div>
                       </div>
                     </div>
@@ -399,7 +434,7 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
                               <span className="text-xs font-semibold text-gray-800">
                                 {c.display_name || c.username}
                               </span>
-                              <span className="text-[10px] text-gray-400">{timeAgo(c.created_at)}</span>
+                              <span className="text-[10px] text-gray-400">{formatDate(c.created_at)}</span>
                             </div>
                             <p className="text-xs text-gray-700 whitespace-pre-wrap">{c.content}</p>
                           </div>
