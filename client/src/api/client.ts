@@ -103,6 +103,21 @@ export const resetChapterFile = (volumeId: string, chapterName: string) =>
     method: 'POST',
   });
 
+export interface TutorContextEntry {
+  kind: string;
+  name: string;
+  signature: string;
+  line: number;
+}
+
+export interface TutorActivityEntry {
+  severity: 'Error' | 'Warning' | 'Information';
+  text: string;
+  sentence_preview?: string;
+  line?: number;
+  kind?: 'message' | 'synthetic';
+}
+
 export interface ExplainRequest {
   volume_id: string;
   chapter_name: string;
@@ -112,6 +127,10 @@ export interface ExplainRequest {
   diagnostics_text: string;
   processed_lines: number | null;
   message: string;
+  /** Definitions / theorems currently in scope (Context panel). */
+  context_entries?: TutorContextEntry[];
+  /** Recent Coq output events (Activity Log). */
+  activity_log?: TutorActivityEntry[];
 }
 
 export const explainOutput = (req: ExplainRequest) =>

@@ -97,6 +97,100 @@ def _load_chapter_excerpt(volume_id: str, chapter_name: str, exercise_name: str 
         return ""
 
 
+def _format_context_entries(entries: list | None) -> str:
+    """Format Context panel entries (Definitions/Theorems in scope) for the prompt.
+
+    Grouped by kind; truncated to a cap so we don't blow the context window on
+    huge chapters. Shows kind, name, and first-line signature — enough for the
+    tutor to know what's in scope and pick the right lemma to suggest.
+    """
+    if not entries:
+        return ""
+    groups: dict[str, list] = {}
+    for e in entries:
+        kind = getattr(e, "kind", None) or (e.get("kind") if isinstance(e, dict) else "Other")
+        groups.setdefault(kind, []).append(e)
+
+    priority_order = [
+        "Theorem", "Lemma", "Fact", "Corollary", "Proposition",
+        "Definition", "Fixpoint", "Function",
+        "Inductive", "Variant", "Record",
+        "Example", "Notation",
+    ]
+    ordered_kinds = [k for k in priority_order if k in groups] + [
+        k for k in groups.keys() if k not in priority_order
+    ]
+
+    lines: list[str] = []
+    total = 0
+    CAP = 80
+    for kind in ordered_kinds:
+        items = groups[kind]
+        lines.append(f"### {kind} ({len(items)})")
+        for e in items:
+            if total >= CAP:
+                lines.append(f"    … and {sum(len(groups[k]) for k in ordered_kinds) - total} more")
+                return "\n".join(lines)
+            name = getattr(e, "name", None) or e.get("name", "?") if isinstance(e, dict) else getattr(e, "name", "?")
+            signature = (
+                getattr(e, "signature", None)
+                or (e.get("signature") if isinstance(e, dict) else "")
+            )
+            line_num = (
+                getattr(e, "line", None)
+                if getattr(e, "line", None) is not None
+                else (e.get("line") if isinstance(e, dict) else None)
+            )
+            sig_short = signature.strip()
+            if len(sig_short) > 120:
+                sig_short = sig_short[:117] + "…"
+            loc = f"  (L{line_num + 1})" if isinstance(line_num, int) and line_num >= 0 else ""
+            lines.append(f"  - `{name}`{loc}: {sig_short}")
+            total += 1
+    return "\n".join(lines)
+
+
+def _format_activity_log(log: list | None) -> str:
+    """Format recent Activity Log entries (Coq output history) for the prompt.
+
+    Keeps only the last N entries and reverses to chronological order (oldest
+    first) so the LLM reads them as a time-ordered narrative of what happened.
+    """
+    if not log:
+        return ""
+    LAST = 25
+    recent = log[-LAST:]
+    lines: list[str] = []
+    for entry in recent:
+        severity = (
+            getattr(entry, "severity", None)
+            or (entry.get("severity") if isinstance(entry, dict) else "Information")
+        )
+        text = (
+            getattr(entry, "text", None)
+            or (entry.get("text") if isinstance(entry, dict) else "")
+        ).strip()
+        preview = (
+            getattr(entry, "sentence_preview", None)
+            or (entry.get("sentence_preview") if isinstance(entry, dict) else "")
+        )
+        line_num = (
+            getattr(entry, "line", None)
+            if getattr(entry, "line", None) is not None
+            else (entry.get("line") if isinstance(entry, dict) else None)
+        )
+        marker = {"Error": "[ERR]", "Warning": "[WARN]", "Information": "[OK]"}.get(severity, "[-]")
+        loc = f"L{line_num + 1} " if isinstance(line_num, int) and line_num >= 0 else ""
+        preview_short = (preview or "").strip()
+        if len(preview_short) > 90:
+            preview_short = preview_short[:87] + "…"
+        if preview_short:
+            lines.append(f"  {marker} {loc}{text}  ← from: {preview_short}")
+        else:
+            lines.append(f"  {marker} {loc}{text}")
+    return "\n".join(lines)
+
+
 def build_rich_context(
     volume_id: str | None,
     chapter_name: str | None,
@@ -105,6 +199,8 @@ def build_rich_context(
     proof_state_text: str | None,
     diagnostics_text: str | None,
     processed_lines: int | None,
+    context_entries: list | None = None,
+    activity_log: list | None = None,
 ) -> tuple[str, str]:
     """Build context for Claude. Returns (system_addition, user_context).
 
@@ -139,6 +235,28 @@ def build_rich_context(
             context_parts.append(f"## Student's Recent Code (last 80 lines)\n```coq\n{code_excerpt}\n```")
         else:
             context_parts.append(f"## Student's Code\n```coq\n{student_code}\n```")
+
+    # Definitions / theorems / lemmas currently in scope
+    ctx_fmt = _format_context_entries(context_entries)
+    if ctx_fmt:
+        context_parts.append(
+            "## Coq Context (definitions & lemmas currently in scope)\n"
+            "These are available for the student to use in their proof "
+            "(the same names they see in the Context panel). Prefer suggesting "
+            "ones already in scope when giving hints.\n"
+            + ctx_fmt
+        )
+
+    # Recent Coq output history from the Activity Log
+    log_fmt = _format_activity_log(activity_log)
+    if log_fmt:
+        context_parts.append(
+            "## Recent Coq Output (Activity Log, chronological)\n"
+            "What the student has seen as they stepped through the document. "
+            "`[OK]` = info/notice, `[WARN]` = warning, `[ERR]` = error. Use this "
+            "to ground your explanation in what they *actually* observed.\n"
+            + log_fmt
+        )
 
     # Proof state (from vscoqtop)
     if proof_state_text:
@@ -175,12 +293,16 @@ async def chat(
     diagnostics_text: str | None = None,
     processed_lines: int | None = None,
     history: list[dict] | None = None,
+    context_entries: list | None = None,
+    activity_log: list | None = None,
 ):
     """Send a message to the AI tutor. Yields text chunks as they arrive."""
 
     system_addition, user_context = build_rich_context(
         volume_id, chapter_name, exercise_name,
         student_code, proof_state_text, diagnostics_text, processed_lines,
+        context_entries=context_entries,
+        activity_log=activity_log,
     )
 
     full_system = SYSTEM_PROMPT + system_addition

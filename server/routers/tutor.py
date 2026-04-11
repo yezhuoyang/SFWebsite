@@ -54,6 +54,8 @@ async def tutor_chat(req: TutorChatRequest, session: AsyncSession = Depends(get_
                 diagnostics_text=req.diagnostics_text or req.current_error,
                 processed_lines=req.processed_lines,
                 history=history,
+                context_entries=req.context_entries,
+                activity_log=req.activity_log,
             ):
                 full_response += chunk
                 yield f"data: {json.dumps({'text': chunk})}\n\n"
@@ -96,6 +98,8 @@ async def tutor_explain(req: TutorChatRequest):
         diagnostics_text=req.diagnostics_text,
         processed_lines=req.processed_lines,
         history=None,  # No conversation history for explain
+        context_entries=req.context_entries,
+        activity_log=req.activity_log,
     ):
         full_text += chunk
     return {"explanation": full_text}

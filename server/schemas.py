@@ -132,6 +132,23 @@ class DailyActivityOut(BaseModel):
 
 # --- Tutor ---
 
+class TutorContextEntry(BaseModel):
+    """One definition/theorem/lemma currently in scope (from the Context panel)."""
+    kind: str
+    name: str
+    signature: str
+    line: int
+
+
+class TutorActivityEntry(BaseModel):
+    """One Coq output event from the Activity Log."""
+    severity: str         # "Error" | "Warning" | "Information"
+    text: str
+    sentence_preview: str | None = None
+    line: int | None = None
+    kind: str | None = None  # "message" | "synthetic"
+
+
 class TutorChatRequest(BaseModel):
     message: str
     volume_id: str | None = None
@@ -142,6 +159,9 @@ class TutorChatRequest(BaseModel):
     proof_state_text: str | None = None
     diagnostics_text: str | None = None
     processed_lines: int | None = None
+    # Rich session context — definitions in scope + recent Coq output history
+    context_entries: list[TutorContextEntry] | None = None
+    activity_log: list[TutorActivityEntry] | None = None
     # Legacy fields (kept for compatibility)
     current_goals: str | None = None
     current_error: str | None = None

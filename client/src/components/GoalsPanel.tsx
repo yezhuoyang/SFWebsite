@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react';
 import PpDisplay from './PpDisplay';
 import type { ProofViewNotification, CoqDiagnostic, ActivityEntry } from '../api/coqWebSocket';
 
@@ -27,12 +26,6 @@ interface Props {
 
 export default function GoalsPanel({ proofView, diagnostics, loading, explanation, explainLoading, hint, hintLoading, activityInfo: _activityInfo, activityLog, renderMarkdown, onExplain, onHint, onJumpToLine }: Props) {
   void _activityInfo; // Moved to History tab
-
-  // Auto-scroll activity log to the newest entry
-  const activityEndRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    activityEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [activityLog.length]);
   const proof = proofView?.proof;
   const messages = proofView?.messages || [];
   const goals = proof?.goals || [];
@@ -191,7 +184,9 @@ export default function GoalsPanel({ proofView, diagnostics, loading, explanatio
               <span className="text-[10px] text-gray-400">{activityLog.length} event{activityLog.length !== 1 ? 's' : ''}</span>
             </div>
             <div className="bg-gray-50 border border-gray-200 rounded-lg max-h-56 overflow-y-auto font-mono text-[11px] leading-snug">
-              {activityLog.map(entry => {
+              {/* Reverse: newest entries at the top so users don't have to
+                  scroll to see what just happened. */}
+              {[...activityLog].reverse().map(entry => {
                 const color =
                   entry.severity === 'Error' ? 'text-red-600'
                   : entry.severity === 'Warning' ? 'text-amber-600'
@@ -228,7 +223,6 @@ export default function GoalsPanel({ proofView, diagnostics, loading, explanatio
                   </div>
                 );
               })}
-              <div ref={activityEndRef} />
             </div>
           </div>
         )}

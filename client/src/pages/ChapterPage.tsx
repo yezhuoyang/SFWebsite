@@ -1027,6 +1027,25 @@ export default function ChapterPage() {
     if (bid !== null) navigateToBlock(bid);
   }, [findBlockAtLine, navigateToBlock]);
 
+  // Build the rich session-context payload (definitions in scope + recent Coq
+  // output events) for tutor/explain and tutor/hint calls.
+  const buildTutorSessionContext = useCallback(() => {
+    const ctx = contextEntries.map(e => ({
+      kind: e.kind,
+      name: e.name,
+      signature: e.signature,
+      line: e.line,
+    }));
+    const log = coqState.activityLog.map(e => ({
+      severity: e.severity,
+      text: e.text,
+      sentence_preview: e.sentencePreview,
+      line: e.line,
+      kind: e.kind,
+    }));
+    return { context_entries: ctx, activity_log: log };
+  }, [contextEntries, coqState.activityLog]);
+
   // Clear stale explanation when proof state changes
   useEffect(() => {
     setExplanation(null);
@@ -1074,6 +1093,7 @@ export default function ChapterPage() {
         diagnostics_text: diagText,
         processed_lines: processed,
         message,
+        ...buildTutorSessionContext(),
       });
       setExplanation(result.explanation);
     } catch (e: any) {
@@ -1132,6 +1152,7 @@ export default function ChapterPage() {
         diagnostics_text: diagText,
         processed_lines: processed,
         message,
+        ...buildTutorSessionContext(),
       });
       setHint(result.explanation);
     } catch (e: any) {
