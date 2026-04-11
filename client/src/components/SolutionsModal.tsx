@@ -270,11 +270,11 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
           )}
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-hidden flex">
+        {/* Body — min-h-0 so flex children can shrink below content size and actually scroll */}
+        <div className="flex-1 min-h-0 overflow-hidden flex">
           {/* Left: list (hidden when submit tab or when detail is open in single-column mode) */}
           {tab !== 'submit' && (
-            <div className={`${selectedId ? 'w-80 border-r border-gray-100' : 'flex-1'} overflow-y-auto`}>
+            <div className={`${selectedId ? 'w-80 border-r border-gray-100' : 'flex-1'} min-h-0 h-full overflow-y-scroll solutions-scroll`}>
               {loading && <div className="p-8 text-center text-sm text-gray-400">Loading&hellip;</div>}
               {error && !loading && (
                 <div className="p-8 text-center text-sm text-red-500">{error}</div>
@@ -370,7 +370,7 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
 
           {/* Right: detail view */}
           {tab !== 'submit' && selectedId !== null && (
-            <div className="flex-1 overflow-y-auto bg-gray-50/30">
+            <div className="flex-1 min-h-0 h-full overflow-y-scroll solutions-scroll bg-gray-50/30">
               {!selectedSolution ? (
                 <div className="p-8 text-center text-sm text-gray-400">Loading&hellip;</div>
               ) : (
@@ -467,7 +467,7 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
 
           {/* Submit tab */}
           {tab === 'submit' && (
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 min-h-0 h-full overflow-y-scroll solutions-scroll p-6">
               <p className="text-sm text-gray-600 mb-4">
                 Share a solution for <span className="font-mono font-semibold">{exerciseName}</span>. You can submit multiple different approaches; each one is saved with its own timestamp.
               </p>

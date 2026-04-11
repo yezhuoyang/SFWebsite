@@ -1691,7 +1691,7 @@ export default function ChapterPage() {
                               }}
                               className="text-[10px] text-purple-500 hover:text-purple-700 font-medium"
                             >
-                              {visibleSolution?.name === block.exercise_name ? 'Hide solution' : 'See solution'}
+                              {visibleSolution?.name === block.exercise_name ? 'Hide sample solution' : 'See sample solution'}
                             </button>
                             {/* Community solutions (LeetCode-style) — visible once solved */}
                             {(() => {
@@ -1711,14 +1711,14 @@ export default function ChapterPage() {
                                     });
                                   }}
                                   disabled={!solved}
-                                  title={solved ? 'Browse community solutions and discuss' : 'Solve this exercise to unlock community solutions'}
+                                  title={solved ? 'Browse shared community solutions and discuss' : 'Solve this exercise to unlock shared solutions'}
                                   className={`text-[10px] font-medium px-2 py-0.5 rounded flex items-center gap-1 ${
                                     solved
                                       ? 'text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600'
                                       : 'text-gray-400 bg-gray-100 cursor-not-allowed'
                                   }`}
                                 >
-                                  {solved ? '\u{1F4AC} Solutions' : '\u{1F512} Solutions'}
+                                  {solved ? '\u{1F4AC} See shared solutions' : '\u{1F512} See shared solutions'}
                                 </button>
                               );
                             })()}

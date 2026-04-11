@@ -124,6 +124,23 @@ body {
 ::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.25); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.45); }
 
+/* Prominent scrollbar inside the shared-solutions modal — must be obviously
+   visible so users know the list is scrollable when there are 100+ entries. */
+.solutions-scroll { scrollbar-gutter: stable; }
+.solutions-scroll::-webkit-scrollbar { width: 12px; }
+.solutions-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+.solutions-scroll::-webkit-scrollbar-thumb {
+  background: #a5b4fc;
+  border: 2px solid #f1f5f9;
+  border-radius: 10px;
+}
+.solutions-scroll::-webkit-scrollbar-thumb:hover { background: #818cf8; }
+/* Firefox */
+.solutions-scroll { scrollbar-width: auto; scrollbar-color: #a5b4fc #f1f5f9; }
+
 /* ===================================================================
    Annotation underlines (per-user colors via inline styles)
    =================================================================== */
