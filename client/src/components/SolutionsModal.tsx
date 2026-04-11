@@ -12,6 +12,7 @@ import {
   type SolutionSort,
 } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
+import CoqCodeBlock from './CoqCodeBlock';
 
 interface Props {
   exerciseId: number;
@@ -194,7 +195,7 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -297,13 +298,16 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
                           </div>
                         </div>
                         {s.explanation && (
-                          <p className="text-xs text-gray-600 line-clamp-2 mb-2">{s.explanation}</p>
+                          <p className="text-xs text-gray-600 mb-2 whitespace-pre-wrap">{s.explanation}</p>
                         )}
-                        <pre className="text-[11px] font-mono text-gray-700 bg-gray-50 border border-gray-100 rounded p-2 overflow-hidden line-clamp-3 whitespace-pre-wrap">
-                          {s.code.slice(0, 200)}{s.code.length > 200 ? '\u2026' : ''}
-                        </pre>
+                        {/* Full code with syntax highlighting — compact view clamps to 10 lines, expanded view shows all */}
+                        <CoqCodeBlock
+                          code={s.code}
+                          maxLines={selectedId ? 10 : undefined}
+                        />
                         <div className="flex items-center gap-3 mt-2 text-[11px] text-gray-400">
                           <span>&#128172; {s.comment_count}</span>
+                          <span className="text-indigo-400">&rarr; click to open</span>
                           {isOwn && (
                             <span
                               onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}
@@ -362,10 +366,10 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
                     </div>
                   )}
 
-                  {/* Code */}
-                  <pre className="text-xs font-mono bg-white border border-gray-200 rounded-lg p-4 overflow-x-auto whitespace-pre-wrap mb-6 text-gray-800 leading-relaxed">
-                    {selectedSolution.code}
-                  </pre>
+                  {/* Code — full syntax-highlighted (matches lecture theme) */}
+                  <div className="mb-6">
+                    <CoqCodeBlock code={selectedSolution.code} />
+                  </div>
 
                   {/* Comments */}
                   <div className="border-t border-gray-200 pt-4">
