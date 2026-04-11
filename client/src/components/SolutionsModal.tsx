@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import Editor, { type BeforeMount } from '@monaco-editor/react';
 import {
   getSharedSolutions,
   getMySolutions,
@@ -13,6 +14,7 @@ import {
 } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import CoqCodeBlock from './CoqCodeBlock';
+import { registerCoqLanguage, COQ_LANGUAGE_ID } from './coqLanguage';
 
 interface Props {
   exerciseId: number;
@@ -57,6 +59,12 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
   // Submit form
   const [submitCode, setSubmitCode] = useState(currentCode);
   const [submitExplanation, setSubmitExplanation] = useState('');
+
+  // Monaco beforeMount: register Coq language + SF theme so <Editor> renders
+  // with the same highlighting as the lecture view.
+  const handleBeforeMount: BeforeMount = (monaco) => {
+    registerCoqLanguage(monaco);
+  };
   const [submitting, setSubmitting] = useState(false);
 
   const loadBrowse = useCallback(async () => {
@@ -443,12 +451,27 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
               <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">
                 Code
               </label>
-              <textarea
-                value={submitCode}
-                onChange={(e) => setSubmitCode(e.target.value)}
-                rows={16}
-                className="w-full text-xs font-mono p-3 border border-gray-200 rounded-lg resize-none focus:outline-none focus:border-indigo-400 mb-4 bg-gray-50"
-              />
+              <div className="border border-gray-200 rounded-lg overflow-hidden mb-4 bg-white">
+                <Editor
+                  height="360px"
+                  language={COQ_LANGUAGE_ID}
+                  theme="coqTheme"
+                  value={submitCode}
+                  onChange={(v) => setSubmitCode(v ?? '')}
+                  beforeMount={handleBeforeMount}
+                  options={{
+                    fontSize: 13,
+                    fontFamily: "'JetBrains Mono', 'Courier New', monospace",
+                    minimap: { enabled: false },
+                    lineNumbers: 'on',
+                    wordWrap: 'on',
+                    scrollBeyondLastLine: false,
+                    tabSize: 2,
+                    automaticLayout: true,
+                    padding: { top: 10, bottom: 10 },
+                  }}
+                />
+              </div>
 
               <div className="flex items-center justify-end gap-2">
                 <button
