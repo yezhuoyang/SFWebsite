@@ -56,7 +56,11 @@ async def update_progress_from_grade(session: AsyncSession, grade_result: GradeR
         progress.status = ex_result.status
         progress.points_earned = ex_result.points_earned
         progress.last_graded_at = datetime.utcnow()
-        progress.compile_output = ex_result.message
+        # Store feedback + error excerpt (if any) for UI history
+        fb_parts = [ex_result.feedback]
+        if ex_result.error_detail:
+            fb_parts.append(ex_result.error_detail)
+        progress.compile_output = "\n".join(p for p in fb_parts if p)
 
         # Track new completions
         if ex_result.status == "completed" and old_status != "completed":

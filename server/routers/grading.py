@@ -30,7 +30,8 @@ async def grade_chapter(
                 "name": ex.exercise_name,
                 "status": ex.status,
                 "points_earned": ex.points_earned,
-                "message": ex.message,
+                "feedback": ex.feedback,
+                "error_detail": ex.error_detail,
             }
             for ex in result.exercises
         ],
@@ -56,7 +57,8 @@ async def quick_grade_chapter(
                 "name": ex.exercise_name,
                 "status": ex.status,
                 "points_earned": ex.points_earned,
-                "message": ex.message,
+                "feedback": ex.feedback,
+                "error_detail": ex.error_detail,
             }
             for ex in result.exercises
         ],
