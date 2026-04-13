@@ -355,18 +355,24 @@ export class CoqEngine implements CoqObserver {
   }
 
   /**
-   * Batch-execute from `executionIndex+1` up to and including `targetIdx`.
+   * Execute from `executionIndex+1` up to and including `targetIdx`.
    *
-   * Old flow: add sentence N, wait for coqAdded, exec N, wait for feedProcessed,
-   * query goals, feedProcessed → then repeat for N+1. For a chapter with 500
-   * sentences that's ~1500 round-trips between main thread and worker.
+   * Old flow: Add N → coqAdded → Exec N → feedProcessed → Goals(N) →
+   * coqGoalInfo → [next]. 3+ round-trips per sentence — too slow.
    *
-   * New flow: fire every Add upfront (sids are pre-allocated so the tip chain
-   * is deterministic — we don't need to wait for coqAdded between Adds), then
-   * Exec only the target sid. Coq's STM processes all dependencies in topo
-   * order inside the worker with zero JS/worker round-trips between them.
-   * `feedProcessed` callbacks still arrive per-sentence so the UI highlight
-   * advances smoothly.
+   * New flow (batch):
+   *   - Fire Add sentence-by-sentence, driven by coqAdded callbacks. This
+   *     keeps Coq's STM sid-chain valid if any intermediate Add fails
+   *     (firing all Adds upfront caused `Stm.Vcs_aux.Expired` when earlier
+   *     parse errors invalidated downstream tips).
+   *   - Skip the per-sentence Exec/Goals entirely. Fire ONE Exec on the
+   *     target sid once all Adds are in. Coq's STM then processes every
+   *     dependency in-worker with no main-thread round-trips between them.
+   *   - Query Goals only at the final tip.
+   *
+   * This eliminates 2/3 of the per-sentence round-trips while leaving the
+   * incremental Add → coqAdded handshake intact. `feedProcessed` still
+   * arrives per-sentence so the green-highlight UI advances smoothly.
    */
   private executeToIndex(targetIdx: number): void {
     if (targetIdx <= this.executionIndex || targetIdx >= this.sentences.length) return;
@@ -374,29 +380,43 @@ export class CoqEngine implements CoqObserver {
     this._executeTarget = targetIdx;
     this._batchExec = true;
     this.executing = true;
-    // Fresh message buffer for this batch run
     this.messages = [];
 
-    // Queue every Add at once. Each uses the *previous* sentence's sid as tip,
-    // which is already known (sids are allocated in setDocument).
-    for (let i = this.executionIndex + 1; i <= targetIdx; i++) {
-      const s = this.sentences[i];
-      if (!s || s.phase !== 'pending') continue;
-      s.phase = 'added';
-      const tipSid = i > 0 ? this.sentences[i - 1].sid : 1;
-      this.worker.add(tipSid, s.sid, this.transformForWorker(s.text));
-    }
-    this.emitHighlights();
-
-    // One Exec on the target — STM will execute everything it depends on.
-    const target = this.sentences[targetIdx];
-    if (target) this.worker.exec(target.sid);
+    // Kick off: Add the first pending sentence. Subsequent Adds are chained
+    // from coqAdded (see below), then Exec(target) fires once all are in.
+    this._addNextInBatch();
   }
   private _executeTarget = -1;
-  /** True while executeToIndex is driving a multi-sentence batch. When set,
-   *  coqAdded must NOT auto-Exec (we exec only the target once) and
-   *  feedProcessed must NOT query goals for intermediate sentences. */
+  /** True while executeToIndex is driving a multi-sentence batch. */
   private _batchExec = false;
+
+  /** Fire the Add for the next pending sentence in the batch window.
+   *  When no more pending sentences remain in the window, fire a single
+   *  Exec on the target sid. */
+  private _addNextInBatch(): void {
+    if (!this._batchExec) return;
+    const target = this._executeTarget;
+    let nextIdx = -1;
+    for (let i = this.executionIndex + 1; i <= target; i++) {
+      const s = this.sentences[i];
+      if (s && s.phase === 'pending') { nextIdx = i; break; }
+    }
+    if (nextIdx === -1) {
+      // All sentences in the window have been Added (or are already past
+      // pending). Trigger a single Exec on the target; STM will process
+      // every dependency in-worker with no JS round-trips between them.
+      const t = this.sentences[target];
+      if (t) this.worker.exec(t.sid);
+      this.emitHighlights();
+      return;
+    }
+    const s = this.sentences[nextIdx];
+    s.phase = 'added';
+    const tipSid = nextIdx > 0 ? this.sentences[nextIdx - 1].sid : 1;
+    this.worker.add(tipSid, s.sid, this.transformForWorker(s.text));
+    this.emitHighlights();
+    // Wait for coqAdded to fire the next one.
+  }
 
   private cancelToIndex(targetIdx: number): void {
     if (targetIdx < this.executionIndex && this.executionIndex >= 0) {
@@ -438,12 +458,16 @@ export class CoqEngine implements CoqObserver {
     const sentence = this.sentences.find(s => s.sid === sid);
     if (!sentence) return;
     sentence.phase = 'executing';
-    // Single-step path: immediately Exec. In a batch (executeToIndex), we
-    // Exec only the target sid once, so skip auto-Exec here.
-    if (!this._batchExec) {
+    this.emitHighlights();
+
+    if (this._batchExec) {
+      // Batch mode: chain to the next sentence's Add. When the window is
+      // exhausted, _addNextInBatch fires a single Exec on the target.
+      this._addNextInBatch();
+    } else {
+      // Single-step: immediately Exec this one sentence.
       this.worker.exec(sid);
     }
-    this.emitHighlights();
   }
 
   coqPending(sid: number, _prefix: unknown, _moduleNames: unknown): void {
