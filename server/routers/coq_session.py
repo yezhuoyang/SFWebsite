@@ -192,10 +192,19 @@ async def save_chapter_file(
     user: "User | None" = Depends(get_optional_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Save the chapter file, auto-grade, and update progress."""
+    """Save the chapter file, auto-grade, and update progress.
+
+    Body fields:
+        content:          full chapter text (required)
+        target_exercise:  optional exercise name — if given, compile ONLY up
+                          to (and including) that exercise, and return grading
+                          for just that one. This is what the per-exercise
+                          "Submit & Grade" button uses.
+    """
     if volume_id not in VOLUMES:
         raise HTTPException(status_code=404, detail=f"Unknown volume: {volume_id}")
     content = body.get("content", "")
+    target_exercise = body.get("target_exercise")
     if not content or len(content.strip()) < 10:
         raise HTTPException(status_code=400, detail="Refusing to save empty or near-empty content")
     vol = VOLUMES[volume_id]
@@ -210,13 +219,16 @@ async def save_chapter_file(
         shutil.copy2(str(v_file), str(orig_file))
         logger.info(f"Created backup: {orig_file}")
 
-    # Save
+    # Save full content always (per-exercise grading compiles a temp truncated copy)
     v_file.write_text(content, encoding="utf-8")
 
-    # Auto-grade after saving — use full_grade for compile errors + tampering detection
-    from server.services.grader import full_grade
+    from server.services.grader import full_grade, full_grade_exercise
     from server.services.progress_tracker import update_progress_from_grade
-    grade_result = await full_grade(volume_id, chapter_name)
+
+    if target_exercise:
+        grade_result = await full_grade_exercise(volume_id, chapter_name, target_exercise)
+    else:
+        grade_result = await full_grade(volume_id, chapter_name)
 
     # Save progress for the current user (if authenticated)
     user_id = user.id if user else None

@@ -697,13 +697,18 @@ export default function ChapterPage() {
   const highlightsRef = useRef(coqState.highlights);
   highlightsRef.current = coqState.highlights;
 
-  // Save the rebuilt document, auto-grade, and show results
-  const handleSave = useCallback(async () => {
+  // Save the rebuilt document, auto-grade, and show results.
+  //
+  // When `targetExerciseName` is provided (per-exercise "Submit & Grade"), the
+  // server compiles ONLY up to and including that exercise (truncated copy,
+  // open Modules/Sections auto-closed) and returns a grade for just that one.
+  // Errors in code *after* the target never penalize it.
+  const handleSave = useCallback(async (targetExerciseName?: string) => {
     if (!volumeId || !chapterName) return;
     setSaving(true);
     try {
       const doc = rebuildDocument();
-      const result = await saveChapterFile(volumeId, chapterName, doc);
+      const result = await saveChapterFile(volumeId, chapterName, doc, targetExerciseName);
       originalDocRef.current = doc;
       setSaveResult(result);
 
@@ -1280,7 +1285,7 @@ export default function ChapterPage() {
 
           <div className="w-px h-5 bg-gray-200" />
 
-          <button onClick={handleSave} disabled={saving}
+          <button onClick={() => handleSave()} disabled={saving}
             className="px-3 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white disabled:opacity-30 rounded font-medium shadow-sm"
             title="Save the file and grade ALL exercises in this chapter">
             {saving ? 'Grading...' : 'Submit & Grade All'}
@@ -1771,12 +1776,12 @@ export default function ChapterPage() {
                             {status === 'full' && (
                               <span className="text-xs text-green-600 font-medium">&#10003;</span>
                             )}
-                            {/* Per-exercise submit button */}
+                            {/* Per-exercise submit button — narrows the feedback modal to just this exercise */}
                             <button
-                              onClick={(e) => { e.stopPropagation(); handleSave(); }}
+                              onClick={(e) => { e.stopPropagation(); handleSave(block.exercise_name || undefined); }}
                               disabled={saving}
                               className="text-[10px] bg-green-600 hover:bg-green-700 text-white px-2 py-0.5 rounded font-medium disabled:opacity-30"
-                              title="Submit and grade this exercise"
+                              title="Submit and grade only this exercise"
                             >
                               {saving ? 'Grading…' : 'Submit & Grade'}
                             </button>

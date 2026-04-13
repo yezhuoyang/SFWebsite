@@ -91,11 +91,20 @@ export interface SaveResult {
   compile_output?: string | null;
 }
 
-export const saveChapterFile = (volumeId: string, chapterName: string, content: string) =>
+export const saveChapterFile = (
+  volumeId: string,
+  chapterName: string,
+  content: string,
+  targetExercise?: string,
+) =>
   fetchJSON<SaveResult>(`${BASE}/coq/file/${volumeId}/${chapterName}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify(
+      targetExercise
+        ? { content, target_exercise: targetExercise }
+        : { content }
+    ),
   });
 
 export const resetChapterFile = (volumeId: string, chapterName: string) =>
