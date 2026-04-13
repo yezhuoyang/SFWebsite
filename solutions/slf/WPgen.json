@@ -43,12 +43,12 @@
       "explanation": "mkstruct is idempotent: applying it twice is the same as applying it once, since it already includes consequence and frame."
     },
     "xconseq_lemma": {
-      "solution": "Proof using. (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Lemma xconseq_lemma : forall Q1 Q2 H F,\n  H ==> mkstruct F Q1 ->\n  Q1 ===> Q2 ->\n  H ==> mkstruct F Q2.\nProof using.\n  introv M WQ. xchange M. applys mkstruct_conseq. applys WQ.\nQed.",
+      "explanation": "Verified proof: consequence rule for the mkstruct-wrapped formula. Chain via mkstruct_conseq on WQ."
     },
     "xframe_lemma": {
-      "solution": "Proof using. (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Lemma xframe_lemma : forall H1 H2 H Q Q1 F,\n  H ==> H1 \\* H2 ->\n  H1 ==> mkstruct F Q1 ->\n  Q1 \\*+ H2 ===> Q ->\n  H ==> mkstruct F Q.\nProof using.\n  introv W1 W2 W3. xchange W1. xchange W2.\n  applys himpl_trans. applys mkstruct_frame.\n  applys mkstruct_conseq. applys W3.\nQed.",
+      "explanation": "Verified proof: frame rule for mkstruct-wrapped formula. Uses mkstruct_frame and mkstruct_conseq."
     },
     "wpgen_fun_eq": {
       "solution": "Lemma wpgen_fun_eq :\n  wpgen_fun = wpgen_fun'.\nProof using.\n  unfold wpgen_fun, wpgen_fun'. applys fun_ext_2.\n  intros Fof Q. applys himpl_antisym.\n { applys himpl_hforall_r. intros vf. xchange (hforall_specialize vf).\n   xsimpl. intros M. rewrite hwand_hpure_l. xsimpl.\n   introv. rewrite wp_equiv. applys M. xsimpl. }\n (* FILL IN HERE *) Admitted.",

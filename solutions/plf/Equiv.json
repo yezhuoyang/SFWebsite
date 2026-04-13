@@ -103,8 +103,8 @@
       "explanation": "c3 = X:=1 and c4 = X:=2 are incomparable. cmin = while true do skip end approximates everything (vacuously). zprop is a best-effort property."
     },
     "not_congr": {
-      "solution": "(* FILL IN HERE *)\n(* Do not modify the following line: *)\nDefinition manual_grade_for_not_congr : option (nat*string) := None.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "(* Informal exercise.\n\n   A relation that is an equivalence but NOT a congruence on commands:\n\n     c1 ~ c2  iff  c1 and c2 both terminate on the same states (ignoring\n                    intermediate states — so c1 and c2 are equivalent iff\n                    forall st, (exists st', st =[c1]=> st') iff (exists st', st =[c2]=> st')).\n\n   This is an equivalence (reflexive, symmetric, transitive).\n   But it is NOT a congruence: e.g., c1 = \"X := 1\" and c2 = \"X := 2\" are\n   equivalent under this relation (both terminate from every state), but\n   \"c1; if X = 1 then skip else while true do skip end end\" and\n   \"c2; if X = 1 then skip else while true do skip end end\" are not\n   equivalent under this relation (the first always terminates, the second\n   diverges).\n*)",
+      "explanation": "Informal exercise: define an equivalence that fails to be a congruence. A \"termination-equivalence\" works."
     },
     "fold_bexp_Eq_informal": {
       "solution": "(* Informal exercise.\n\n   Prove informally the correctness of the boolean optimization fold_constants_bexp (BEq case).\n*)",
