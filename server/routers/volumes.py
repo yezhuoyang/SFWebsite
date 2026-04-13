@@ -14,19 +14,34 @@ from server.models import Chapter, Exercise, Progress, Volume
 from server.schemas import ChapterOut, ExerciseOut, VolumeOut
 
 
-def _get_chapter_meta(volume_id: str, chapter_name: str) -> tuple[str, int]:
-    """Extract a one-line summary and line count from a .v file."""
+def _get_chapter_meta(volume_id: str, chapter_name: str) -> tuple[str, str, int]:
+    """Extract (title, summary, line_count) from a chapter's .v file.
+
+    The title is the text of the first top-level `(** * Title *)` doc comment
+    (e.g. "Imp: Simple Imperative Programs"); the summary is the first
+    substantial prose paragraph after the title.
+    """
     vol = VOLUME_CFG.get(volume_id)
     if not vol:
-        return "", 0
+        return "", "", 0
     v_file = Path(vol["path"]) / f"{chapter_name}.v"
     if not v_file.exists():
-        return "", 0
+        return "", "", 0
     try:
         text = v_file.read_text(encoding="utf-8", errors="replace")
         line_count = text.count("\n") + 1
-        # Find doc comments — skip the title, take the first substantial paragraph
+        # Find doc comments
         doc_matches = list(re.finditer(r'\(\*\*\s+(.*?)\s*\*\)', text, re.DOTALL))
+
+        # Title — first doc comment matching `* Title Here` (exactly one star)
+        title = ""
+        for m in doc_matches[:3]:
+            t = m.group(1).strip()
+            title_match = re.match(r'^\*\s+(.+)$', t, re.DOTALL)
+            if title_match:
+                title = re.sub(r'\s+', ' ', title_match.group(1)).strip()
+                break
+
         summary = ""
         for m in doc_matches[1:6]:
             t = m.group(1).strip()
@@ -43,9 +58,9 @@ def _get_chapter_meta(volume_id: str, chapter_name: str) -> tuple[str, int]:
             if len(t) > 150:
                 summary = summary.rsplit(' ', 1)[0] + '...'
             break
-        return summary, line_count
+        return title, summary, line_count
     except Exception:
-        return "", 0
+        return "", "", 0
 
 router = APIRouter(tags=["volumes"])
 
@@ -111,10 +126,10 @@ async def list_chapters(volume_id: str, session: AsyncSession = Depends(get_sess
         )
         total_pts = pts.scalar() or 0.0
 
-        summary, line_count = _get_chapter_meta(volume_id, ch.name)
+        title, summary, line_count = _get_chapter_meta(volume_id, ch.name)
 
         out.append(ChapterOut(
-            id=ch.id, volume_id=ch.volume_id, name=ch.name,
+            id=ch.id, volume_id=ch.volume_id, name=ch.name, title=title,
             display_order=ch.display_order, exercise_count=ch.exercise_count,
             max_points_standard=ch.max_points_standard,
             max_points_advanced=ch.max_points_advanced,

@@ -81,7 +81,7 @@ export default function VolumePage() {
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold text-gray-800 group-hover:text-indigo-700 transition-colors">{ch.name}</h3>
+                  <h3 className="text-sm font-bold text-gray-800 group-hover:text-indigo-700 transition-colors">{ch.title || ch.name}</h3>
                   {ch.exercise_count === 0 && (
                     <span className="text-[11px] text-gray-300 font-medium">(reading only)</span>
                   )}

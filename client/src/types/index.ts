@@ -14,6 +14,7 @@ export interface Chapter {
   id: number;
   volume_id: string;
   name: string;
+  title: string;
   display_order: number;
   exercise_count: number;
   max_points_standard: number;

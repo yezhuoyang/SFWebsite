@@ -28,6 +28,7 @@ class ChapterOut(BaseModel):
     id: int
     volume_id: str
     name: str
+    title: str = ""
     display_order: int
     exercise_count: int
     max_points_standard: float
