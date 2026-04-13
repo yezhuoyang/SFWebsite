@@ -107,7 +107,17 @@ export default function ChapterPage() {
   const syncThenDoRef = useRef<((action: () => void) => void) | null>(null);
 
   // Auth + live presence
-  const { user: authUser, requireLogin } = useAuth();
+  const { user: authUser, requireLogin, logout: authLogout } = useAuth();
+  // Local "pending" annotations — highlighted in the document while a save
+  // is in flight (or after a retriable failure) so the user can see exactly
+  // what range their note applies to.
+  const [pendingAnnotations, setPendingAnnotations] = useState<Array<{
+    id: string;                // client-side id
+    block_id: number;
+    selected_text: string;
+    color: string;
+    note: string;
+  }>>([]);
 
   // Server annotation helpers
   const refreshAnnotations = useCallback(() => {
@@ -592,15 +602,46 @@ export default function ChapterPage() {
       }
     });
 
+    type HighlightItem = {
+      id: string;
+      block_id: number;
+      selected_text: string;
+      color?: string;
+      note: string;
+      tooltip_prefix: string;
+      pending?: boolean;
+    };
+    const items: HighlightItem[] = [
+      ...serverAnnotations
+        .filter(a => !!a.selected_text)
+        .map(a => ({
+          id: String(a.id),
+          block_id: a.block_id,
+          selected_text: a.selected_text,
+          color: a.color || '#f59e0b',
+          note: a.note,
+          tooltip_prefix: a.display_name || a.username,
+        })),
+      ...pendingAnnotations.map(a => ({
+        id: 'pending-' + a.id,
+        block_id: a.block_id,
+        selected_text: a.selected_text,
+        color: a.color,
+        note: a.note,
+        tooltip_prefix: 'pending',
+        pending: true,
+      })),
+    ];
+
     // Apply highlights for annotations that have selected_text
-    for (const ann of serverAnnotations) {
-      if (!ann.selected_text) continue;
-      const blockEl = blockRefsMap.current.get(ann.block_id);
+    for (const item of items) {
+      if (!item.selected_text) continue;
+      const blockEl = blockRefsMap.current.get(item.block_id);
       if (!blockEl) continue;
 
       // Walk text nodes in this block to find the annotated string
       const walker = document.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT);
-      const searchText = ann.selected_text;
+      const searchText = item.selected_text;
       let node: Text | null;
       while ((node = walker.nextNode() as Text | null)) {
         const idx = node.textContent?.indexOf(searchText) ?? -1;
@@ -610,20 +651,25 @@ export default function ChapterPage() {
         const before = node.splitText(idx);
         before.splitText(searchText.length);
         const mark = document.createElement('mark');
-        mark.setAttribute('data-annotation-id', String(ann.id));
-        mark.style.backgroundColor = (ann.color || '#f59e0b') + '20';
-        mark.style.borderBottom = `2px solid ${ann.color || '#f59e0b'}`;
+        mark.setAttribute('data-annotation-id', item.id);
+        const color = item.color || '#f59e0b';
+        mark.style.backgroundColor = color + '20';
+        mark.style.borderBottom = `2px solid ${color}`;
         mark.style.padding = '0 1px';
         mark.style.borderRadius = '2px';
         mark.style.cursor = 'pointer';
-        mark.title = `${ann.display_name || ann.username}: ${ann.note}`;
+        if (item.pending) {
+          mark.style.opacity = '0.85';
+          mark.style.borderBottomStyle = 'dashed';
+        }
+        mark.title = `${item.tooltip_prefix}: ${item.note}`;
         before.parentNode?.replaceChild(mark, before);
         mark.appendChild(document.createTextNode(searchText));
         // Only highlight the first occurrence
         break;
       }
     }
-  }, [serverAnnotations]);
+  }, [serverAnnotations, pendingAnnotations]);
 
   /** Sync document if dirty, then run action.
    * Only sends didChange when user explicitly steps — never auto during typing.
@@ -2116,6 +2162,19 @@ export default function ChapterPage() {
           selectedText={annotationCreate.selectedText}
           position={{ x: annotationCreate.x, y: annotationCreate.y }}
           onSave={async (note, color, isPublic) => {
+            const pendingId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+            // Add a pending highlight immediately so the selected range stays
+            // visible on the page while we talk to the server (and after any
+            // retries). Only removed on explicit success, or if the user
+            // cancels the re-login prompt on a failed save.
+            setPendingAnnotations(p => [...p, {
+              id: pendingId,
+              block_id: annotationCreate.blockId,
+              selected_text: annotationCreate.selectedText,
+              color,
+              note,
+            }]);
+
             const save = () =>
               createServerAnnotation({
                 volume_id: volumeId,
@@ -2130,29 +2189,52 @@ export default function ChapterPage() {
                 end_col: annotationCreate.endCol,
                 is_public: isPublic,
               });
+
+            const isAuthError = (err: unknown) => {
+              const msg = err instanceof Error ? err.message : String(err);
+              return /^401/.test(msg) || /Invalid token/i.test(msg) || /Not authenticated/i.test(msg);
+            };
+
+            let savedOk = false;
+            let fatalError: Error | null = null;
             try {
-              try {
-                await save();
-              } catch (err) {
-                // If the server rejected us as unauthenticated, prompt for
-                // login and retry once. Other errors propagate.
-                const msg = err instanceof Error ? err.message : '';
-                if (/^401/.test(msg) || !authUser) {
+              await save();
+              savedOk = true;
+            } catch (err) {
+              if (isAuthError(err)) {
+                // The cached token is stale (e.g., the user it refers to was
+                // deleted). Clear the auth state so `requireLogin` actually
+                // pops the modal instead of resolving against the stale user.
+                authLogout();
+                try {
                   await requireLogin('Please sign in to save annotations.');
                   await save();
-                } else {
-                  throw err;
+                  savedOk = true;
+                } catch (inner) {
+                  if (inner instanceof Error && inner.message === 'Login cancelled') {
+                    // User dismissed the prompt — we'll keep the highlight
+                    // on the page so they can see what they tried to annotate.
+                  } else {
+                    fatalError = inner instanceof Error ? inner : new Error(String(inner));
+                  }
                 }
-              }
-              refreshAnnotations();
-            } catch (err) {
-              if (err instanceof Error && err.message === 'Login cancelled') {
-                // User closed the login modal — silently drop the annotation.
               } else {
-                console.error('Failed to save annotation:', err);
-                alert('Failed to save annotation: ' + (err instanceof Error ? err.message : String(err)));
+                fatalError = err instanceof Error ? err : new Error(String(err));
               }
             }
+
+            if (savedOk) {
+              refreshAnnotations();
+              setPendingAnnotations(p => p.filter(a => a.id !== pendingId));
+            } else if (fatalError) {
+              // A real error (not just "user cancelled"): show it, drop
+              // the pending highlight.
+              console.error('Failed to save annotation:', fatalError);
+              alert('Failed to save annotation: ' + fatalError.message);
+              setPendingAnnotations(p => p.filter(a => a.id !== pendingId));
+            }
+            // else: user cancelled login → keep the pending highlight
+            //   visible as a reminder, with dashed styling.
             setAnnotationCreate(null);
           }}
           onCancel={() => setAnnotationCreate(null)}

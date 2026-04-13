@@ -44,6 +44,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Login-modal state and the pending-promise callbacks for requireLogin().
   const [modalReason, setModalReason] = useState<string | null>(null);
   const pendingRef = useRef<{ resolve: () => void; reject: (err: Error) => void } | null>(null);
+  // Ref-mirror of `user` so requireLogin() always sees the latest value —
+  // callers may call logout() and immediately requireLogin() in the same
+  // tick (e.g., after detecting a stale 401), before the setUser update
+  // has flushed.
+  const userRef = useRef<AuthUser | null>(user);
+  useEffect(() => { userRef.current = user; }, [user]);
 
   // Validate token on mount
   useEffect(() => {
@@ -111,6 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    userRef.current = null;
     setToken(null);
     setUser(null);
     localStorage.removeItem(TOKEN_KEY);
@@ -118,12 +125,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const requireLogin = useCallback((reason?: string): Promise<void> => {
-    if (user) return Promise.resolve();
+    // Check the ref (latest value), not the closed-over `user`, so that a
+    // `logout(); requireLogin()` sequence in the same tick pops the modal.
+    if (userRef.current && localStorage.getItem(TOKEN_KEY)) return Promise.resolve();
     return new Promise<void>((resolve, reject) => {
       pendingRef.current = { resolve, reject };
       setModalReason(reason ?? '');
     });
-  }, [user]);
+  }, []);
 
   const handleModalSuccess = useCallback(() => {
     const p = pendingRef.current;
