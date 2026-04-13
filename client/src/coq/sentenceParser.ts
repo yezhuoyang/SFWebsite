@@ -60,7 +60,19 @@ export function parseSentences(text: string): CoqSentence[] {
 
     // Start of comment: (* ... *)
     if (ch === '(' && i + 1 < len && text[i + 1] === '*') {
+      const wasAtStart = i === sentenceStart;
       i = skipComment(text, i);
+      // A leading comment (before the first real token of a sentence) is
+      // trivia, not part of the sentence. Advance sentenceStart past it so
+      // that a bullet sitting after the comment is still recognized by the
+      // `i === sentenceStart` check below. Without this, a sequence like
+      // "(* ... *)\n  - tactic." is emitted as one sentence — the `-` bullet
+      // and `tactic.` then get sent to jsCoq in a single Add, and only the
+      // bullet is processed, leaving the tactic behind and breaking the proof.
+      if (wasAtStart) {
+        while (i < len && isWhitespace(text[i])) i++;
+        sentenceStart = i;
+      }
       continue;
     }
 
