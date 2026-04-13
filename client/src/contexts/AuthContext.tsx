@@ -1,9 +1,14 @@
 /**
  * Auth context: manages JWT token, user info, and login/logout.
  * Token is persisted in localStorage.
+ *
+ * Also exposes `requireLogin(reason)` — shows a modal sign-in dialog
+ * when an action requires auth; resolves when the user is signed in,
+ * rejects when they cancel.
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import LoginModal from '../components/LoginModal';
 
 export interface AuthUser {
   id: number;
@@ -18,6 +23,9 @@ interface AuthState {
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string, displayName?: string) => Promise<void>;
   logout: () => void;
+  /** Ensure the user is signed in. If already signed in, resolves immediately.
+   *  Otherwise pops a login modal; resolves on success, rejects on cancel. */
+  requireLogin: (reason?: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -32,6 +40,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return stored ? JSON.parse(stored) : null;
   });
   const [loading, setLoading] = useState(false);
+
+  // Login-modal state and the pending-promise callbacks for requireLogin().
+  const [modalReason, setModalReason] = useState<string | null>(null);
+  const pendingRef = useRef<{ resolve: () => void; reject: (err: Error) => void } | null>(null);
 
   // Validate token on mount
   useEffect(() => {
@@ -105,9 +117,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(USER_KEY);
   }, []);
 
+  const requireLogin = useCallback((reason?: string): Promise<void> => {
+    if (user) return Promise.resolve();
+    return new Promise<void>((resolve, reject) => {
+      pendingRef.current = { resolve, reject };
+      setModalReason(reason ?? '');
+    });
+  }, [user]);
+
+  const handleModalSuccess = useCallback(() => {
+    const p = pendingRef.current;
+    pendingRef.current = null;
+    setModalReason(null);
+    p?.resolve();
+  }, []);
+
+  const handleModalCancel = useCallback(() => {
+    const p = pendingRef.current;
+    pendingRef.current = null;
+    setModalReason(null);
+    p?.reject(new Error('Login cancelled'));
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout, requireLogin }}>
       {children}
+      {modalReason !== null && (
+        <LoginModal
+          reason={modalReason || 'This action requires you to be signed in.'}
+          onSuccess={handleModalSuccess}
+          onCancel={handleModalCancel}
+        />
+      )}
     </AuthContext.Provider>
   );
 }

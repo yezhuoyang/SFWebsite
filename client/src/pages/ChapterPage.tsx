@@ -107,7 +107,7 @@ export default function ChapterPage() {
   const syncThenDoRef = useRef<((action: () => void) => void) | null>(null);
 
   // Auth + live presence
-  const { user: authUser } = useAuth();
+  const { user: authUser, requireLogin } = useAuth();
 
   // Server annotation helpers
   const refreshAnnotations = useCallback(() => {
@@ -2116,8 +2116,8 @@ export default function ChapterPage() {
           selectedText={annotationCreate.selectedText}
           position={{ x: annotationCreate.x, y: annotationCreate.y }}
           onSave={async (note, color, isPublic) => {
-            try {
-              await createServerAnnotation({
+            const save = () =>
+              createServerAnnotation({
                 volume_id: volumeId,
                 chapter_name: chapterName,
                 block_id: annotationCreate.blockId,
@@ -2130,10 +2130,28 @@ export default function ChapterPage() {
                 end_col: annotationCreate.endCol,
                 is_public: isPublic,
               });
+            try {
+              try {
+                await save();
+              } catch (err) {
+                // If the server rejected us as unauthenticated, prompt for
+                // login and retry once. Other errors propagate.
+                const msg = err instanceof Error ? err.message : '';
+                if (/^401/.test(msg) || !authUser) {
+                  await requireLogin('Please sign in to save annotations.');
+                  await save();
+                } else {
+                  throw err;
+                }
+              }
               refreshAnnotations();
             } catch (err) {
-              console.error('Failed to save annotation:', err);
-              alert('Failed to save annotation. Make sure you are logged in.');
+              if (err instanceof Error && err.message === 'Login cancelled') {
+                // User closed the login modal — silently drop the annotation.
+              } else {
+                console.error('Failed to save annotation:', err);
+                alert('Failed to save annotation: ' + (err instanceof Error ? err.message : String(err)));
+              }
             }
             setAnnotationCreate(null);
           }}

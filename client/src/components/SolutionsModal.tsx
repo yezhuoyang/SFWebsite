@@ -50,7 +50,7 @@ function formatDate(iso: string): string {
 }
 
 export default function SolutionsModal({ exerciseId, exerciseName, currentCode, onClose }: Props) {
-  const { user } = useAuth();
+  const { user, requireLogin } = useAuth();
   const [tab, setTab] = useState<Tab>('browse');
   const [sort, setSort] = useState<SolutionSort>('upvotes');
   const [solutions, setSolutions] = useState<SharedSolutionSummary[]>([]);
@@ -180,20 +180,36 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
   const handleSubmit = async () => {
     if (!submitCode.trim()) return;
     setSubmitting(true);
-    try {
-      await shareSolution({
+    const doShare = () =>
+      shareSolution({
         exercise_id: exerciseId,
         code: submitCode,
         explanation: submitExplanation.trim() || undefined,
       });
+    try {
+      try {
+        await doShare();
+      } catch (err: any) {
+        const msg = String(err);
+        if (msg.includes('401') || !user) {
+          await requireLogin('Please sign in to share your solution.');
+          await doShare();
+        } else {
+          throw err;
+        }
+      }
       setSubmitExplanation('');
       setTab('mine');
     } catch (err: any) {
-      const msg = String(err);
-      if (msg.includes('403')) {
-        alert('You must solve this exercise first before sharing a solution.');
+      if (err instanceof Error && err.message === 'Login cancelled') {
+        // User dismissed login prompt — do nothing.
       } else {
-        alert('Failed to submit: ' + msg);
+        const msg = String(err);
+        if (msg.includes('403')) {
+          alert('You must solve this exercise first before sharing a solution.');
+        } else {
+          alert('Failed to submit: ' + msg);
+        }
       }
     } finally {
       setSubmitting(false);
