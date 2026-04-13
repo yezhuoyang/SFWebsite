@@ -336,8 +336,24 @@ export class CoqEngine implements CoqObserver {
    * Remove when/if we upgrade jsCoq to a build using Coq 8.18+.
    */
   private transformForWorker(text: string): string {
+    const originalText = text;
+    let out = text;
+
+    // 3) Neutralise Imp.v's redeclaration of `x !-> v` at the SAME level-100
+    //    as Maps.v's `x !-> v ; m`. Coq 8.17 can't cope with that overlap
+    //    and rejects the declaration with a cryptic term-level-200 syntax
+    //    error. Since rule (2) below expands every USE of `(x !-> v)` into
+    //    the three-arg form anyway, the declaration is redundant in the
+    //    jsCoq path — replace it with a harmless no-op Notation.
+    //    Regex is permissive about whitespace so it matches even after
+    //    the document's been re-formatted.
+    out = out.replace(
+      /Notation\s+"\s*x\s*'!->'\s*v\s*"\s*:=\s*\(\s*x\s*!->\s*v\s*;\s*empty_st\s*\)\s*\([^)]*\)\s*\./g,
+      'Notation "\'__sf_compat_shim\'" := O (at level 0, only parsing).',
+    );
+
     // 1) (__ !-> v) -> (t_empty v)
-    let out = text.replace(
+    out = out.replace(
       /(^|[^A-Za-z0-9_])__(\s+!->\s+)/g,
       (_m, before, sep) => `${before}t_empty${sep.replace(/!->\s+/, '')}`,
     );
@@ -346,16 +362,18 @@ export class CoqEngine implements CoqObserver {
     //    "<ident> !-> <single-token-value>" with NO `;` already present.
     //    This expands Imp.v's two-arg shorthand into the full Maps.v three-arg
     //    `x !-> v ; m` chain, bypassing the ambiguous precedence entirely.
-    //
-    //    Regex: open paren, then an identifier, whitespace, `!->`, whitespace,
-    //    then one or more "safe" chars (no paren, semicolon, brace, bracket,
-    //    or whitespace), then close paren. This matches `(X !-> 5)`, `(X !-> true)`,
-    //    `(X !-> foo_bar)`; skips `(X !-> 5 ; Y !-> 4)` (has `;`), and skips
-    //    `(X !-> (1+2))` (has inner paren — rare in SF, user can work around).
     out = out.replace(
       /\(([A-Za-z_]\w*\s+!->\s+[^();{}[\]\s<>]+)\)/g,
       (_m, inner) => `(${inner} ; empty_st)`,
     );
+
+    // Debug: log when we actually rewrote something, so field reports of
+    // residual Coq 8.17 errors come with ground truth about what text the
+    // worker received. Cheap enough to leave on; easy to strip later.
+    if (out !== originalText) {
+      // eslint-disable-next-line no-console
+      console.debug('[CoqEngine] rewrote for Coq 8.17:\n  in:', originalText.slice(0, 200), '\n  out:', out.slice(0, 200));
+    }
 
     return out;
   }
