@@ -319,26 +319,45 @@ export class CoqEngine implements CoqObserver {
   // --- Private: Execution Logic ---
 
   /**
-   * Coq 8.17 (the version bundled in jsCoq 0.17.1) has a notation parser
-   * quirk: when two `!->` notations live at the same precedence level (from
-   * Maps.v), input like `(__ !-> 0)` is sometimes mis-parsed as the longer
-   * `x !-> v ; m` notation and it fails with "';' expected after [term]".
+   * Coq 8.17 (bundled in jsCoq 0.17.1) has notation-precedence bugs around
+   * SF's `!->` total-map notations, all of which live at level 100 and
+   * confuse the parser. We transparently rewrite the sentence text to the
+   * unambiguous expanded form before shipping to the worker. All rewrites
+   * are semantic no-ops — each is literally how the original notation is
+   * defined in Maps.v / Imp.v:
    *
-   * The fix: transparently rewrite `__ !-> v` to `t_empty v` before sending
-   * a sentence to the worker. Per Maps.v:140, these two forms are defined to
-   * be exactly equal (`Notation "'__' '!->' v" := (t_empty v)`), so this is
-   * semantically a no-op. It only affects the bytes shipped to the worker —
-   * the editor text, sentence positions, highlights, and the grading path
-   * (server Coq 8.19, which handles the original fine) all stay untouched.
+   *   (__ !-> v)             ->  (t_empty v)           [Maps.v:140]
+   *   (x  !-> v)             ->  (x !-> v ; empty_st)  [Imp.v two-arg form]
    *
-   * Remove this when/if we upgrade jsCoq to a build using Coq 8.18+.
+   * Only the bytes shipped to the worker are rewritten — editor text,
+   * sentence positions, highlights, and the server grading path
+   * (Coq 8.19 via coqc, which handles all of these fine) stay untouched.
+   *
+   * Remove when/if we upgrade jsCoq to a build using Coq 8.18+.
    */
   private transformForWorker(text: string): string {
-    // Match `__ !-> ` only when `__` is not part of a larger identifier.
-    return text.replace(
+    // 1) (__ !-> v) -> (t_empty v)
+    let out = text.replace(
       /(^|[^A-Za-z0-9_])__(\s+!->\s+)/g,
       (_m, before, sep) => `${before}t_empty${sep.replace(/!->\s+/, '')}`,
     );
+
+    // 2) (x !-> v) -> (x !-> v ; empty_st) when the inner form is a simple
+    //    "<ident> !-> <single-token-value>" with NO `;` already present.
+    //    This expands Imp.v's two-arg shorthand into the full Maps.v three-arg
+    //    `x !-> v ; m` chain, bypassing the ambiguous precedence entirely.
+    //
+    //    Regex: open paren, then an identifier, whitespace, `!->`, whitespace,
+    //    then one or more "safe" chars (no paren, semicolon, brace, bracket,
+    //    or whitespace), then close paren. This matches `(X !-> 5)`, `(X !-> true)`,
+    //    `(X !-> foo_bar)`; skips `(X !-> 5 ; Y !-> 4)` (has `;`), and skips
+    //    `(X !-> (1+2))` (has inner paren — rare in SF, user can work around).
+    out = out.replace(
+      /\(([A-Za-z_]\w*\s+!->\s+[^();{}[\]\s<>]+)\)/g,
+      (_m, inner) => `(${inner} ; empty_st)`,
+    );
+
+    return out;
   }
 
   private executeSentence(idx: number): void {
