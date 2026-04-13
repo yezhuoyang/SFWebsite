@@ -84,19 +84,20 @@ export function parseSentences(text: string): CoqSentence[] {
 
     // Potential sentence terminator: '.' followed by whitespace/EOF/closing-paren
     if (ch === '.') {
-      const next = i + 1 < len ? text[i + 1] : '\0';
-      const prev = i > 0 ? text[i - 1] : '\0';
-      // '.' is a sentence terminator if followed by whitespace, EOF, or ')'.
-      // But NOT if it is part of a '..' token (preceded OR followed by another
-      // '.'), which appears in recursive notations like `(.. (f x) .. y)`.
-      if ((i + 1 >= len || isWhitespace(next) || next === ')') && prev !== '.' && next !== '.') {
-        // Also check it's not part of "..." (number like 0.5 - but Coq doesn't have float literals in SF)
-        // And not part of a qualified name like "Nat.add" — check char before '.'
-        // Actually, qualified names like `Nat.add` have identifier chars on BOTH sides of '.'
-        // A sentence-ending '.' has non-identifier char after it (whitespace/EOF)
-        // So the check above (whitespace/EOF after '.') is sufficient.
+      // Scan the run of consecutive '.' chars.
+      // - run length 1: ordinary terminator or qualified-name dot
+      // - run length 2: '..' token inside recursive notations like `(.. (f x) .. y)`
+      //   — never a sentence terminator
+      // - run length 3: '...' — Coq's `Proof with tac` continuation syntax,
+      //   which IS a sentence terminator (e.g. `destruct n...`)
+      let runEnd = i;
+      while (runEnd < len && text[runEnd] === '.') runEnd++;
+      const runLen = runEnd - i;
+      const afterDots = runEnd < len ? text[runEnd] : '\0';
+      const isFollowedByTerm = runEnd >= len || isWhitespace(afterDots) || afterDots === ')';
 
-        const endOffset = i + 1; // past the '.'
+      if (runLen !== 2 && isFollowedByTerm) {
+        const endOffset = runEnd; // past the last '.'
         const sentenceText = text.slice(sentenceStart, endOffset);
 
         // Only add non-empty sentences (skip pure whitespace)
@@ -114,6 +115,10 @@ export function parseSentences(text: string): CoqSentence[] {
         sentenceStart = i;
         continue;
       }
+      // Not a terminator — skip past the whole dot run so we don't revisit
+      // its dots one-by-one and spuriously terminate on a later iteration.
+      i = runEnd;
+      continue;
     }
 
     // Bullet markers: -, +, * at the start of a tactic (after whitespace or at line start)
@@ -159,6 +164,25 @@ export function parseSentences(text: string): CoqSentence[] {
         while (i < len && isWhitespace(text[i])) i++;
         sentenceStart = i;
         continue;
+      }
+      // Goal-selector + focus: `N:{ ... }` or `all:{ ... }` etc. Emit the
+      // selector-prefix-plus-'{' as a single sentence so Coq receives a
+      // valid focus opener. Only accept short selectors that look like
+      // `<digits-or-ident>:` with optional whitespace.
+      if (ch === '{') {
+        const prefix = text.slice(sentenceStart, i);
+        if (/^\s*(\d+|all|par|only\s+\d+(\s*-\s*\d+)?)\s*:\s*$/.test(prefix)) {
+          const sentenceText = text.slice(sentenceStart, i + 1).trim();
+          sentences.push({
+            text: sentenceText,
+            startOffset: sentenceStart,
+            endOffset: i + 1,
+          });
+          i++;
+          while (i < len && isWhitespace(text[i])) i++;
+          sentenceStart = i;
+          continue;
+        }
       }
       // If there's content before, the brace will be part of next sentence
       // Actually in Coq, '{' and '}' are standalone sentences. We should emit
