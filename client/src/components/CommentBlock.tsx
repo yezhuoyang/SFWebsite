@@ -65,18 +65,26 @@ export default function CommentBlock({ content }: Props) {
         }
 
         // Indented code block: after removing the base 4-space comment
-        // indentation, if every non-blank line still starts with at least 3
-        // additional leading spaces, treat the paragraph as a code-like pre
-        // block. The threshold of 3 discriminates against 2-space bullet
-        // continuations while catching Imp/pseudocode samples like
+        // indentation, require every non-blank line to start with >= 3 spaces
+        // AND the reflowed content to lack common English function words.
+        // The indent rules out 2-space bullet continuations; the word check
+        // rules out deeply-indented prose like a bullet's body paragraph.
+        //
+        // SF convention: prose continuations inside bullets use 4-8 space
+        // indent (all of it English), while code/formula samples like
         //     Z := X;
-        //     Y := 1;
         //     while Z <> 0 do ... end
-        // embedded in comment prose.
+        // have no stop-words.
         const nonBlankLines = lines.filter(l => l.trim().length > 0);
+        // Common English function words that virtually never appear in Coq
+        // or Imp source (we deliberately exclude ambiguous tokens like
+        // `while`, `when`, `where`, `if`, `then`, `else`, `in`, `for`, `to`,
+        // `do`, `end` which are language keywords in either system).
+        const PROSE_WORDS = /(?:^|[\s(])(the|this|these|those|is|are|was|were|been|has|have|had|of|with|we|us|our|its|their|they|them|so|because|therefore|suppose|consider|assume|observe|note|clearly|obviously|namely|here|there|about|which|who|whose|also|most|some|any|every|each|just|very|such|as|but|however|moreover|thus|hence|from|by|without|within|though|unless|still|now|one|another|more|less|similarly)(?:$|[\s.,;:!?])/i;
         const looksLikeCode =
           nonBlankLines.length >= 2 &&
-          nonBlankLines.every(l => /^   /.test(l));
+          nonBlankLines.every(l => /^   /.test(l)) &&
+          !PROSE_WORDS.test(reflowed);
 
         const isFormatted = hasRuleSeparators || hasBNFPipes || looksLikeCode;
 
