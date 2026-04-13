@@ -85,6 +85,22 @@
     "STLCArith_progress": {
       "solution": "Theorem progress : forall t T,\n  empty |-- t \\in T ->\n  value t \\/ (exists t', t --> t').\nProof with eauto.\n  intros t T Ht.\n  remember empty as Gamma.\n  induction Ht; subst...\n  - (* var *) inversion H.\n  - (* app *) right.\n    destruct IHHt1 as [Hv1 | [t1' Hs1]]...\n    destruct IHHt2 as [Hv2 | [t2' Hs2]]...\n    + inversion Hv1; subst; try solve_by_invert.\n      exists <{ [x0:=t2]t0 }>...\n    + exists <{ t1 t2' }>...\n  - (* if *) right.\n    destruct IHHt1 as [Hv1 | [t1' Hs1]]...\n    + inversion Hv1; subst; try solve_by_invert...\n    + exists <{ if t1' then t2 else t3 }>...\nQed.",
       "explanation": "Progress for STLCArith: well-typed terms in the empty context are either values or can step."
+    },
+    "STLCArith.subst": {
+      "solution": "Fixpoint subst (x : string) (s : tm) (t : tm) : tm\n  (* REPLACE THIS LINE WITH \":= _your_definition_ .\" *). Admitted.\n\n(** (You'll need to remove the period at the end of this\n    definition and add\n\n    where \"'[' x ':=' s ']' t\" := (subst x s t) (in custom stlc_tm).\n\n    when you fill it in.) *)\n\nInductive value : tm -> Prop :=\n  (* FILL IN HERE *)\n.\n\nHint Constructors value : core.\n\nReserved Notation \"t '-->' t'\" (at level 40).\n\nInductive step : tm -> tm -> Prop :=\n  (* FILL IN HERE *)\nwhere \"t '-->' t'\" := (step t t').\n\nNotation multistep := (multi step).\nNotation \"t1 '-->*' t2\" := (multistep t1 t2) (at level 40).\n\nHint Constructors step : core.\n\n(* An example *)\n\nExample Nat_step_example : exists t,\n<{(\\x: Nat, \\y: Nat, x * y ) $(3) $(2) }> -->* t.\nProof. (* FILL IN HERE *) Admitted.\n\n(* Typing *)\n\nDefinition context := partial_map ty.\n\nInductive has_type : context -> tm -> ty -> Prop :=\n  (* FILL IN HERE *)\nwhere \"<{ Gamma '|--' t '\\in' T }>\" := (has_type Gamma t T).\n\nHint Constructors has_type : core.\n\n(* An example *)\n\nExample Nat_typing_example :\n   <{ empty |-- ( \\x: Nat, \\y: Nat, x * y ) $(3) $(2) \\in Nat }>.\nProof.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "STLCArith.weakening": {
+      "solution": "Lemma weakening : forall Gamma Gamma' t T,\n     includedin Gamma Gamma' ->\n     <{ Gamma  |-- t \\in T }> ->\n     <{ Gamma' |-- t \\in T }>.\nProof. (* FILL IN HERE *) Admitted.\n\n(* FILL IN HERE *)",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "STLCArith.preservation": {
+      "solution": "Theorem preservation : forall t t' T,\n  <{ empty |-- t \\in T }> ->\n  t --> t'  ->\n  <{ empty |-- t' \\in T }>.\nProof with eauto. (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "STLCArith.progress": {
+      "solution": "Theorem progress : forall t T,\n  <{ empty |-- t \\in T }> ->\n  value t \\/ exists t', t --> t'.\nProof with eauto. (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
     }
   }
 }

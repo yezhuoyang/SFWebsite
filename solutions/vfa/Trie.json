@@ -65,6 +65,10 @@
     "Abs_three_ten": {
       "solution": "Proof.\n  apply insert_relate. exact I.\n  apply insert_relate. exact I.\n  apply empty_relate.\nQed.",
       "explanation": "Chain insert_relate twice with empty_relate, using I for the trivial is_trie proofs."
+    },
+    "pos2nat_bijective": {
+      "solution": "Lemma pos2nat_injective: forall p q, pos2nat p = pos2nat q -> p=q.\n(* FILL IN HERE *) Admitted.\n\nLemma nat2pos_injective: forall i j, nat2pos i = nat2pos j -> i=j.\n(* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
     }
   }
 }

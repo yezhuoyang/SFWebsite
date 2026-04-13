@@ -133,6 +133,14 @@
     "classical_axioms": {
       "solution": "(* This exercise asks to prove equivalence of five classical axioms plus excluded_middle.\n   Here is a proof sketch of the circular chain:\n   excluded_middle -> double_negation_elimination:\n     Assume EM. Given ~~P, by EM either P or ~P. If P, done. If ~P, apply ~~P to ~P, contradiction.\n   double_negation_elimination -> peirce:\n     Assume DNE. Apply DNE to ~P. Assume ~P. Apply ((P->Q)->P) to (fun HP => ex_falso (apply ~P HP)).\n   peirce -> consequentia_mirabilis:\n     Apply Peirce with Q := False.\n   consequentia_mirabilis -> implies_to_or:\n     Assume CM. Given P->Q. Apply CM to show ~P \\/ Q.\n     Assume ~(~P \\/ Q). Then P holds (by CM, since ~P gives left disjunct contradiction).\n     So Q holds. Right. Contradiction.\n   implies_to_or -> de_morgan_not_and_not:\n     Given ~(~P /\\ ~Q). From implies_to_or with (P->P), we get ~P \\/ P. Case analysis.\n   de_morgan_not_and_not -> excluded_middle:\n     Apply de_morgan_not_and_not to ~(~P /\\ ~~P). Since ~P /\\ ~~P is always contradictory,\n     we get P \\/ ~P.\n*)",
       "explanation": "Optional 5-star exercise proving equivalence of classical axioms in a circular chain."
+    },
+    "not_S_inverse_pred": {
+      "solution": "Lemma not_S_pred_n : ~(forall n : nat, S (pred n) = n).\nProof.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "iff_properties": {
+      "solution": "Theorem iff_refl : forall P : Prop,\n  P <-> P.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem iff_trans : forall P Q R : Prop,\n  (P <-> Q) -> (Q <-> R) -> (P <-> R).\nProof.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
     }
   }
 }

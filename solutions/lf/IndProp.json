@@ -293,6 +293,46 @@
     "test_der7": {
       "solution": "reflexivity.",
       "explanation": "Computation check for derive d (derive c (App (Char d) (Char c)))."
+    },
+    "Perm3": {
+      "solution": "Lemma Perm3_ex1 : Perm3 [1;2;3] [2;3;1].\nProof.\n  (* FILL IN HERE *) Admitted.\n\nLemma Perm3_refl : forall (X : Type) (a b c : X),\n  Perm3 [a;b;c] [a;b;c].\nProof.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "inversion_practice": {
+      "solution": "Theorem SSSSev__even : forall n,\n  ev (S (S (S (S n)))) -> ev n.\nProof.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "le_facts": {
+      "solution": "Lemma le_trans : forall m n o, m <= n -> n <= o -> m <= o.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem O_le_n : forall n,\n  0 <= n.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem n_le_m__Sn_le_Sm : forall n m,\n  n <= m -> S n <= S m.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem Sn_le_Sm__n_le_m : forall n m,\n  S n <= S m -> n <= m.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem le_plus_l : forall a b,\n  a <= a + b.\nProof.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "plus_le_facts1": {
+      "solution": "Theorem plus_le : forall n1 n2 m,\n  n1 + n2 <= m ->\n  n1 <= m /\\ n2 <= m.\nProof.\n (* FILL IN HERE *) Admitted.\n\nTheorem plus_le_cases : forall n m p q,\n  n + m <= p + q -> n <= p \\/ m <= q.\n  (** Hint: May be easiest to prove by induction on [n]. *)\nProof.\n(* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "plus_le_facts2": {
+      "solution": "Theorem plus_le_compat_l : forall n m p,\n  n <= m ->\n  p + n <= p + m.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem plus_le_compat_r : forall n m p,\n  n <= m ->\n  n + p <= m + p.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem le_plus_trans : forall n m p,\n  n <= m ->\n  n <= m + p.\nProof.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "lt_facts": {
+      "solution": "Theorem lt_ge_cases : forall n m,\n  n < m \\/ n >= m.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem n_lt_m__n_le_m : forall n m,\n  n < m ->\n  n <= m.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem plus_lt : forall n1 n2 m,\n  n1 + n2 < m ->\n  n1 < m /\\ n2 < m.\nProof.\n(* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "leb_le": {
+      "solution": "Theorem leb_complete : forall n m,\n  n <=? m = true -> n <= m.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem leb_correct : forall n m,\n  n <= m ->\n  n <=? m = true.\nProof.\n  (* FILL IN HERE *) Admitted.\n\n(** Hint: The next two can easily be proved without using [induction]. *)\n\nTheorem leb_iff : forall n m,\n  n <=? m = true <-> n <= m.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem leb_true_trans : forall n m o,\n  n <=? m = true -> m <=? o = true -> n <=? o = true.\nProof.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "R_provability2": {
+      "solution": "(* FILL IN HERE\n\n    [] *)\n\n(** **** Exercise: 2 stars, standard, optional (total_relation)\n\n    Define an inductive binary relation [total_relation] that holds\n    between every pair of natural numbers. *)\n\nInductive total_relation : nat -> nat -> Prop :=\n  (* FILL IN HERE *)\n.\n\nTheorem total_relation_is_total : forall n m, total_relation n m.\n  Proof.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "exp_match_ex2": {
+      "solution": "(** The [MStar''] lemma below (combined with its converse, the\n    [MStar'] exercise above), shows that our definition of [exp_match]\n    for [Star] is equivalent to the informal one given previously. *)\n\nLemma MStar'' : forall T (s : list T) (re : reg_exp T),\n  s =~ Star re ->\n  exists ss : list (list T),\n    s = fold app ss []\n    /\\ forall s', In s' ss -> s' =~ re.\nProof.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "filter_challenge_2": {
+      "solution": "(* FILL IN HERE\n\n    [] *)\n\n(** **** Exercise: 4 stars, standard, optional (palindromes)\n\n    A palindrome is a sequence that reads the same backwards as\n    forwards.\n\n    - Define an inductive proposition [pal] on [list X] that\n      captures what it means to be a palindrome. (Hint: You'll need\n      three cases.\n\n    - Prove ([pal_app_rev]) that\n\n       forall l, pal (l ++ rev l).\n\n    - Prove ([pal_rev] that)\n\n       forall l, pal l -> l = rev l.\n\n    For extra credit, try proving the same theorems with an alternate\n    definition with a _single_ constructor of this type:\n\n        forall l, l = rev l -> pal l\n*)\n\nInductive pal {X:Type} : list X -> Prop :=\n(* FILL IN HERE *)\n.\n\nTheorem pal_app_rev : forall (X:Type) (l : list X),\n  pal (l ++ (rev l)).\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem pal_rev : forall (X:Type) (l: list X) , pal l -> l = rev l.\nProof.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
     }
   }
 }

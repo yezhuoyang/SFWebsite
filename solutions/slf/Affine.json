@@ -57,6 +57,14 @@
     "mkstruct_haffine_pre": {
       "solution": "Lemma mkstruct_haffine_pre : forall H' F Q,\n  haffine H' ->\n  (mkstruct F Q) \\* H' ==> mkstruct F Q.\nProof using.\n  introv HA. unfold mkstruct. xpull. intros Q'. xsimpl Q'.\n  intros v. xchange (himpl_hgc_r HA).\nQed.",
       "explanation": "Discard affine predicates from mkstruct preconditions."
+    },
+    "triple_frame": {
+      "solution": "Lemma hgc_intro : forall h,\n  heap_affine h ->\n  \\GC h.\nProof using. (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "himpl_hgc_absorb": {
+      "solution": "Lemma himpl_hgc_absorb_r : forall H,\n  haffine H ->\n  \\GC \\* H ==> \\GC.\nProof using. (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
     }
   }
 }

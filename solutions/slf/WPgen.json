@@ -41,6 +41,22 @@
     "mkstruct_idempotent": {
       "solution": "Lemma mkstruct_idempotent : forall F,\n  mkstruct (mkstruct F) = mkstruct F.\nProof using.\n  intros. apply functional_extensionality. intros Q.\n  apply himpl_antisym.\n  { unfold mkstruct. xpull. intros Q'. xchange (mkstruct_erase F Q').\n    intros H M. xsimpl (Q' \\*+ H) . auto. xsimpl. }\n  { applys mkstruct_erase. }\nQed.",
       "explanation": "mkstruct is idempotent: applying it twice is the same as applying it once, since it already includes consequence and frame."
+    },
+    "xconseq_lemma": {
+      "solution": "Proof using. (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "xframe_lemma": {
+      "solution": "Proof using. (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "wpgen_fun_eq": {
+      "solution": "Lemma wpgen_fun_eq :\n  wpgen_fun = wpgen_fun'.\nProof using.\n  unfold wpgen_fun, wpgen_fun'. applys fun_ext_2.\n  intros Fof Q. applys himpl_antisym.\n { applys himpl_hforall_r. intros vf. xchange (hforall_specialize vf).\n   xsimpl. intros M. rewrite hwand_hpure_l. xsimpl.\n   introv. rewrite wp_equiv. applys M. xsimpl. }\n (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "triple_forloop": {
+      "solution": "Lemma triple_forloop : forall (I:int->hprop) (a b:int) (f:val),\n  a <= b ->\n  (forall i, a <= i <= b ->\n    triple (f i)\n      (I i)\n      (fun u => I (i+1))) ->\n  triple (forloop a b f)\n    (I a)\n    (fun r => I b).\nProof using. (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
     }
   }
 }

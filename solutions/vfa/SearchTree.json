@@ -169,6 +169,18 @@
     "elements_relate'": {
       "solution": "Proof.\n  intros V t Hbst.\n  unfold Abs'.\n  induction Hbst.\n  - simpl. reflexivity.\n  - simpl. rewrite map_of_list_app.\n    + simpl. rewrite IHHbst1. rewrite IHHbst2.\n      extensionality y. unfold update, union, t_update.\n      bdestruct (x =? y).\n      * subst. destruct (map_of_tree l y) eqn:El; destruct (map_of_tree r y) eqn:Er; auto.\n        -- exfalso. eapply map_of_tree_prop in El; eauto. lia.\n        -- exfalso. eapply map_of_tree_prop in El; eauto. lia.\n      * destruct (map_of_list (elements r) y) eqn:Er; auto.\n    + unfold disjoint. intros k Hinl Hinr.\n      apply in_map_iff in Hinl. destruct Hinl as [[k1 v1] [Hf1 Hi1]]. simpl in Hf1. subst.\n      simpl in Hinr. destruct Hinr as [Heq | Hinr].\n      * subst. assert (k < x) by (eapply elements_preserves_relation; eauto). lia.\n      * apply in_map_iff in Hinr. destruct Hinr as [[k2 v2] [Hf2 Hi2]]. simpl in Hf2. subst.\n        assert (k < x) by (eapply elements_preserves_relation; eauto).\n        assert (k > x) by (eapply elements_preserves_relation; eauto). lia.\nQed.",
       "explanation": "By induction on BST. Uses map_of_list_app with a disjointness proof, then rewrites with the IH and shows the resulting maps are equal pointwise using extensionality."
+    },
+    "direct_equalities_break": {
+      "solution": "(** Prove that the other equalities do not hold.  Hint: find a counterexample\n    first on paper, then use the [exists] tactic to instantiate the theorem\n    on your counterexample.  The simpler your counterexample, the simpler\n    the rest of the proof will be. *)\n\nLemma insert_same_equality_breaks :\n  exists (V : Type) (d : V) (t : tree V) (k : key),\n      insert k (lookup d k t) t <> t.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nLemma insert_permute_equality_breaks :\n  exists (V : Type) (v1 v2 : V) (k1 k2 : key) (t : tree V),\n    k1 <> k2 /\\ insert k1 v1 (insert k2 v2 t) <> insert k2 v2 (insert k1 v1 t).\nProof.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "union_collapse": {
+      "solution": "Lemma union_left : forall {X} (m1 m2: partial_map X) k,\n    m2 k = None -> union m1 m2 k = m1 k.\nProof.\n(* FILL IN HERE *) Admitted.\n\nLemma union_right : forall {X} (m1 m2: partial_map X) k,\n    m1 k = None ->\n    union m1 m2 k = m2 k.\nProof.\n(* FILL IN HERE *) Admitted.\n\nLemma union_both : forall {X} (m1 m2 : partial_map X) k v1 v2,\n    m1 k = Some v1 ->\n    m2 k = Some v2 ->\n    union m1 m2 k = None.\nProof.\n(* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "union_update": {
+      "solution": "Lemma union_update_right : forall {X} (m1 m2: partial_map X) k v,\n    m1 k = None ->\n    update (union m1 m2) k v = union m1 (update m2 k v).\nProof.\n(* FILL IN HERE *) Admitted.\n\nLemma union_update_left : forall {X} (m1 m2: partial_map X) k v,\n    m2 k = None ->\n    update (union m1 m2) k v = union (update m1 k v) m2.\nProof.\n(* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
     }
   }
 }

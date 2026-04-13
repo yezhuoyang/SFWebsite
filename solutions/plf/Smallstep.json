@@ -105,6 +105,14 @@
     "normalize_ex'": {
       "solution": "Lemma normalize_ex' : exists e',\n  (P (C 3) (P (C 2) (C 1))) -->* e' /\\ normal_form step e'.\nProof.\n  exists (C 6). split.\n  - eapply multi_step. { apply ST_P2. apply v_C. apply ST_PCC. }\n    eapply multi_step. { apply ST_PCC. }\n    apply multi_refl.\n  - apply nf_same_as_value. apply v_C.\nQed.",
       "explanation": "Manually reduce: P (C 2) (C 1) -> C 3, then P (C 3) (C 3) -> C 6."
+    },
+    "step_deterministic": {
+      "solution": "Theorem step_deterministic : deterministic step.\nProof.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "eval__multistep_inf": {
+      "solution": "(* Do not modify the following line: *)\nDefinition manual_grade_for_eval__multistep_inf : option (nat*string) := None.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
     }
   }
 }

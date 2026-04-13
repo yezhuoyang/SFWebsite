@@ -45,6 +45,10 @@
     "rtc_rsc_coincide": {
       "solution": "Theorem rtc_rsc_coincide :\n  forall (X:Type) (R: relation X) (x y : X),\n    clos_refl_trans R x y <-> clos_refl_trans_1n R x y.\nProof.\n  intros X R x y. split.\n  - intros H. induction H.\n    + apply rsc_R. apply H.\n    + apply rt1n_refl.\n    + apply rsc_trans with y. apply IHclos_refl_trans1. apply IHclos_refl_trans2.\n  - intros H. induction H.\n    + apply rt_refl.\n    + apply rt_trans with y.\n      * apply rt_step. apply Hxy.\n      * apply IHclos_refl_trans_1n.\nQed.",
       "explanation": "Forward direction: induction on clos_refl_trans, using rsc_R and rsc_trans. Backward: induction on clos_refl_trans_1n, using rt_step and rt_trans."
+    },
+    "le_Sn_n_inf": {
+      "solution": "    (* FILL IN HERE\n\n    [] *)\n\n(** **** Exercise: 1 star, standard, optional (le_Sn_n) *)\nTheorem le_Sn_n : forall n,\n  ~ (S n <= n).\nProof.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
     }
   }
 }

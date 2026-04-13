@@ -69,6 +69,14 @@
     "forall_exists_challenge": {
       "solution": "Fixpoint forallb {X : Type} (test : X -> bool) (l : list X) : bool :=\n  match l with\n  | [] => true\n  | h :: t => andb (test h) (forallb test t)\n  end.\n\nExample test_forallb_1 : forallb odd [1;3;5;7;9] = true.\nProof. reflexivity. Qed.\n\nExample test_forallb_2 : forallb negb [false;false] = true.\nProof. reflexivity. Qed.\n\nExample test_forallb_3 : forallb even [0;2;4;5] = false.\nProof. reflexivity. Qed.\n\nExample test_forallb_4 : forallb (eqb 5) [] = true.\nProof. reflexivity. Qed.\n\nFixpoint existsb {X : Type} (test : X -> bool) (l : list X) : bool :=\n  match l with\n  | [] => false\n  | h :: t => orb (test h) (existsb test t)\n  end.\n\nExample test_existsb_1 : existsb (eqb 5) [0;2;3;6] = false.\nProof. reflexivity. Qed.\n\nExample test_existsb_2 : existsb (andb true) [true;true;false] = true.\nProof. reflexivity. Qed.\n\nExample test_existsb_3 : existsb odd [1;0;0;0;0;3] = true.\nProof. reflexivity. Qed.\n\nExample test_existsb_4 : existsb even [] = false.\nProof. reflexivity. Qed.\n\nDefinition existsb' {X : Type} (test : X -> bool) (l : list X) : bool :=\n  negb (forallb (fun x => negb (test x)) l).\n\nTheorem existsb_existsb' : forall (X : Type) (test : X -> bool) (l : list X),\n  existsb test l = existsb' test l.\nProof.\n  intros X test l. induction l as [| h t IHt].\n  - reflexivity.\n  - simpl. unfold existsb'. simpl.\n    destruct (test h) eqn:Eth.\n    + reflexivity.\n    + simpl. fold (existsb' test t). rewrite <- IHt. reflexivity.\nQed.",
       "explanation": "forallb checks all elements satisfy test (conjunction). existsb checks if any element satisfies test (disjunction). existsb' uses De Morgan's law: exists = not (forall (not test)). The equivalence proof proceeds by induction on l."
+    },
+    "eqb_true_informal": {
+      "solution": "(* FILL IN HERE *)\n\n(* Do not modify the following line: *)\nDefinition manual_grade_for_informal_proof : option (nat*string) := None.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "eqb_sym_informal": {
+      "solution": "   (* FILL IN HERE\n\n    [] *)\n\n(** **** Exercise: 3 stars, standard, optional (eqb_trans) *)\nTheorem eqb_trans : forall n m p,\n  n =? m = true ->\n  m =? p = true ->\n  n =? p = true.\nProof.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
     }
   }
 }

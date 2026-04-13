@@ -25,6 +25,10 @@
     "harray_focus_read": {
       "solution": "Lemma harray_focus_read : forall i L p,\n  0 <= i < length L ->\n      harray L p\n  ==> let v := LibList.nth (abs i) L in\n      hcell v p i \\* (hcell v p i \\-* harray L p).\nProof using.\n  introv Hi. xchange (harray_focus i L p Hi).\n  lets v: (LibList.nth (abs i) L). xsimpl. intros w.\n  xchange (hforall_specialize v).\n  rewrite LibList.update_nth_same. { xsimpl. } { typeclass. }\nQed.",
       "explanation": "Read-only focus: specialize the general focus lemma's universal quantifier with the original value, using update_nth_same."
+    },
+    "hseg_focus": {
+      "solution": "Lemma hseg_focus_relative : forall (k:nat) L p j,\n  0 <= k < length L ->\n      hseg L p j\n  ==> let v := LibList.nth k L in\n         hcell v p (j+k)\n      \\* (\\forall w, hcell w p (j+k) \\-* hseg (LibList.update k w L) p j).\nProof using. (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
     }
   }
 }

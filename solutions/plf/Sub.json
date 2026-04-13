@@ -181,6 +181,22 @@
     "subtyping_example_2": {
       "solution": "(* Optional exercise proving a specific subtyping relationship holds. *)",
       "explanation": "Prove the subtyping relationship using the defined rules."
+    },
+    "typing_example_0": {
+      "solution": "(* empty |-- ((\\z:A,z), (\\z:B,z)) \\in (A->A * B->B) *)\n(* FILL IN HERE\n\n    [] *)\n\n(** **** Exercise: 2 stars, standard, optional (typing_example_1) *)\n(* empty |-- (\\x:(Top * B->B), x.snd) ((\\z:A,z), (\\z:B,z))\n         \\in B->B *)\n(* FILL IN HERE\n\n    [] *)\n\n(** **** Exercise: 2 stars, standard, optional (typing_example_2) *)\n(* empty |-- (\\z:(C->C)->(Top * B->B), (z (\\x:C,x)).snd)\n              (\\z:C->C, ((\\z:A,z), (\\z:B,z)))\n         \\in B->B *)\n(* FILL IN HERE\n\n    [] *)\n\nEnd Examples2.\n\n(* ################################################################# *)\n(** * Properties *)\n\n(** The fundamental properties of the system that we want to\n    check are the same as always: progress and preservation.  Unlike\n    the extension of the STLC with references (chapter [References]),\n    we don't need to change the _statements_ of these properties to\n    take subtyping into account.  However, their proofs do become a\n    little bit more involved. *)\n\n(* ================================================================= *)\n(** ** Inversion Lemmas for Subtyping *)\n\n(** Before we look at the properties of the typing relation, we need\n    to establish a couple of critical structural properties of the\n    subtype relation:\n       - [Bool] is the only subtype of [Bool], and\n       - every subtype of an arrow type is itself an arrow type. *)\n\n(** These are called _inversion lemmas_ because they play a\n    similar role in proofs as the built-in [inversion] tactic: given a\n    hypothesis that there exists a derivation of some subtyping\n    statement [S <: T] and some constraints on the shape of [S] and/or\n    [T], each inversion lemma reasons about what this derivation must\n    look like to tell us something further about the shapes of [S] and\n    [T] and the existence of subtype relations between their parts. *)\n\n(** **** Exercise: 2 stars, standard, optional (sub_inversion_Bool) *)\nLemma sub_inversion_Bool : forall U,\n     U <: <{{ Bool }}> ->\n     U = <{{ Bool }}>.\nProof with auto.\n  intros U Hs.\n  remember <{{ Bool }}> as V.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "sub_inversion_Unit": {
+      "solution": "Lemma sub_inversion_Unit : forall U,\n     U <: <{{ Unit }}> ->\n     U = <{{ Unit }}>.\nProof with auto.\n  intros U Hs.\n  remember <{{ Unit }}> as V.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "sub_inversion_Base": {
+      "solution": "Lemma sub_inversion_Base : forall U s,\n     U <: <{{ Base s }}> ->\n     U = <{{ Base s }}>.\nProof with auto.\n  intros U s Hs.\n  remember <{{ Base s }}> as V.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+    },
+    "sub_inversion_Top": {
+      "solution": "Lemma sub_inversion_Top : forall U,\n     <{{ Top }}> <: U ->\n     U = <{{ Top }}>.\nProof with auto.\n  intros U Hs.\n  remember <{{ Top }}> as V.\n  (* FILL IN HERE *) Admitted.",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
     }
   }
 }

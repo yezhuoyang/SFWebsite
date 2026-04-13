@@ -45,6 +45,10 @@
     "ListsETable": {
       "solution": "(* Manual grade exercise - no code solution needed *)",
       "explanation": "This advanced exercise asks to implement ETableSubset using association lists with no duplicate keys, enforced by a subset type."
+    },
+    "TreeTableModel'": {
+      "solution": "(* This is an informal (pencil-and-paper) exercise; no Coq code to fill in. *)",
+      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
     }
   }
 }
