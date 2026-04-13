@@ -85,9 +85,11 @@ export function parseSentences(text: string): CoqSentence[] {
     // Potential sentence terminator: '.' followed by whitespace/EOF/closing-paren
     if (ch === '.') {
       const next = i + 1 < len ? text[i + 1] : '\0';
-      // '.' is a sentence terminator if followed by whitespace, EOF, or ')'
-      // But NOT if followed by another identifier char (e.g., "Coq.Init.Logic")
-      if (i + 1 >= len || isWhitespace(next) || next === ')') {
+      const prev = i > 0 ? text[i - 1] : '\0';
+      // '.' is a sentence terminator if followed by whitespace, EOF, or ')'.
+      // But NOT if it is part of a '..' token (preceded OR followed by another
+      // '.'), which appears in recursive notations like `(.. (f x) .. y)`.
+      if ((i + 1 >= len || isWhitespace(next) || next === ')') && prev !== '.' && next !== '.') {
         // Also check it's not part of "..." (number like 0.5 - but Coq doesn't have float literals in SF)
         // And not part of a qualified name like "Nat.add" — check char before '.'
         // Actually, qualified names like `Nat.add` have identifier chars on BOTH sides of '.'
