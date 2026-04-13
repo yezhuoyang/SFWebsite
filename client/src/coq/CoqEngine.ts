@@ -358,13 +358,19 @@ export class CoqEngine implements CoqObserver {
       (_m, before, sep) => `${before}t_empty${sep.replace(/!->\s+/, '')}`,
     );
 
-    // 2) (x !-> v) -> (x !-> v ; empty_st) when the inner form is a simple
-    //    "<ident> !-> <single-token-value>" with NO `;` already present.
-    //    This expands Imp.v's two-arg shorthand into the full Maps.v three-arg
-    //    `x !-> v ; m` chain, bypassing the ambiguous precedence entirely.
+    // 2) Terminate any two-arg `!-> <simple_value>)` pattern with `; empty_st`.
+    //    This handles BOTH:
+    //       (X !-> 5)                  -> (X !-> 5 ; empty_st)
+    //       (X !-> 5 ; Y !-> 4)        -> (X !-> 5 ; Y !-> 4 ; empty_st)
+    //       (Z !-> 2 ; Y !-> 1 ; X !-> 0)
+    //                                  -> (Z !-> 2 ; Y !-> 1 ; X !-> 0 ; empty_st)
+    //    The match anchor is `!-> <ident-or-num>\s*)` — i.e. the LAST `!->`
+    //    in a chain, immediately followed by `)`. Already-terminated chains
+    //    like `(X !-> 5 ; empty_st)` are NOT matched (after the `5` there is
+    //    ` ;`, not `)`), so the transform is idempotent.
     out = out.replace(
-      /\(([A-Za-z_]\w*\s+!->\s+[^();{}[\]\s<>]+)\)/g,
-      (_m, inner) => `(${inner} ; empty_st)`,
+      /!->(\s+)([A-Za-z_]\w*|\d+)(\s*)\)/g,
+      (_m, sp1, val, sp2) => `!->${sp1}${val} ; empty_st${sp2})`,
     );
 
     // Debug: log when we actually rewrote something, so field reports of
