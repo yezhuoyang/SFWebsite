@@ -135,12 +135,12 @@
       "explanation": "Optional 5-star exercise proving equivalence of classical axioms in a circular chain."
     },
     "not_S_inverse_pred": {
-      "solution": "Lemma not_S_pred_n : ~(forall n : nat, S (pred n) = n).\nProof.\n  (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Lemma not_S_pred_n : ~(forall n : nat, S (pred n) = n).\nProof.\n  intros H. specialize (H 0). simpl in H. discriminate H.\nQed.",
+      "explanation": "Verified proof."
     },
     "iff_properties": {
-      "solution": "Theorem iff_refl : forall P : Prop,\n  P <-> P.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem iff_trans : forall P Q R : Prop,\n  (P <-> Q) -> (Q <-> R) -> (P <-> R).\nProof.\n  (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Theorem iff_refl : forall P : Prop,\n  P <-> P.\nProof.\n  intros P. split.\n  - intros HP. apply HP.\n  - intros HP. apply HP.\nQed.\n\nTheorem iff_trans : forall P Q R : Prop,\n  (P <-> Q) -> (Q <-> R) -> (P <-> R).\nProof.\n  intros P Q R [HPQ HQP] [HQR HRQ]. split.\n  - intros HP. apply HQR. apply HPQ. apply HP.\n  - intros HR. apply HQP. apply HRQ. apply HR.\nQed.",
+      "explanation": "Verified proof."
     }
   }
 }

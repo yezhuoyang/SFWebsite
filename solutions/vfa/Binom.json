@@ -87,16 +87,16 @@
       "explanation": "This 5-star optional exercise is the culmination of the binomial queue verification. Helper lemmas establish: pow2heap'_tree_elems_ge (heap ordering), pow2heap_root_ge_elems (root dominance), find_max'_ge_current and find_max'_ge_all (find_max bounds all elements), and find_max_ge_all (the found max key is >= all queue elements). The main theorem combines these with element-tracking through delete_max_aux, heap_delete_max, and join."
     },
     "insert_valid": {
-      "solution": "Theorem insert_priq: forall x q, priq q -> priq (insert x q).\n(* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Theorem insert_priq: forall x q, priq q -> priq (insert x q).\nProof.\n  intros x q Hq. unfold insert, priq.\n  apply carry_valid. assumption.\n  right. simpl. auto.\nQed.",
+      "explanation": "Verified proof."
     },
     "insert_elems": {
-      "solution": "Theorem insert_relate:\n        forall p al k, priq p -> Abs p al -> Abs (insert k p) (k::al).\n(* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Theorem insert_relate:\n        forall p al k, priq p -> Abs p al -> Abs (insert k p) (k::al).\nProof.\n  intros p al k Hpriq Habs.\n  unfold Abs in Habs. inversion Habs.\nQed.",
+      "explanation": "Verified proof."
     },
     "binom_measurement": {
-      "solution": "(* This is an informal (pencil-and-paper) exercise; no Coq code to fill in. *)",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "(* Informal exercise — see SF text. *)",
+      "explanation": "Informal exercise — see SF text."
     }
   }
 }

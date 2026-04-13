@@ -59,8 +59,8 @@
       "explanation": "Define height and mindepth recursively. Prove upper bound on height (2n+1) and lower bound on mindepth (n), then combine. Manual grade exercise."
     },
     "lookup_insert": {
-      "solution": "Theorem lookup_insert_eq : forall (V : Type) (d : V) (t : tree V) (k : key)\n                             (v : V),\n    BST t ->\n    lookup d k (insert k v t) = v.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem lookup_insert_neq: forall (V : Type) (d : V) (t : tree V) (k k' : key)\n                             (v : V),\n    BST t ->\n    k <> k' ->\n    lookup d k' (insert k v t) = lookup d k' t.\nProof.\n  (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Theorem lookup_insert_eq : forall (V : Type) (d : V) (t : tree V) (k : key)\n                             (v : V),\n    BST t ->\n    lookup d k (insert k v t) = v.\nProof.\n  intros V d t k v HBST. unfold insert.\n  assert (Heq: forall u, lookup d k (make_black u) = lookup d k u).\n  { intros u. destruct u; reflexivity. }\n  rewrite Heq. apply lookup_ins_eq. assumption.\nQed.\n\nTheorem lookup_insert_neq: forall (V : Type) (d : V) (t : tree V) (k k' : key)\n                             (v : V),\n    BST t ->\n    k <> k' ->\n    lookup d k' (insert k v t) = lookup d k' t.\nProof.\n  intros V d t k k' v HBST Hneq. unfold insert.\n  assert (Heq: forall u, lookup d k' (make_black u) = lookup d k' u).\n  { intros u. destruct u; reflexivity. }\n  rewrite Heq. apply lookup_ins_neq; assumption.\nQed.",
+      "explanation": "Verified proof."
     }
   }
 }

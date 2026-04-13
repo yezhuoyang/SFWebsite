@@ -47,8 +47,8 @@
       "explanation": "nor_intuition extends imp_intuition with rules for conjunction, biconditional, disjunction, negation, False, and the nor connective."
     },
     "andb_true_elim2": {
-      "solution": "Theorem andb_true_elim2 : forall b c : bool,\n  andb b c = true -> c = true.\nProof.\n  intros b c. destruct b eqn:Eb.\n  - simpl. intros H. rewrite H. reflexivity.\n  - simpl. intros H. destruct c eqn:Ec.\n    + reflexivity.\n    + rewrite H. reflexivity.\nQed.\n\n(** Uncomment the definition of [destructpf'], below, and define your\n    own, improved version of [destructpf]. Use it to prove the\n    theorem. *)\n\n(*\nLtac destructpf' x := ...\n*)\n\n(** Your one-shot proof should need only [intros] and\n    [destructpf']. *)\n\nTheorem andb_true_elim2' : forall b c : bool,\n    andb b c = true -> c = true.\nProof. (* FILL IN HERE *) Admitted.\n\n(** Double-check that [intros] and your new [destructpf'] still\n    suffice to prove this earlier theorem -- i.e., that your improved\n    tactic is general enough to still prove it in one shot: *)\n\nTheorem andb3_exchange' :\n  forall b c d, andb (andb b c) d = andb (andb b d) c.\nProof. (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Ltac destructpf' x :=\n  destruct x; simpl; intros;\n  try reflexivity; try discriminate;\n  repeat match goal with\n  | [ H : _ = _ |- _ ] => rewrite H; try reflexivity\n  end.\n\nTheorem andb_true_elim2' : forall b c : bool,\n    andb b c = true -> c = true.\nProof. intros b c; destructpf' b; destructpf' c. Qed.\n\nTheorem andb3_exchange' :\n  forall b c d, andb (andb b c) d = andb (andb b d) c.\nProof. intros b c d; destructpf' b; destructpf' c; destructpf' d. Qed.",
+      "explanation": "Verified proof."
     }
   }
 }

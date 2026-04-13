@@ -71,12 +71,12 @@
       "explanation": "forallb checks all elements satisfy test (conjunction). existsb checks if any element satisfies test (disjunction). existsb' uses De Morgan's law: exists = not (forall (not test)). The equivalence proof proceeds by induction on l."
     },
     "eqb_true_informal": {
-      "solution": "(* FILL IN HERE *)\n\n(* Do not modify the following line: *)\nDefinition manual_grade_for_informal_proof : option (nat*string) := None.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "(* Informal exercise.\n\n   Theorem: For every n : nat, for every m : nat, if (n =? m) = true then n = m.\n\n   Proof: By induction on n (generalizing m).\n\n   - Base case: n = 0. We must show, for every m, that if (0 =? m) = true\n     then 0 = m. Take an arbitrary m and assume (0 =? m) = true.\n     Case-analyze m.\n       + If m = 0, then 0 = m trivially.\n       + If m = S m', then (0 =? S m') computes to false, contradicting\n         the assumption that it equals true. Hence this case is vacuous.\n\n   - Inductive step: n = S n'. The induction hypothesis is:\n       IH : for every m, if (n' =? m) = true then n' = m.\n     We must show: for every m, if (S n' =? m) = true then S n' = m.\n     Take an arbitrary m and assume (S n' =? m) = true.\n     Case-analyze m.\n       + If m = 0, then (S n' =? 0) computes to false, contradicting the\n         assumption; vacuous.\n       + If m = S m', then (S n' =? S m') = (n' =? m') by definition of\n         =?, so our assumption simplifies to (n' =? m') = true. By the\n         induction hypothesis applied to m', we obtain n' = m'. Hence\n         S n' = S m' = m, as required. QED.\n*)",
+      "explanation": "Informal exercise — see the SF text for discussion."
     },
     "eqb_sym_informal": {
-      "solution": "   (* FILL IN HERE\n\n    [] *)\n\n(** **** Exercise: 3 stars, standard, optional (eqb_trans) *)\nTheorem eqb_trans : forall n m p,\n  n =? m = true ->\n  m =? p = true ->\n  n =? p = true.\nProof.\n  (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "(* Informal exercise.\n\n   Theorem: For any n m : nat, (n =? m) = (m =? n).\n\n   Proof: By induction on n, generalizing m.\n\n   - Base case: n = 0. We must show, for every m, (0 =? m) = (m =? 0).\n     Case-analyze m.\n       + If m = 0, then both sides are (0 =? 0) = true, so they are equal.\n       + If m = S m', then (0 =? S m') = false and (S m' =? 0) = false,\n         so both sides are false and equal.\n\n   - Inductive step: n = S n'. The IH says:\n       for every m, (n' =? m) = (m =? n').\n     We must show: for every m, (S n' =? m) = (m =? S n').\n     Case-analyze m.\n       + If m = 0, then (S n' =? 0) = false and (0 =? S n') = false, so\n         both sides are equal.\n       + If m = S m', then (S n' =? S m') = (n' =? m') by definition, and\n         likewise (S m' =? S n') = (m' =? n'). By the induction hypothesis\n         instantiated at m', (n' =? m') = (m' =? n'). Therefore the two\n         sides are equal. QED.\n*)",
+      "explanation": "Informal exercise — see the SF text for discussion."
     }
   }
 }

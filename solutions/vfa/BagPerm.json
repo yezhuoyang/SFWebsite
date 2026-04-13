@@ -51,8 +51,8 @@
       "explanation": "By induction on al. For non-empty al with head a, find a in bl using bag_cons_inv, then apply Permutation_cons_app and use IH on the remainders."
     },
     "bag_eqv_properties": {
-      "solution": "(* It is easy to prove [bag_eqv] is an equivalence relation. *)\n\nLemma bag_eqv_refl : forall b, bag_eqv b b.\nProof.\n(* FILL IN HERE *) Admitted.\n\nLemma bag_eqv_sym: forall b1 b2, bag_eqv b1 b2 -> bag_eqv b2 b1.\nProof.\n(* FILL IN HERE *) Admitted.\n\nLemma bag_eqv_trans: forall b1 b2 b3, bag_eqv b1 b2 -> bag_eqv b2 b3 -> bag_eqv b1 b3.\nProof.\n(* FILL IN HERE *) Admitted.\n\n(** The following little lemma is handy in a couple of places. *)\n\nLemma bag_eqv_cons : forall x b1 b2, bag_eqv b1 b2 -> bag_eqv (x::b1) (x::b2).\nProof.\n  (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "(* It is easy to prove [bag_eqv] is an equivalence relation. *)\n\nLemma bag_eqv_refl : forall b, bag_eqv b b.\nProof.\n  intros b n. reflexivity.\nQed.\n\nLemma bag_eqv_sym: forall b1 b2, bag_eqv b1 b2 -> bag_eqv b2 b1.\nProof.\n  intros b1 b2 H n. symmetry. apply H.\nQed.\n\nLemma bag_eqv_trans: forall b1 b2 b3, bag_eqv b1 b2 -> bag_eqv b2 b3 -> bag_eqv b1 b3.\nProof.\n  intros b1 b2 b3 H12 H23 n.\n  rewrite H12. apply H23.\nQed.\n\n(** The following little lemma is handy in a couple of places. *)\n\nLemma bag_eqv_cons : forall x b1 b2, bag_eqv b1 b2 -> bag_eqv (x::b1) (x::b2).\nProof.\n  intros x b1 b2 H n. simpl. rewrite H. reflexivity.\nQed.",
+      "explanation": "Verified proof."
     }
   }
 }

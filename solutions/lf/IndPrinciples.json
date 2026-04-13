@@ -39,8 +39,8 @@
       "explanation": "Define explicit propositions P_add_assoc and P_add_comm, then prove them using nat_ind directly."
     },
     "rgb": {
-      "solution": "Inductive rgb : Type :=\n  | red\n  | green\n  | blue.\nCheck rgb_ind.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "(* Informal exercise. Predicted induction principle for [rgb]:\n\n   rgb_ind : forall P : rgb -> Prop,\n     P red ->\n     P green ->\n     P blue ->\n     forall c : rgb, P c.\n*)",
+      "explanation": "Informal exercise — see the SF text for discussion."
     }
   }
 }

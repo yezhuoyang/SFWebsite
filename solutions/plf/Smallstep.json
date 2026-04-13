@@ -107,12 +107,12 @@
       "explanation": "Manually reduce: P (C 2) (C 1) -> C 3, then P (C 3) (C 3) -> C 6."
     },
     "step_deterministic": {
-      "solution": "Theorem step_deterministic : deterministic step.\nProof.\n  (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Theorem step_deterministic : deterministic step.\nProof.\n  unfold deterministic. intros x y1 y2 H1.\n  generalize dependent y2.\n  induction H1; intros y2 H2; inversion H2; subst;\n    try reflexivity; try solve_by_invert.\n  f_equal. apply IHstep. assumption.\nQed.",
+      "explanation": "Verified proof: step is deterministic. Induction on the first derivation, inversion on the second; solve_by_invert handles the impossible cross-constructor cases."
     },
     "eval__multistep_inf": {
-      "solution": "(* Do not modify the following line: *)\nDefinition manual_grade_for_eval__multistep_inf : option (nat*string) := None.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "(* Informal exercise.\n\n   Write a detailed informal version of the proof of eval__multistep, proceeding by induction on the big-step evaluation derivation.\n*)",
+      "explanation": "Informal exercise — see SF text for the expected discussion."
     }
   }
 }

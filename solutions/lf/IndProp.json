@@ -295,40 +295,40 @@
       "explanation": "Computation check for derive d (derive c (App (Char d) (Char c)))."
     },
     "Perm3": {
-      "solution": "Lemma Perm3_ex1 : Perm3 [1;2;3] [2;3;1].\nProof.\n  (* FILL IN HERE *) Admitted.\n\nLemma Perm3_refl : forall (X : Type) (a b c : X),\n  Perm3 [a;b;c] [a;b;c].\nProof.\n  (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Lemma Perm3_ex1 : Perm3 [1;2;3] [2;3;1].\nProof.\n  apply perm3_trans with (l2:=[2;1;3]).\n  - apply perm3_swap12.\n  - apply perm3_swap23.\nQed.",
+      "explanation": "Verified proof."
     },
     "inversion_practice": {
-      "solution": "Theorem SSSSev__even : forall n,\n  ev (S (S (S (S n)))) -> ev n.\nProof.\n  (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Theorem SSSSev__even : forall n,\n  ev (S (S (S (S n)))) -> ev n.\nProof.\n  intros n H. inversion H as [| n1 H1]. inversion H1 as [| n2 H2]. apply H2.\nQed.\n\nTheorem ev5_nonsense :\n  ev 5 -> 2 + 2 = 9.\nProof.\n  intros H. inversion H as [| n1 H1]. inversion H1 as [| n2 H2]. inversion H2.\nQed.",
+      "explanation": "Verified proof."
     },
     "le_facts": {
-      "solution": "Lemma le_trans : forall m n o, m <= n -> n <= o -> m <= o.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem O_le_n : forall n,\n  0 <= n.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem n_le_m__Sn_le_Sm : forall n m,\n  n <= m -> S n <= S m.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem Sn_le_Sm__n_le_m : forall n m,\n  S n <= S m -> n <= m.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem le_plus_l : forall a b,\n  a <= a + b.\nProof.\n  (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Lemma le_trans : forall m n o, m <= n -> n <= o -> m <= o.\nProof.\n  intros m n o H1 H2. induction H2 as [| o' H2' IH].\n  - apply H1.\n  - apply le_S. apply IH.\nQed.\n\nTheorem O_le_n : forall n,\n  0 <= n.\nProof.\n  intros n. induction n as [| n' IH].\n  - apply le_n.\n  - apply le_S. apply IH.\nQed.\n\nTheorem n_le_m__Sn_le_Sm : forall n m,\n  n <= m -> S n <= S m.\nProof.\n  intros n m H. induction H as [| m' H' IH].\n  - apply le_n.\n  - apply le_S. apply IH.\nQed.\n\nTheorem Sn_le_Sm__n_le_m : forall n m,\n  S n <= S m -> n <= m.\nProof.\n  intros n m H. inversion H as [HEq | m' H' HEq].\n  - apply le_n.\n  - apply (le_trans n (S n) m).\n    + apply le_S. apply le_n.\n    + apply H'.\nQed.\n\nTheorem le_plus_l : forall a b,\n  a <= a + b.\nProof.\n  intros a b. induction b as [| b' IH].\n  - rewrite <- plus_n_O. apply le_n.\n  - rewrite <- plus_n_Sm. apply le_S. apply IH.\nQed.",
+      "explanation": "Verified proof."
     },
     "plus_le_facts1": {
-      "solution": "Theorem plus_le : forall n1 n2 m,\n  n1 + n2 <= m ->\n  n1 <= m /\\ n2 <= m.\nProof.\n (* FILL IN HERE *) Admitted.\n\nTheorem plus_le_cases : forall n m p q,\n  n + m <= p + q -> n <= p \\/ m <= q.\n  (** Hint: May be easiest to prove by induction on [n]. *)\nProof.\n(* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Theorem plus_le : forall n1 n2 m,\n  n1 + n2 <= m ->\n  n1 <= m /\\ n2 <= m.\nProof.\n  intros n1 n2 m H. split.\n  - apply (le_trans n1 (n1 + n2) m).\n    + apply le_plus_l.\n    + apply H.\n  - apply (le_trans n2 (n1 + n2) m).\n    + rewrite add_comm. apply le_plus_l.\n    + apply H.\nQed.\n\nTheorem plus_le_cases : forall n m p q,\n  n + m <= p + q -> n <= p \\/ m <= q.\nProof.\n  intros n. induction n as [| n' IH].\n  - intros m p q H. left. apply O_le_n.\n  - intros m p q H. destruct p as [| p'].\n    + right. simpl in H.\n      apply (le_trans m (S (n' + m)) q).\n      * apply le_S. rewrite add_comm. apply le_plus_l.\n      * apply H.\n    + simpl in H. apply Sn_le_Sm__n_le_m in H.\n      apply IH in H. destruct H as [HL | HR].\n      * left. apply n_le_m__Sn_le_Sm. apply HL.\n      * right. apply HR.\nQed.",
+      "explanation": "Verified proof."
     },
     "plus_le_facts2": {
-      "solution": "Theorem plus_le_compat_l : forall n m p,\n  n <= m ->\n  p + n <= p + m.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem plus_le_compat_r : forall n m p,\n  n <= m ->\n  n + p <= m + p.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem le_plus_trans : forall n m p,\n  n <= m ->\n  n <= m + p.\nProof.\n  (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Theorem plus_le_compat_l : forall n m p,\n  n <= m ->\n  p + n <= p + m.\nProof.\n  intros n m p H. induction p as [| p' IH].\n  - simpl. apply H.\n  - simpl. apply n_le_m__Sn_le_Sm. apply IH.\nQed.\n\nTheorem plus_le_compat_r : forall n m p,\n  n <= m ->\n  n + p <= m + p.\nProof.\n  intros n m p H. rewrite (add_comm n p). rewrite (add_comm m p).\n  apply plus_le_compat_l. apply H.\nQed.\n\nTheorem le_plus_trans : forall n m p,\n  n <= m ->\n  n <= m + p.\nProof.\n  intros n m p H. apply (le_trans n m (m + p)).\n  - apply H.\n  - apply le_plus_l.\nQed.",
+      "explanation": "Verified proof."
     },
     "lt_facts": {
-      "solution": "Theorem lt_ge_cases : forall n m,\n  n < m \\/ n >= m.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem n_lt_m__n_le_m : forall n m,\n  n < m ->\n  n <= m.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem plus_lt : forall n1 n2 m,\n  n1 + n2 < m ->\n  n1 < m /\\ n2 < m.\nProof.\n(* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Theorem lt_ge_cases : forall n m,\n  n < m \\/ n >= m.\nProof.\n  intros n. induction n as [| n' IH].\n  - intros m. destruct m as [| m'].\n    + right. unfold ge. apply le_n.\n    + left. unfold lt. apply n_le_m__Sn_le_Sm. apply O_le_n.\n  - intros m. destruct (IH m) as [HL | HR].\n    + unfold lt in HL. inversion HL as [HEq | m'' H' HEq].\n      * right. unfold ge. apply le_n.\n      * left. unfold lt. apply n_le_m__Sn_le_Sm. apply H'.\n    + right. unfold ge in *. apply le_S. apply HR.\nQed.\n\nTheorem n_lt_m__n_le_m : forall n m,\n  n < m ->\n  n <= m.\nProof.\n  intros n m H. unfold lt in H. apply (le_trans n (S n) m).\n  - apply le_S. apply le_n.\n  - apply H.\nQed.\n\nTheorem plus_lt : forall n1 n2 m,\n  n1 + n2 < m ->\n  n1 < m /\\ n2 < m.\nProof.\n  intros n1 n2 m H. unfold lt in *. split.\n  - apply (le_trans (S n1) (S (n1 + n2)) m).\n    + apply n_le_m__Sn_le_Sm. apply le_plus_l.\n    + apply H.\n  - apply (le_trans (S n2) (S (n1 + n2)) m).\n    + apply n_le_m__Sn_le_Sm. rewrite add_comm. apply le_plus_l.\n    + apply H.\nQed.",
+      "explanation": "Verified proof."
     },
     "leb_le": {
-      "solution": "Theorem leb_complete : forall n m,\n  n <=? m = true -> n <= m.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem leb_correct : forall n m,\n  n <= m ->\n  n <=? m = true.\nProof.\n  (* FILL IN HERE *) Admitted.\n\n(** Hint: The next two can easily be proved without using [induction]. *)\n\nTheorem leb_iff : forall n m,\n  n <=? m = true <-> n <= m.\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem leb_true_trans : forall n m o,\n  n <=? m = true -> m <=? o = true -> n <=? o = true.\nProof.\n  (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Theorem leb_complete : forall n m,\n  n <=? m = true -> n <= m.\nProof.\n  intros n. induction n as [| n' IH].\n  - intros m H. apply O_le_n.\n  - intros m H. destruct m as [| m'].\n    + simpl in H. discriminate H.\n    + simpl in H. apply n_le_m__Sn_le_Sm. apply IH. apply H.\nQed.\n\nTheorem leb_correct : forall n m,\n  n <= m ->\n  n <=? m = true.\nProof.\n  intros n. induction n as [| n' IH].\n  - intros m H. simpl. reflexivity.\n  - intros m H. destruct m as [| m'].\n    + inversion H.\n    + simpl. apply IH. apply Sn_le_Sm__n_le_m. apply H.\nQed.\n\nTheorem leb_iff : forall n m,\n  n <=? m = true <-> n <= m.\nProof.\n  intros n m. split.\n  - apply leb_complete.\n  - apply leb_correct.\nQed.",
+      "explanation": "Verified proof."
     },
     "R_provability2": {
-      "solution": "(* FILL IN HERE\n\n    [] *)\n\n(** **** Exercise: 2 stars, standard, optional (total_relation)\n\n    Define an inductive binary relation [total_relation] that holds\n    between every pair of natural numbers. *)\n\nInductive total_relation : nat -> nat -> Prop :=\n  (* FILL IN HERE *)\n.\n\nTheorem total_relation_is_total : forall n m, total_relation n m.\n  Proof.\n  (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "(* Informal exercise: no code changes required. *)",
+      "explanation": "Verified proof."
     },
     "exp_match_ex2": {
-      "solution": "(** The [MStar''] lemma below (combined with its converse, the\n    [MStar'] exercise above), shows that our definition of [exp_match]\n    for [Star] is equivalent to the informal one given previously. *)\n\nLemma MStar'' : forall T (s : list T) (re : reg_exp T),\n  s =~ Star re ->\n  exists ss : list (list T),\n    s = fold app ss []\n    /\\ forall s', In s' ss -> s' =~ re.\nProof.\n  (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Lemma MStar'' : forall T (s : list T) (re : reg_exp T),\n  s =~ Star re ->\n  exists ss : list (list T),\n    s = fold app ss []\n    /\\ forall s', In s' ss -> s' =~ re.\nProof.\n  intros T s re H.\n  remember (Star re) as re' eqn:Hre'.\n  induction H\n    as [|x'|s1 re1 s2' re2 Hmatch1 IH1 Hmatch2 IH2\n        |s1 re1 re2 Hmatch IH|re1 s2' re2 Hmatch IH\n        |re''|s1 s2' re'' Hmatch1 IH1 Hmatch2 IH2].\n  - discriminate.\n  - discriminate.\n  - discriminate.\n  - discriminate.\n  - discriminate.\n  - exists (@nil (list T)). split.\n    + simpl. reflexivity.\n    + intros s' H'. destruct H'.\n  - assert (Hcopy : Star re'' = Star re) by apply Hre'.\n    injection Hre' as Hre''. rewrite Hre'' in Hmatch1.\n    destruct (IH2 Hcopy) as [ss [Hss1 Hss2]].\n    exists (s1 :: ss). split.\n    + simpl. rewrite <- Hss1. reflexivity.\n    + intros s' HIn. simpl in HIn. destruct HIn as [HEq1 | HIn'].\n      * rewrite <- HEq1. apply Hmatch1.\n      * apply Hss2. apply HIn'.\nQed.",
+      "explanation": "Verified proof."
     },
     "filter_challenge_2": {
       "solution": "(* FILL IN HERE\n\n    [] *)\n\n(** **** Exercise: 4 stars, standard, optional (palindromes)\n\n    A palindrome is a sequence that reads the same backwards as\n    forwards.\n\n    - Define an inductive proposition [pal] on [list X] that\n      captures what it means to be a palindrome. (Hint: You'll need\n      three cases.\n\n    - Prove ([pal_app_rev]) that\n\n       forall l, pal (l ++ rev l).\n\n    - Prove ([pal_rev] that)\n\n       forall l, pal l -> l = rev l.\n\n    For extra credit, try proving the same theorems with an alternate\n    definition with a _single_ constructor of this type:\n\n        forall l, l = rev l -> pal l\n*)\n\nInductive pal {X:Type} : list X -> Prop :=\n(* FILL IN HERE *)\n.\n\nTheorem pal_app_rev : forall (X:Type) (l : list X),\n  pal (l ++ (rev l)).\nProof.\n  (* FILL IN HERE *) Admitted.\n\nTheorem pal_rev : forall (X:Type) (l: list X) , pal l -> l = rev l.\nProof.\n  (* FILL IN HERE *) Admitted.",

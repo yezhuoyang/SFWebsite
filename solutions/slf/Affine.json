@@ -59,12 +59,12 @@
       "explanation": "Discard affine predicates from mkstruct preconditions."
     },
     "triple_frame": {
-      "solution": "Lemma hgc_intro : forall h,\n  heap_affine h ->\n  \\GC h.\nProof using. (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Lemma hgc_intro : forall h,\n  heap_affine h ->\n  \\GC h.\nProof using.\n  introv K. unfold hgc. exists (fun h' => h' = h).\n  rewrite hstar_hpure_l. split.\n  { intros h' ->. apply K. }\n  { reflexivity. }\nQed.",
+      "explanation": "Verified proof."
     },
     "himpl_hgc_absorb": {
-      "solution": "Lemma himpl_hgc_absorb_r : forall H,\n  haffine H ->\n  \\GC \\* H ==> \\GC.\nProof using. (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "Lemma himpl_hgc_absorb_r : forall H,\n  haffine H ->\n  \\GC \\* H ==> \\GC.\nProof using.\n  introv M. xchange (himpl_hgc_r M). xchange hstar_hgc_hgc.\nQed.",
+      "explanation": "Verified proof."
     }
   }
 }

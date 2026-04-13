@@ -47,8 +47,8 @@
       "explanation": "Forward direction: induction on clos_refl_trans, using rsc_R and rsc_trans. Backward: induction on clos_refl_trans_1n, using rt_step and rt_trans."
     },
     "le_Sn_n_inf": {
-      "solution": "    (* FILL IN HERE\n\n    [] *)\n\n(** **** Exercise: 1 star, standard, optional (le_Sn_n) *)\nTheorem le_Sn_n : forall n,\n  ~ (S n <= n).\nProof.\n  (* FILL IN HERE *) Admitted.",
-      "explanation": "Auto-generated scaffold. Replace `Admitted.` with an actual proof."
+      "solution": "(* Informal exercise.\n\n   Theorem: For every n, ~ (S n <= n).\n\n   Proof: By induction on n.\n\n   - Base case: n = 0. We must show ~ (S 0 <= 0), i.e., ~ (1 <= 0).\n     Suppose 1 <= 0. Inversion of the <= relation gives no valid\n     constructor (le_n would require 1 = 0, impossible; le_S would\n     require 1 <= -1, also impossible), so we have a contradiction.\n\n   - Inductive step: assume ~ (S n <= n) (the IH). We must show\n     ~ (S (S n) <= S n). Suppose S (S n) <= S n. By the lemma\n     Sn_le_Sm__n_le_m (injectivity of S under <=), we get S n <= n,\n     which contradicts the IH. Hence ~ (S (S n) <= S n). QED.\n*)",
+      "explanation": "Informal exercise — see the SF text for discussion."
     }
   }
 }
