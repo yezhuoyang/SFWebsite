@@ -514,7 +514,7 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
           {tab === 'submit' && (
             <div className="flex-1 min-h-0 h-full flex flex-col">
               {/* Scrollable form area */}
-              <div className="flex-1 min-h-0 overflow-y-auto solutions-scroll p-6 flex flex-col">
+              <div className="flex-1 min-h-0 overflow-y-auto solutions-scroll p-6">
                 <p className="text-sm text-gray-600 mb-4 shrink-0">
                   Share a solution for <span className="font-mono font-semibold">{exerciseName}</span>. You can submit multiple different approaches; each one is saved with its own timestamp.
                 </p>
@@ -572,15 +572,16 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
                     {'\u2193 Use current solution'}
                   </button>
                 </div>
-                <div className="flex-1 min-h-[220px] border border-gray-200 rounded-lg overflow-hidden bg-white">
-                  {/* Use `defaultValue` (uncontrolled init), not `value`.
-                      @monaco-editor/react's controlled `value` prop has a race
-                      with the lazy Monaco loader where the initial content can
-                      end up blank on first mount. State is still tracked via
-                      onChange; on tab-switch remount, defaultValue=submitCode
-                      preserves whatever the user already typed. */}
+                {/* FIXED-HEIGHT container — Monaco inside flex-1 nested
+                    containers doesn't get a measured height before mounting,
+                    which left the editor blank even when setValue() succeeded.
+                    A concrete pixel height bypasses that entirely.
+                    The `key` forces a fresh editor instance per exerciseId so
+                    nothing carries over between modal opens. */}
+                <div className="border border-gray-200 rounded-lg overflow-hidden bg-white" style={{ height: 360 }}>
                   <Editor
-                    height="100%"
+                    key={`share-editor-${exerciseId}`}
+                    height="360px"
                     language={COQ_LANGUAGE_ID}
                     theme="coqTheme"
                     defaultValue={submitCode}
