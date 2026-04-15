@@ -733,18 +733,22 @@ export default function ChapterPage() {
       // Also persist current edits
       saveBlockEdits(volumeId, chapterName, blockContentsRef.current);
 
-      // Update exercises state immediately from grade results
-      // Build from result.exercises as the authoritative source (parser-based, not DB)
+      // Update exercises state from grade results.
+      //
+      // CRITICAL: when targetExerciseName is set, result.exercises only
+      // contains the ONE graded exercise. We must MERGE that update into
+      // the existing list rather than replace it — otherwise grading a
+      // second exercise wipes the prior "Solved" status (and the Share-
+      // solution gate) for everything else in the chapter.
       if (result.exercises && result.exercises.length > 0) {
         const localGrades = loadGradeResults(volumeId, chapterName) || {};
         setExercises(prev => {
           const byName = new Map(prev.map(ex => [ex.name, ex]));
-          // Merge: grade results are authoritative, fill in details from prev
-          const merged = result.exercises.map(g => {
+          for (const g of result.exercises) {
             const existing = byName.get(g.name);
             const status = g.status === 'completed' || localGrades[g.name]?.status === 'completed'
               ? 'completed' : g.status;
-            return {
+            byName.set(g.name, {
               id: existing?.id ?? 0,
               name: g.name,
               stars: existing?.stars ?? 0,
@@ -756,9 +760,20 @@ export default function ChapterPage() {
               line_end: existing?.line_end ?? null,
               status,
               points_earned: g.status === 'completed' ? g.points : 0,
-            } as Exercise;
-          });
-          return merged;
+            } as Exercise);
+          }
+          // Preserve original ordering from `prev`; new entries (if any)
+          // appended at the end.
+          const out: Exercise[] = [];
+          const seen = new Set<string>();
+          for (const ex of prev) {
+            const merged = byName.get(ex.name);
+            if (merged) { out.push(merged); seen.add(ex.name); }
+          }
+          for (const [name, ex] of byName) {
+            if (!seen.has(name)) out.push(ex);
+          }
+          return out;
         });
       }
       // Modal stays open until user dismisses it
