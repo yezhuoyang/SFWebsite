@@ -481,50 +481,56 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
             </div>
           )}
 
-          {/* Submit tab */}
+          {/* Submit tab — flex column so the editor fills available space and
+              the Cancel/Share footer is ALWAYS visible at the bottom of the
+              modal regardless of viewport height. */}
           {tab === 'submit' && (
-            <div className="flex-1 min-h-0 h-full overflow-y-scroll solutions-scroll p-6">
-              <p className="text-sm text-gray-600 mb-4">
-                Share a solution for <span className="font-mono font-semibold">{exerciseName}</span>. You can submit multiple different approaches; each one is saved with its own timestamp.
-              </p>
+            <div className="flex-1 min-h-0 h-full flex flex-col">
+              {/* Scrollable form area */}
+              <div className="flex-1 min-h-0 overflow-y-auto solutions-scroll p-6 flex flex-col">
+                <p className="text-sm text-gray-600 mb-4 shrink-0">
+                  Share a solution for <span className="font-mono font-semibold">{exerciseName}</span>. You can submit multiple different approaches; each one is saved with its own timestamp.
+                </p>
 
-              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">
-                Explanation (optional)
-              </label>
-              <textarea
-                value={submitExplanation}
-                onChange={(e) => setSubmitExplanation(e.target.value)}
-                placeholder="Briefly describe your approach or what makes this solution interesting&hellip;"
-                rows={3}
-                className="w-full text-sm p-3 border border-gray-200 rounded-lg resize-none focus:outline-none focus:border-indigo-400 mb-4"
-              />
-
-              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">
-                Code
-              </label>
-              <div className="border border-gray-200 rounded-lg overflow-hidden mb-4 bg-white">
-                <Editor
-                  height="360px"
-                  language={COQ_LANGUAGE_ID}
-                  theme="coqTheme"
-                  value={submitCode}
-                  onChange={(v) => setSubmitCode(v ?? '')}
-                  beforeMount={handleBeforeMount}
-                  options={{
-                    fontSize: 13,
-                    fontFamily: "'JetBrains Mono', 'Courier New', monospace",
-                    minimap: { enabled: false },
-                    lineNumbers: 'on',
-                    wordWrap: 'on',
-                    scrollBeyondLastLine: false,
-                    tabSize: 2,
-                    automaticLayout: true,
-                    padding: { top: 10, bottom: 10 },
-                  }}
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5 shrink-0">
+                  Explanation (optional)
+                </label>
+                <textarea
+                  value={submitExplanation}
+                  onChange={(e) => setSubmitExplanation(e.target.value)}
+                  placeholder="Briefly describe your approach or what makes this solution interesting&hellip;"
+                  rows={2}
+                  className="w-full text-sm p-3 border border-gray-200 rounded-lg resize-none focus:outline-none focus:border-indigo-400 mb-4 shrink-0"
                 />
+
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5 shrink-0">
+                  Code
+                </label>
+                <div className="flex-1 min-h-[220px] border border-gray-200 rounded-lg overflow-hidden bg-white">
+                  <Editor
+                    height="100%"
+                    language={COQ_LANGUAGE_ID}
+                    theme="coqTheme"
+                    value={submitCode}
+                    onChange={(v) => setSubmitCode(v ?? '')}
+                    beforeMount={handleBeforeMount}
+                    options={{
+                      fontSize: 13,
+                      fontFamily: "'JetBrains Mono', 'Courier New', monospace",
+                      minimap: { enabled: false },
+                      lineNumbers: 'on',
+                      wordWrap: 'on',
+                      scrollBeyondLastLine: false,
+                      tabSize: 2,
+                      automaticLayout: true,
+                      padding: { top: 10, bottom: 10 },
+                    }}
+                  />
+                </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2">
+              {/* Pinned footer — always visible */}
+              <div className="shrink-0 border-t border-gray-100 px-6 py-3 flex items-center justify-end gap-2 bg-white">
                 <button
                   onClick={() => setTab('browse')}
                   className="text-sm text-gray-600 hover:text-gray-900 px-4 py-2"
@@ -534,9 +540,9 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
                 <button
                   onClick={handleSubmit}
                   disabled={submitting || !submitCode.trim()}
-                  className="text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-semibold disabled:opacity-40"
+                  className="text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-semibold disabled:opacity-40 shadow-sm"
                 >
-                  {submitting ? 'Submitting&hellip;' : 'Share solution'}
+                  {submitting ? 'Submitting\u2026' : 'Share solution'}
                 </button>
               </div>
             </div>
