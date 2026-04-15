@@ -22,8 +22,10 @@ export default function Layout() {
   const { user, logout } = useAuth();
 
   useEffect(() => {
+    // Re-fetch when the auth user changes — the per-user completion counts
+    // baked into /volumes responses depend on the JWT we send.
     getVolumes().then(setVolumes).catch(console.error);
-  }, []);
+  }, [user?.id]);
 
   return (
     <div className="flex h-screen bg-[#f8f7f4]">
@@ -39,7 +41,7 @@ export default function Layout() {
 
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
           {volumes.map((v) => {
-            const localCount = countVolumeLocalCompleted(v.id);
+            const localCount = countVolumeLocalCompleted(user?.id, v.id);
             const completed = Math.max(v.completed_count, localCount);
             const pct = v.exercise_count > 0
               ? Math.round((completed / v.exercise_count) * 100)

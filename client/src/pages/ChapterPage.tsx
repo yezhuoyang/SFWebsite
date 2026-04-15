@@ -171,8 +171,8 @@ export default function ChapterPage() {
       // Capture pristine originals BEFORE applying saved edits
       data.blocks.forEach(b => originalBlockContentsRef.current.set(b.id, b.content));
 
-      // Restore saved edits from localStorage
-      const savedEdits = loadBlockEdits(volumeId, chapterName);
+      // Restore saved edits from localStorage (per-user)
+      const savedEdits = loadBlockEdits(authUser?.id, volumeId, chapterName);
       const blocksWithEdits = savedEdits ? data.blocks.map(b => {
         const saved = savedEdits.get(b.id);
         return saved !== undefined ? { ...b, content: saved } : b;
@@ -189,7 +189,7 @@ export default function ChapterPage() {
       .catch(() => {});
     // Load exercises, then overlay with locally-stored grades
     getExercises(volumeId, chapterName).then(serverExercises => {
-      const localGrades = loadGradeResults(volumeId, chapterName);
+      const localGrades = loadGradeResults(authUser?.id, volumeId, chapterName);
       if (localGrades) {
         const merged = serverExercises.map(ex => {
           const local = localGrades[ex.name];
@@ -434,7 +434,7 @@ export default function ChapterPage() {
       if (localSaveTimerRef.current) clearTimeout(localSaveTimerRef.current);
       localSaveTimerRef.current = setTimeout(() => {
         if (volumeId && chapterName) {
-          saveBlockEdits(volumeId, chapterName, blockContentsRef.current);
+          saveBlockEdits(authUser?.id, volumeId, chapterName, blockContentsRef.current);
         }
       }, 1000);
     });
@@ -722,7 +722,7 @@ export default function ChapterPage() {
       // Persist grades to localStorage + detect new completions for celebration
       if (result.exercises) {
         const grades: Record<string, StoredGrade> = {};
-        const existing = loadGradeResults(volumeId, chapterName) || {};
+        const existing = loadGradeResults(authUser?.id, volumeId, chapterName) || {};
         for (const [k, v] of Object.entries(existing)) grades[k] = v;
         const newlyCompleted: string[] = [];
         for (const ex of result.exercises) {
@@ -731,14 +731,14 @@ export default function ChapterPage() {
           }
           grades[ex.name] = { status: ex.status, points: ex.points, gradedAt: Date.now() };
         }
-        saveGradeResults(volumeId, chapterName, grades);
+        saveGradeResults(authUser?.id, volumeId, chapterName, grades);
         if (newlyCompleted.length > 0) {
           setCelebration({ names: newlyCompleted });
           setTimeout(() => setCelebration(null), 4000);
         }
       }
       // Also persist current edits
-      saveBlockEdits(volumeId, chapterName, blockContentsRef.current);
+      saveBlockEdits(authUser?.id, volumeId, chapterName, blockContentsRef.current);
 
       // Update exercises state from grade results.
       //
@@ -748,7 +748,7 @@ export default function ChapterPage() {
       // second exercise wipes the prior "Solved" status (and the Share-
       // solution gate) for everything else in the chapter.
       if (result.exercises && result.exercises.length > 0) {
-        const localGrades = loadGradeResults(volumeId, chapterName) || {};
+        const localGrades = loadGradeResults(authUser?.id, volumeId, chapterName) || {};
         setExercises(prev => {
           const byName = new Map(prev.map(ex => [ex.name, ex]));
           for (const g of result.exercises) {
@@ -797,8 +797,8 @@ export default function ChapterPage() {
     if (!confirm('Reset this chapter to its original code? Your changes will be lost.')) return;
     try {
       await resetChapterFile(volumeId, chapterName);
-      // Clear localStorage for this chapter
-      clearBlockEdits(volumeId, chapterName);
+      // Clear localStorage for this chapter (this user only)
+      clearBlockEdits(authUser?.id, volumeId, chapterName);
       // Reload the page to get fresh blocks
       window.location.reload();
     } catch (e: any) {
@@ -876,8 +876,8 @@ export default function ChapterPage() {
     // Update the block in state so React re-renders with the original content
     setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, content: original } : b));
 
-    // Persist to localStorage
-    saveBlockEdits(volumeId, chapterName, blockContentsRef.current);
+    // Persist to localStorage (per-user)
+    saveBlockEdits(authUser?.id, volumeId, chapterName, blockContentsRef.current);
 
     // Mark dirty so the document is re-synced to Coq on next action
     setDirtyBlockIds(prev => {

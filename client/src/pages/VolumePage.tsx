@@ -4,6 +4,7 @@ import { getChapters, getVolumes } from '../api/client';
 import type { Chapter, Volume } from '../types';
 import { getChapterIllustration } from '../components/ChapterIllustrations';
 import { countLocalCompleted } from '../utils/storage';
+import { useAuth } from '../contexts/AuthContext';
 
 const VOLUME_GRADIENTS: Record<string, string> = {
   lf: 'from-blue-500 to-indigo-600',
@@ -14,6 +15,7 @@ const VOLUME_GRADIENTS: Record<string, string> = {
 };
 
 export default function VolumePage() {
+  const { user: authUser } = useAuth();
   const { volumeId } = useParams<{ volumeId: string }>();
   const [volume, setVolume] = useState<Volume | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -24,14 +26,14 @@ export default function VolumePage() {
     getChapters(volumeId).then(setChapters).catch(console.error);
   }, [volumeId]);
 
-  // Overlay localStorage grades onto chapter completed counts
+  // Overlay this user's localStorage grades onto chapter completed counts.
   const chaptersWithLocal = useMemo(() => {
     if (!volumeId) return chapters;
     return chapters.map(ch => {
-      const localCount = countLocalCompleted(volumeId, ch.name);
+      const localCount = countLocalCompleted(authUser?.id, volumeId, ch.name);
       return { ...ch, completed_count: Math.max(ch.completed_count, localCount) };
     });
-  }, [chapters, volumeId]);
+  }, [chapters, volumeId, authUser?.id]);
 
   if (!volumeId || !volume) return <div className="p-10 text-gray-400">Loading...</div>;
 

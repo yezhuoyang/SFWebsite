@@ -1,25 +1,39 @@
 /**
- * localStorage persistence for user progress.
- * Data survives browser restarts; only cleared by user manually.
+ * localStorage persistence for per-user progress.
+ *
+ * PRIVACY: every key is namespaced by userId so two users on the same browser
+ * never see each other's grades, edits, or annotations. Anonymous (logged-out)
+ * usage falls under the literal "anon" namespace.
  *
  * Keys:
- *   sf:edits:{volume}:{chapter}   → JSON { blockId: editedContent, ... }
- *   sf:grades:{volume}:{chapter}  → JSON { exerciseName: { status, points, gradedAt }, ... }
+ *   sf:u:{userId}:edits:{volume}:{chapter}        → JSON { blockId: editedContent, ... }
+ *   sf:u:{userId}:grades:{volume}:{chapter}       → JSON { exerciseName: { status, points, gradedAt }, ... }
+ *   sf:u:{userId}:annotations:{volume}:{chapter}  → JSON Annotation[]
  */
 
 const PREFIX = 'sf';
+type UserId = number | string | null | undefined;
 
-function editsKey(volume: string, chapter: string): string {
-  return `${PREFIX}:edits:${volume}:${chapter}`;
+function uid(userId: UserId): string {
+  return userId == null ? 'anon' : String(userId);
 }
 
-function gradesKey(volume: string, chapter: string): string {
-  return `${PREFIX}:grades:${volume}:${chapter}`;
+function editsKey(userId: UserId, volume: string, chapter: string): string {
+  return `${PREFIX}:u:${uid(userId)}:edits:${volume}:${chapter}`;
+}
+
+function gradesKey(userId: UserId, volume: string, chapter: string): string {
+  return `${PREFIX}:u:${uid(userId)}:grades:${volume}:${chapter}`;
+}
+
+function annotationsKey(userId: UserId, volume: string, chapter: string): string {
+  return `${PREFIX}:u:${uid(userId)}:annotations:${volume}:${chapter}`;
 }
 
 // ── Block edits ──────────────────────────────────────────────
 
 export function saveBlockEdits(
+  userId: UserId,
   volume: string,
   chapter: string,
   edits: Map<number, string>,
@@ -29,18 +43,19 @@ export function saveBlockEdits(
     obj[String(blockId)] = content;
   });
   try {
-    localStorage.setItem(editsKey(volume, chapter), JSON.stringify(obj));
+    localStorage.setItem(editsKey(userId, volume, chapter), JSON.stringify(obj));
   } catch {
     // localStorage full — silently ignore
   }
 }
 
 export function loadBlockEdits(
+  userId: UserId,
   volume: string,
   chapter: string,
 ): Map<number, string> | null {
   try {
-    const raw = localStorage.getItem(editsKey(volume, chapter));
+    const raw = localStorage.getItem(editsKey(userId, volume, chapter));
     if (!raw) return null;
     const obj = JSON.parse(raw) as Record<string, string>;
     const map = new Map<number, string>();
@@ -53,8 +68,8 @@ export function loadBlockEdits(
   }
 }
 
-export function clearBlockEdits(volume: string, chapter: string): void {
-  localStorage.removeItem(editsKey(volume, chapter));
+export function clearBlockEdits(userId: UserId, volume: string, chapter: string): void {
+  localStorage.removeItem(editsKey(userId, volume, chapter));
 }
 
 // ── Grade results ────────────────────────────────────────────
@@ -66,23 +81,25 @@ export interface StoredGrade {
 }
 
 export function saveGradeResults(
+  userId: UserId,
   volume: string,
   chapter: string,
   grades: Record<string, StoredGrade>,
 ): void {
   try {
-    localStorage.setItem(gradesKey(volume, chapter), JSON.stringify(grades));
+    localStorage.setItem(gradesKey(userId, volume, chapter), JSON.stringify(grades));
   } catch {
     // silently ignore
   }
 }
 
 export function loadGradeResults(
+  userId: UserId,
   volume: string,
   chapter: string,
 ): Record<string, StoredGrade> | null {
   try {
-    const raw = localStorage.getItem(gradesKey(volume, chapter));
+    const raw = localStorage.getItem(gradesKey(userId, volume, chapter));
     if (!raw) return null;
     return JSON.parse(raw) as Record<string, StoredGrade>;
   } catch {
@@ -90,9 +107,9 @@ export function loadGradeResults(
   }
 }
 
-/** Count locally-completed exercises for a chapter */
-export function countLocalCompleted(volume: string, chapter: string): number {
-  const grades = loadGradeResults(volume, chapter);
+/** Count locally-completed exercises for a chapter (this user only). */
+export function countLocalCompleted(userId: UserId, volume: string, chapter: string): number {
+  const grades = loadGradeResults(userId, volume, chapter);
   if (!grades) return 0;
   return Object.values(grades).filter(g => g.status === 'completed').length;
 }
@@ -112,13 +129,9 @@ export interface Annotation {
   createdAt: number;
 }
 
-function annotationsKey(volume: string, chapter: string): string {
-  return `${PREFIX}:annotations:${volume}:${chapter}`;
-}
-
-export function loadAnnotations(volume: string, chapter: string): Annotation[] {
+export function loadAnnotations(userId: UserId, volume: string, chapter: string): Annotation[] {
   try {
-    const raw = localStorage.getItem(annotationsKey(volume, chapter));
+    const raw = localStorage.getItem(annotationsKey(userId, volume, chapter));
     if (!raw) return [];
     return JSON.parse(raw) as Annotation[];
   } catch {
@@ -126,20 +139,19 @@ export function loadAnnotations(volume: string, chapter: string): Annotation[] {
   }
 }
 
-export function saveAnnotations(volume: string, chapter: string, annotations: Annotation[]): void {
+export function saveAnnotations(userId: UserId, volume: string, chapter: string, annotations: Annotation[]): void {
   try {
-    localStorage.setItem(annotationsKey(volume, chapter), JSON.stringify(annotations));
+    localStorage.setItem(annotationsKey(userId, volume, chapter), JSON.stringify(annotations));
   } catch { /* ignore */ }
 }
 
-export function clearAnnotations(volume: string, chapter: string): void {
-  localStorage.removeItem(annotationsKey(volume, chapter));
+export function clearAnnotations(userId: UserId, volume: string, chapter: string): void {
+  localStorage.removeItem(annotationsKey(userId, volume, chapter));
 }
 
-/** Get total local completions across all chapters for a volume.
- *  Scans all localStorage keys matching sf:grades:{volume}:* */
-export function countVolumeLocalCompleted(volume: string): number {
-  const prefix = `${PREFIX}:grades:${volume}:`;
+/** Get total local completions across all chapters for a volume (this user). */
+export function countVolumeLocalCompleted(userId: UserId, volume: string): number {
+  const prefix = `${PREFIX}:u:${uid(userId)}:grades:${volume}:`;
   let total = 0;
   try {
     for (let i = 0; i < localStorage.length; i++) {

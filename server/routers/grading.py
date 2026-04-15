@@ -1,9 +1,12 @@
-"""Grading endpoints."""
+"""Grading endpoints. All endpoints REQUIRE authentication: every grade is
+attributed to the calling user, never to a default account."""
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.database import get_session
+from server.models import User
+from server.routers.auth import get_current_user
 from server.services.grader import full_grade, quick_grade
 from server.services.progress_tracker import update_progress_from_grade
 
@@ -14,11 +17,12 @@ router = APIRouter(tags=["grading"])
 async def grade_chapter(
     volume_id: str,
     chapter_name: str,
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Full grade: compile with coqc + static analysis."""
+    """Full grade: compile with coqc + static analysis. Per-user."""
     result = await full_grade(volume_id, chapter_name)
-    await update_progress_from_grade(session, result)
+    await update_progress_from_grade(session, result, user.id)
 
     return {
         "volume_id": result.volume_id,
@@ -42,11 +46,12 @@ async def grade_chapter(
 async def quick_grade_chapter(
     volume_id: str,
     chapter_name: str,
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Quick grade: static analysis only (no compilation)."""
+    """Quick grade: static analysis only (no compilation). Per-user."""
     result = await quick_grade(volume_id, chapter_name)
-    await update_progress_from_grade(session, result)
+    await update_progress_from_grade(session, result, user.id)
 
     return {
         "volume_id": result.volume_id,

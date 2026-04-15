@@ -6,11 +6,10 @@ from pathlib import Path
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from server.config import VOLUMES as VOLUME_CFG
 from server.database import get_session
-from server.models import Chapter, Exercise, Progress, Volume
+from server.models import Chapter, Exercise, Progress, User, Volume
+from server.routers.auth import get_optional_user
 from server.schemas import ChapterOut, ExerciseOut, VolumeOut
 
 
@@ -66,30 +65,45 @@ router = APIRouter(tags=["volumes"])
 
 
 @router.get("/volumes", response_model=list[VolumeOut])
-async def list_volumes(session: AsyncSession = Depends(get_session)):
+async def list_volumes(
+    session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(get_optional_user),
+):
+    """List volumes with the CURRENT user's completion counts.
+    For unauthenticated callers, completed_count and total_points_earned
+    are reported as zero — never aggregated across all users.
+    """
     result = await session.execute(
         select(Volume).order_by(Volume.id)
     )
     volumes = result.scalars().all()
 
+    user_id = user.id if user else None
     out = []
     for v in volumes:
-        # Count completed exercises
-        completed = await session.execute(
-            select(func.count(Progress.id))
-            .join(Exercise, Progress.exercise_id == Exercise.id)
-            .join(Chapter, Exercise.chapter_id == Chapter.id)
-            .where(Chapter.volume_id == v.id, Progress.status == "completed")
-        )
-        completed_count = completed.scalar() or 0
+        if user_id is not None:
+            completed = await session.execute(
+                select(func.count(Progress.id))
+                .join(Exercise, Progress.exercise_id == Exercise.id)
+                .join(Chapter, Exercise.chapter_id == Chapter.id)
+                .where(
+                    Chapter.volume_id == v.id,
+                    Progress.status == "completed",
+                    Progress.user_id == user_id,
+                )
+            )
+            completed_count = completed.scalar() or 0
 
-        pts = await session.execute(
-            select(func.coalesce(func.sum(Progress.points_earned), 0.0))
-            .join(Exercise, Progress.exercise_id == Exercise.id)
-            .join(Chapter, Exercise.chapter_id == Chapter.id)
-            .where(Chapter.volume_id == v.id)
-        )
-        total_pts = pts.scalar() or 0.0
+            pts = await session.execute(
+                select(func.coalesce(func.sum(Progress.points_earned), 0.0))
+                .join(Exercise, Progress.exercise_id == Exercise.id)
+                .join(Chapter, Exercise.chapter_id == Chapter.id)
+                .where(Chapter.volume_id == v.id, Progress.user_id == user_id)
+            )
+            total_pts = pts.scalar() or 0.0
+        else:
+            completed_count = 0
+            total_pts = 0.0
 
         out.append(VolumeOut(
             id=v.id, name=v.name, namespace=v.namespace,
@@ -102,7 +116,12 @@ async def list_volumes(session: AsyncSession = Depends(get_session)):
 
 
 @router.get("/volumes/{volume_id}/chapters", response_model=list[ChapterOut])
-async def list_chapters(volume_id: str, session: AsyncSession = Depends(get_session)):
+async def list_chapters(
+    volume_id: str,
+    session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(get_optional_user),
+):
+    """List chapters with the CURRENT user's completion counts."""
     result = await session.execute(
         select(Chapter)
         .where(Chapter.volume_id == volume_id)
@@ -110,21 +129,30 @@ async def list_chapters(volume_id: str, session: AsyncSession = Depends(get_sess
     )
     chapters = result.scalars().all()
 
+    user_id = user.id if user else None
     out = []
     for ch in chapters:
-        completed = await session.execute(
-            select(func.count(Progress.id))
-            .join(Exercise, Progress.exercise_id == Exercise.id)
-            .where(Exercise.chapter_id == ch.id, Progress.status == "completed")
-        )
-        completed_count = completed.scalar() or 0
+        if user_id is not None:
+            completed = await session.execute(
+                select(func.count(Progress.id))
+                .join(Exercise, Progress.exercise_id == Exercise.id)
+                .where(
+                    Exercise.chapter_id == ch.id,
+                    Progress.status == "completed",
+                    Progress.user_id == user_id,
+                )
+            )
+            completed_count = completed.scalar() or 0
 
-        pts = await session.execute(
-            select(func.coalesce(func.sum(Progress.points_earned), 0.0))
-            .join(Exercise, Progress.exercise_id == Exercise.id)
-            .where(Exercise.chapter_id == ch.id)
-        )
-        total_pts = pts.scalar() or 0.0
+            pts = await session.execute(
+                select(func.coalesce(func.sum(Progress.points_earned), 0.0))
+                .join(Exercise, Progress.exercise_id == Exercise.id)
+                .where(Exercise.chapter_id == ch.id, Progress.user_id == user_id)
+            )
+            total_pts = pts.scalar() or 0.0
+        else:
+            completed_count = 0
+            total_pts = 0.0
 
         title, summary, line_count = _get_chapter_meta(volume_id, ch.name)
 
@@ -141,20 +169,43 @@ async def list_chapters(volume_id: str, session: AsyncSession = Depends(get_sess
 
 
 @router.get("/chapters/{volume_id}/{chapter_name}/exercises", response_model=list[ExerciseOut])
-async def list_exercises(volume_id: str, chapter_name: str, session: AsyncSession = Depends(get_session)):
+async def list_exercises(
+    volume_id: str,
+    chapter_name: str,
+    session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(get_optional_user),
+):
+    """List exercises with the CURRENT user's per-exercise status.
+    PRIVACY: previously this used `selectinload(Exercise.progress)` which
+    grabbed whichever Progress row happened to exist for the exercise —
+    leaking another user's completion status. Now we fetch this user's
+    Progress rows in a side query and join them in Python.
+    """
     result = await session.execute(
         select(Exercise)
         .join(Chapter)
         .where(Chapter.volume_id == volume_id, Chapter.name == chapter_name)
-        .options(selectinload(Exercise.progress))
         .order_by(Exercise.line_start)
     )
     exercises = result.scalars().all()
 
+    user_id = user.id if user else None
+    progress_by_ex: dict[int, Progress] = {}
+    if user_id is not None and exercises:
+        ex_ids = [ex.id for ex in exercises]
+        prog_rows = (await session.execute(
+            select(Progress).where(
+                Progress.user_id == user_id,
+                Progress.exercise_id.in_(ex_ids),
+            )
+        )).scalars().all()
+        progress_by_ex = {p.exercise_id: p for p in prog_rows}
+
     out = []
     for ex in exercises:
-        status = ex.progress.status if ex.progress else "not_started"
-        pts = ex.progress.points_earned if ex.progress else 0.0
+        p = progress_by_ex.get(ex.id)
+        status = p.status if p else "not_started"
+        pts = p.points_earned if p else 0.0
         out.append(ExerciseOut(
             id=ex.id, name=ex.name, stars=ex.stars,
             difficulty=ex.difficulty, modifier=ex.modifier,

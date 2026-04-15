@@ -6,6 +6,7 @@ import { VOLUME_ILLUSTRATIONS } from '../components/VolumeIllustrations';
 import { PLSELogo, UCLACSLogo } from '../components/PLSELogo';
 import { countVolumeLocalCompleted } from '../utils/storage';
 import LeaderboardWidget from '../components/LeaderboardWidget';
+import { useAuth } from '../contexts/AuthContext';
 
 const VOLUME_META: Record<string, { gradient: string; accent: string; desc: string; topics: string[] }> = {
   lf: {
@@ -44,17 +45,20 @@ const VOLUME_META: Record<string, { gradient: string; accent: string; desc: stri
 // const VOLUME_COLORS: Record<string, string> = { lf: 'bg-blue-500', ... };
 
 export default function Dashboard() {
+  const { user: authUser } = useAuth();
   const [volumes, setVolumes] = useState<Volume[]>([]);
 
   useEffect(() => {
+    // Re-fetch when the auth user changes — the per-user completion counts
+    // baked into /volumes responses depend on the JWT we send.
     getVolumes().then(setVolumes).catch(console.error);
-  }, []);
+  }, [authUser?.id]);
 
-  // Overlay localStorage grades onto volume completed counts
+  // Overlay this user's localStorage grades onto server-reported counts.
   const volumesWithLocal = useMemo(() => volumes.map(v => {
-    const localCount = countVolumeLocalCompleted(v.id);
+    const localCount = countVolumeLocalCompleted(authUser?.id, v.id);
     return { ...v, completed_count: Math.max(v.completed_count, localCount) };
-  }), [volumes]);
+  }), [volumes, authUser?.id]);
 
   const totalExercises = volumesWithLocal.reduce((s, v) => s + v.exercise_count, 0);
   const totalCompleted = volumesWithLocal.reduce((s, v) => s + v.completed_count, 0);
