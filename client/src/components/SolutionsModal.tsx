@@ -507,11 +507,17 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
                   Code
                 </label>
                 <div className="flex-1 min-h-[220px] border border-gray-200 rounded-lg overflow-hidden bg-white">
+                  {/* Use `defaultValue` (uncontrolled init), not `value`.
+                      @monaco-editor/react's controlled `value` prop has a race
+                      with the lazy Monaco loader where the initial content can
+                      end up blank on first mount. State is still tracked via
+                      onChange; on tab-switch remount, defaultValue=submitCode
+                      preserves whatever the user already typed. */}
                   <Editor
                     height="100%"
                     language={COQ_LANGUAGE_ID}
                     theme="coqTheme"
-                    value={submitCode}
+                    defaultValue={submitCode}
                     onChange={(v) => setSubmitCode(v ?? '')}
                     beforeMount={handleBeforeMount}
                     options={{
