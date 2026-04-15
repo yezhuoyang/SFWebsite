@@ -1,9 +1,16 @@
-"""Server-side annotations: create, list (public/mine), delete."""
+"""Server-side annotations: create (always public), list, delete.
+
+Annotations are PUBLIC by design — anyone (including unauthenticated readers)
+can see every annotation on a chapter. Only the original author can delete
+their own. The is_public flag is honoured on read for backward compatibility
+but new annotations are always created public.
+"""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select, or_
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from server.database import get_session
 from server.models import Annotation, Vote, User
@@ -23,10 +30,14 @@ class CreateAnnotation(BaseModel):
     start_col: int
     end_line: int
     end_col: int
-    is_public: bool = False
+    is_public: bool = True   # default + forced True on create — kept in the
+                              # schema for compat with old client code
 
 
 def _annotation_dict(a: Annotation, user_voted: bool = False) -> dict:
+    # `a.user` MUST be eagerly loaded by the caller's query
+    # (selectinload(Annotation.user)) — otherwise this raises MissingGreenlet
+    # in async mode and the endpoint 500s for every reader.
     return {
         "id": a.id, "user_id": a.user_id,
         "username": a.user.username, "display_name": a.user.display_name,
@@ -45,24 +56,23 @@ def _annotation_dict(a: Annotation, user_voted: bool = False) -> dict:
 async def list_annotations(
     volume_id: str = Query(...),
     chapter_name: str = Query(...),
-    public: bool = Query(True),
+    public: bool = Query(True),  # kept for compat; ignored — we always serve all
     user: User | None = Depends(get_optional_user),
     session: AsyncSession = Depends(get_session),
 ):
-    q = select(Annotation).where(
-        Annotation.volume_id == volume_id,
-        Annotation.chapter_name == chapter_name,
+    """List annotations on a chapter. Annotations are public — anyone can read."""
+    _ = public  # ignored; behaviour is always "show every annotation"
+    q = (
+        select(Annotation)
+        .where(
+            Annotation.volume_id == volume_id,
+            Annotation.chapter_name == chapter_name,
+        )
+        .options(selectinload(Annotation.user))
+        .order_by(Annotation.created_at.desc())
+        .limit(500)
     )
-    if public:
-        # Public annotations + own annotations
-        if user:
-            q = q.where(or_(Annotation.is_public == True, Annotation.user_id == user.id))
-        else:
-            q = q.where(Annotation.is_public == True)
-    q = q.order_by(Annotation.created_at.desc()).limit(200)
-
-    result = await session.execute(q)
-    annotations = result.scalars().all()
+    annotations = (await session.execute(q)).scalars().all()
 
     voted_ids: set[int] = set()
     if user:
@@ -82,11 +92,14 @@ async def my_annotations(
     session: AsyncSession = Depends(get_session),
 ):
     result = await session.execute(
-        select(Annotation).where(
+        select(Annotation)
+        .where(
             Annotation.user_id == user.id,
             Annotation.volume_id == volume_id,
             Annotation.chapter_name == chapter_name,
-        ).order_by(Annotation.created_at.desc())
+        )
+        .options(selectinload(Annotation.user))
+        .order_by(Annotation.created_at.desc())
     )
     return [_annotation_dict(a) for a in result.scalars().all()]
 
@@ -97,6 +110,7 @@ async def create_annotation(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    """Create an annotation. Always public — every learner can see it."""
     a = Annotation(
         user_id=user.id,
         volume_id=req.volume_id, chapter_name=req.chapter_name,
@@ -104,11 +118,18 @@ async def create_annotation(
         note=req.note, color=req.color,
         start_line=req.start_line, start_col=req.start_col,
         end_line=req.end_line, end_col=req.end_col,
-        is_public=req.is_public,
+        is_public=True,  # forced public regardless of request
     )
     session.add(a)
     await session.commit()
-    await session.refresh(a)
+    # Re-fetch with the user relationship eagerly loaded so _annotation_dict
+    # can serialize without lazy-loading.
+    result = await session.execute(
+        select(Annotation)
+        .where(Annotation.id == a.id)
+        .options(selectinload(Annotation.user))
+    )
+    a = result.scalar_one()
     return _annotation_dict(a)
 
 
