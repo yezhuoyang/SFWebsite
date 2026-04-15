@@ -189,6 +189,19 @@ export interface ChapterBlocksResponse {
 export const getChapterBlocks = (volumeId: string, chapterName: string) =>
   fetchJSON<ChapterBlocksResponse>(`${BASE}/coq/blocks/${volumeId}/${chapterName}`);
 
+// --- Imports catalog (definitions/theorems available from `Require Import`) ---
+
+export interface ImportedEntry {
+  kind: string;            // "Definition" | "Theorem" | "Lemma" | "Inductive" | ...
+  name: string;
+  signature: string;       // first-line signature for hover
+  module: string;          // e.g. "PLF.Maps" or "Coq.Bool.Bool"
+  chapter_name: string | null;  // set if from a SF chapter (so UI can link)
+}
+
+export const getChapterImports = (volumeId: string, chapterName: string) =>
+  fetchJSON<{ entries: ImportedEntry[] }>(`${BASE}/coq/imports/${volumeId}/${chapterName}`);
+
 // Grading
 export const gradeChapter = (volumeId: string, chapterName: string) =>
   fetchJSON<any>(`${BASE}/grade/${volumeId}/${chapterName}`, { method: 'POST' });

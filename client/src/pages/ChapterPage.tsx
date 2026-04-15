@@ -8,6 +8,7 @@ import GoalsPanel from '../components/GoalsPanel';
 import CommentBlock from '../components/CommentBlock';
 import ContextPanel, { parseBlockEntries, getContextNames, type ContextEntry } from '../components/ContextPanel';
 import { parseSentences } from '../coq/sentenceParser';
+import { getChapterImports, type ImportedEntry } from '../api/client';
 import TacticsPanel from '../components/TacticsPanel';
 import TutorChat, { type GpsAnchor, type TutorChatHandle, renderMarkdown as renderTutorMarkdown } from '../components/TutorChat';
 import { ppToString } from '../components/PpDisplay';
@@ -39,6 +40,7 @@ export default function ChapterPage() {
   const [blocks, setBlocks] = useState<BlockData[]>([]);
   const [toc, setToc] = useState<TocEntry[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [importedEntries, setImportedEntries] = useState<ImportedEntry[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<SaveResult | null>(null);
   const [visibleSolution, setVisibleSolution] = useState<{ name: string; data: SolutionData } | null>(null);
@@ -201,6 +203,11 @@ export default function ChapterPage() {
         setExercises(serverExercises);
       }
     }).catch(console.error);
+    // Fetch the static "Imported" catalog (definitions/theorems available
+    // via `Require Import` from same-volume chapters + Coq stdlib).
+    getChapterImports(volumeId, chapterName)
+      .then(r => setImportedEntries(r.entries))
+      .catch(() => setImportedEntries([]));
   }, [volumeId, chapterName]);
 
   // Page timer — counts up from when page was opened
@@ -2011,6 +2018,7 @@ export default function ChapterPage() {
             {rightTab === 'context' && (
               <ContextPanel
                 entries={contextEntries}
+                importedEntries={importedEntries}
                 onJumpTo={(blockId, _line) => navigateToBlock(blockId)}
               />
             )}

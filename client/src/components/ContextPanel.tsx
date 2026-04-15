@@ -1,16 +1,19 @@
 /**
  * Context panel: shows all definitions, theorems, lemmas, inductives, etc.
- * that have been executed so far — i.e., the current Coq environment.
+ * available to the user. Two sections:
+ *   - "This chapter" — defined here so far (executed, dynamic, expandable
+ *     bodies, jump-to-source). The primary content the user is editing.
+ *   - "Imported" — pulled in via `From X Require Import Y`. Includes
+ *     auto-extracted definitions from same-volume sibling chapters AND a
+ *     curated catalog of common Coq stdlib identifiers. Static, attributed
+ *     by source module.
  *
- * Features:
- *   - Grouped by kind (Types / Definitions / Theorems / Examples / Notations)
- *   - Click a name to expand its body inline (no round-trip to the code area)
- *   - "Jump" link scrolls the corresponding block into view
- *   - Search box filters by name
+ * Search filters across BOTH sections at once.
  */
 
 import { useMemo, useState } from 'react';
 import CoqCodeBlock from './CoqCodeBlock';
+import type { ImportedEntry } from '../api/client';
 
 export interface ContextEntry {
   kind: string;         // "Definition", "Theorem", "Lemma", ...
@@ -23,6 +26,7 @@ export interface ContextEntry {
 
 interface Props {
   entries: ContextEntry[];
+  importedEntries?: ImportedEntry[];
   onJumpTo?: (blockId: number, line: number) => void;
 }
 
@@ -70,9 +74,18 @@ const GROUP_ORDER = [
   'Examples', 'Notations', 'Modules', 'Axioms', 'Other',
 ];
 
-export default function ContextPanel({ entries, onJumpTo }: Props) {
+export default function ContextPanel({ entries, importedEntries = [], onJumpTo }: Props) {
   const [query, setQuery] = useState('');
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const [importedExpanded, setImportedExpanded] = useState(true);
+  // Per-module collapse inside the Imported section. Default: all collapsed
+  // (modules can be huge — let users opt in).
+  const [openModules, setOpenModules] = useState<Set<string>>(new Set());
+  const toggleModule = (m: string) => setOpenModules(prev => {
+    const n = new Set(prev);
+    if (n.has(m)) n.delete(m); else n.add(m);
+    return n;
+  });
 
   const toggleExpand = (key: string) => {
     setExpandedKeys(prev => {
@@ -88,6 +101,14 @@ export default function ContextPanel({ entries, onJumpTo }: Props) {
     return entries.filter(e => e.name.toLowerCase().includes(q));
   }, [entries, query]);
 
+  const filteredImported = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return importedEntries;
+    return importedEntries.filter(e =>
+      e.name.toLowerCase().includes(q) || e.module.toLowerCase().includes(q)
+    );
+  }, [importedEntries, query]);
+
   const groups = useMemo(() => {
     const map = new Map<string, ContextEntry[]>();
     for (const e of filtered) {
@@ -98,6 +119,23 @@ export default function ContextPanel({ entries, onJumpTo }: Props) {
     return map;
   }, [filtered]);
 
+  // Group imported entries by their source module
+  const importedByModule = useMemo(() => {
+    const map = new Map<string, ImportedEntry[]>();
+    for (const e of filteredImported) {
+      if (!map.has(e.module)) map.set(e.module, []);
+      map.get(e.module)!.push(e);
+    }
+    return map;
+  }, [filteredImported]);
+
+  // When the user is searching, auto-expand any module that has matches
+  // (otherwise they'd have to click into each one to see results).
+  const effectiveOpen = useMemo(() => {
+    if (!query.trim()) return openModules;
+    return new Set(importedByModule.keys());
+  }, [query, openModules, importedByModule]);
+
   return (
     <div className="h-full flex flex-col">
       {/* Header + search */}
@@ -107,30 +145,40 @@ export default function ContextPanel({ entries, onJumpTo }: Props) {
             Environment
           </p>
           <span className="text-[10px] text-gray-400">
-            {filtered.length} of {entries.length}
+            {`chapter: ${filtered.length}/${entries.length} \u00B7 imports: ${filteredImported.length}/${importedEntries.length}`}
           </span>
         </div>
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter by name&hellip;"
+          placeholder="Filter chapter + imports by name&hellip;"
           className="w-full text-xs px-2 py-1 border border-gray-200 rounded focus:outline-none focus:border-indigo-400"
         />
       </div>
 
-      {/* Entry list */}
+      {/* Body — scrollable */}
       <div className="flex-1 min-h-0 overflow-y-auto">
+
+        {/* === SECTION 1: This chapter === */}
+        <div className="px-3 py-1.5 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between">
+          <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider">
+            {'\u2605 This chapter'}
+          </span>
+          <span className="text-[10px] text-indigo-500">
+            {filtered.length}{query ? ` / ${entries.length}` : ''}
+          </span>
+        </div>
+
         {entries.length === 0 && (
-          <div className="p-6 text-center">
-            <p className="text-gray-500 text-sm">No definitions yet</p>
-            <p className="text-gray-600 text-xs mt-1">Step through code to populate</p>
+          <div className="px-4 py-3 text-center">
+            <p className="text-gray-500 text-xs">{'No definitions yet \u2014 step through code to populate'}</p>
           </div>
         )}
 
         {entries.length > 0 && filtered.length === 0 && (
-          <div className="p-6 text-center text-xs text-gray-400">
-            No definitions match "{query}"
+          <div className="px-4 py-3 text-center text-xs text-gray-400">
+            No chapter definitions match "{query}"
           </div>
         )}
 
@@ -139,7 +187,7 @@ export default function ContextPanel({ entries, onJumpTo }: Props) {
           if (!items || items.length === 0) return null;
           return (
             <div key={groupName} className="mb-1">
-              <div className="px-3 py-1.5 sticky top-0 bg-gray-50/90 backdrop-blur-sm border-b border-gray-100">
+              <div className="px-3 py-1 bg-gray-50/90 border-b border-gray-100">
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                   {groupName}
                 </span>
@@ -147,12 +195,11 @@ export default function ContextPanel({ entries, onJumpTo }: Props) {
               </div>
               <div className="py-0.5">
                 {items.map((e) => {
-                  const key = `${e.kind}-${e.name}-${e.line}`;
+                  const key = `chap-${e.kind}-${e.name}-${e.line}`;
                   const expanded = expandedKeys.has(key);
                   const colors = KIND_COLORS[e.kind] || { text: 'text-gray-600', bg: 'bg-gray-100' };
                   return (
                     <div key={key} className="border-b border-gray-50 last:border-b-0">
-                      {/* Row: kind badge + name + jump button */}
                       <div
                         onClick={() => toggleExpand(key)}
                         className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors ${
@@ -179,7 +226,6 @@ export default function ContextPanel({ entries, onJumpTo }: Props) {
                         )}
                       </div>
 
-                      {/* Expanded body */}
                       {expanded && (
                         <div className="px-3 pb-2.5 pt-0.5 bg-indigo-50/20">
                           <CoqCodeBlock code={e.body} maxLines={20} />
@@ -195,6 +241,79 @@ export default function ContextPanel({ entries, onJumpTo }: Props) {
             </div>
           );
         })}
+
+        {/* === SECTION 2: Imported === */}
+        {importedEntries.length > 0 && (
+          <>
+            <div
+              onClick={() => setImportedExpanded(v => !v)}
+              className="px-3 py-1.5 bg-emerald-50 border-y border-emerald-100 flex items-center justify-between cursor-pointer hover:bg-emerald-100/60 mt-2"
+            >
+              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
+                {'\u2192 Imported (Require Import)'}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-emerald-600">
+                  {filteredImported.length}{query ? ` / ${importedEntries.length}` : ''}
+                </span>
+                <span className="text-[10px] text-emerald-500">
+                  {importedExpanded ? '\u25B2' : '\u25BC'}
+                </span>{/* up/down triangle */}
+              </div>
+            </div>
+
+            {importedExpanded && filteredImported.length === 0 && query && (
+              <div className="px-4 py-3 text-center text-xs text-gray-400">
+                No imported definitions match "{query}"
+              </div>
+            )}
+
+            {importedExpanded && Array.from(importedByModule.entries()).map(([module, items]) => {
+              const open = effectiveOpen.has(module);
+              return (
+                <div key={module}>
+                  <div
+                    onClick={() => toggleModule(module)}
+                    className="px-3 py-1 bg-gray-50/90 border-b border-gray-100 cursor-pointer hover:bg-gray-100 flex items-center justify-between"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[11px] font-mono font-semibold text-gray-700 truncate">
+                        {module}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-gray-400 ml-2">
+                      {items.length}
+                    </span>
+                    <span className="text-[10px] text-gray-300 ml-1">
+                      {open ? '\u25B2' : '\u25BC'}
+                    </span>
+                  </div>
+                  {open && (
+                    <div className="py-0.5">
+                      {items.map((e, idx) => {
+                        const colors = KIND_COLORS[e.kind] || { text: 'text-gray-600', bg: 'bg-gray-100' };
+                        return (
+                          <div
+                            key={`imp-${module}-${e.name}-${idx}`}
+                            className="flex items-center gap-2 px-3 py-1 hover:bg-gray-50/60"
+                            title={e.signature}
+                          >
+                            <span className={`text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded shrink-0 ${colors.text} ${colors.bg}`}>
+                              {e.kind.slice(0, 3)}
+                            </span>
+                            <span className="text-xs font-mono text-gray-700 truncate flex-1">
+                              {e.name}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </>
+        )}
       </div>
     </div>
   );

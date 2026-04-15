@@ -186,6 +186,32 @@ async def get_chapter_file(volume_id: str, chapter_name: str):
     return {"content": content, "filename": f"{chapter_name}.v"}
 
 
+@router.get("/coq/imports/{volume_id}/{chapter_name}")
+async def get_chapter_imports(volume_id: str, chapter_name: str):
+    """Resolve every `From X Require Import Y` in this chapter into a flat
+    list of identifiers the user can reference. Two sources:
+      - same-volume sibling chapters (auto-extracted from their .v files)
+      - curated catalog of common Coq stdlib modules
+    Returns entries grouped by source module so the UI can attribute them.
+    """
+    if volume_id not in VOLUMES:
+        raise HTTPException(status_code=404, detail=f"Unknown volume: {volume_id}")
+    from server.services.imports import get_imported_entries
+    entries = get_imported_entries(volume_id, chapter_name)
+    return {
+        "entries": [
+            {
+                "kind": e.kind,
+                "name": e.name,
+                "signature": e.signature,
+                "module": e.module,
+                "chapter_name": e.chapter_name,
+            }
+            for e in entries
+        ],
+    }
+
+
 @router.put("/coq/file/{volume_id}/{chapter_name}")
 async def save_chapter_file(
     volume_id: str, chapter_name: str, body: dict,
