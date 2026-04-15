@@ -1429,23 +1429,15 @@ export default function ChapterPage() {
           exerciseName={solutionsModal.exerciseName}
           currentCode={solutionsModal.currentCode}
           getLatestCode={() => {
-            // Read the freshest live block content at click time. Try the
-            // Monaco editor instance directly first — it's the source of truth.
+            // Read the freshest live block content at click time. Monaco's
+            // editor instance is source of truth; blockContentsRef + state
+            // are fallbacks.
             const bid = solutionsModal.blockId;
             const ed = editorInstancesRef.current.get(bid);
             const fromMonaco = ed?.getModel?.()?.getValue?.();
             const fromRef = blockContentsRef.current.get(bid);
             const fallback = blocks.find(b => b.id === bid)?.content ?? '';
-            const code = fromMonaco || fromRef || fallback;
-            // eslint-disable-next-line no-console
-            console.log('[Solutions] getLatestCode', {
-              blockId: bid,
-              monacoLen: fromMonaco?.length ?? null,
-              refLen: fromRef?.length ?? null,
-              fallbackLen: fallback.length,
-              finalLen: code.length,
-            });
-            return code;
+            return fromMonaco || fromRef || fallback;
           }}
           onClose={() => setSolutionsModal(null)}
         />
@@ -1850,23 +1842,13 @@ export default function ChapterPage() {
                                     e.stopPropagation();
                                     if (!solved) return;
                                     // Try three sources, in order of freshness:
-                                    //   1. The live Monaco editor instance for this block
+                                    //   1. live Monaco editor instance for this block
                                     //   2. blockContentsRef (updated on every keystroke)
-                                    //   3. block.content (the React state, possibly stale)
+                                    //   3. block.content (React state, possibly stale)
                                     const ed = editorInstancesRef.current.get(block.id);
                                     const fromMonaco = ed?.getModel?.()?.getValue?.();
                                     const fromRef = blockContentsRef.current.get(block.id);
                                     const code = fromMonaco || fromRef || block.content || '';
-                                    // eslint-disable-next-line no-console
-                                    console.log('[Solutions] open modal', {
-                                      exerciseName: block.exercise_name,
-                                      blockId: block.id,
-                                      monacoLen: fromMonaco?.length ?? null,
-                                      refLen: fromRef?.length ?? null,
-                                      blockContentLen: block.content?.length ?? null,
-                                      finalLen: code.length,
-                                      preview: code.slice(0, 200),
-                                    });
                                     setSolutionsModal({
                                       exerciseId: ex.id,
                                       exerciseName: block.exercise_name!,

@@ -336,7 +336,6 @@ export class CoqEngine implements CoqObserver {
    * Remove when/if we upgrade jsCoq to a build using Coq 8.18+.
    */
   private transformForWorker(text: string): string {
-    const originalText = text;
     let out = text;
 
     // 3) Neutralise Imp.v's redeclaration of `x !-> v` at the SAME level-100
@@ -372,14 +371,6 @@ export class CoqEngine implements CoqObserver {
       /!->(\s+)([A-Za-z_]\w*|\d+)(\s*)\)/g,
       (_m, sp1, val, sp2) => `!->${sp1}${val} ; empty_st${sp2})`,
     );
-
-    // Debug: log when we actually rewrote something, so field reports of
-    // residual Coq 8.17 errors come with ground truth about what text the
-    // worker received. Cheap enough to leave on; easy to strip later.
-    if (out !== originalText) {
-      // eslint-disable-next-line no-console
-      console.debug('[CoqEngine] rewrote for Coq 8.17:\n  in:', originalText.slice(0, 200), '\n  out:', out.slice(0, 200));
-    }
 
     return out;
   }
