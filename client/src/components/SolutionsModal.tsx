@@ -20,6 +20,10 @@ interface Props {
   exerciseId: number;
   exerciseName: string;
   currentCode: string;
+  /** Re-read the live block contents at the moment the user clicks
+   *  "Use current solution". Falls back to the initial currentCode if not
+   *  supplied. Lets us pull the freshest editor content without prop drilling. */
+  getLatestCode?: () => string;
   onClose: () => void;
 }
 
@@ -49,7 +53,7 @@ function formatDate(iso: string): string {
   return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
 }
 
-export default function SolutionsModal({ exerciseId, exerciseName, currentCode, onClose }: Props) {
+export default function SolutionsModal({ exerciseId, exerciseName, currentCode, getLatestCode, onClose }: Props) {
   const { user, requireLogin } = useAuth();
   const [tab, setTab] = useState<Tab>('browse');
   const [sort, setSort] = useState<SolutionSort>('upvotes');
@@ -522,9 +526,27 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
                   className="w-full text-sm p-3 border border-gray-200 rounded-lg resize-none focus:outline-none focus:border-indigo-400 mb-4 shrink-0"
                 />
 
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5 shrink-0">
-                  Code
-                </label>
+                <div className="flex items-center justify-between mb-1.5 shrink-0">
+                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    Code
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const fresh = (getLatestCode ? getLatestCode() : currentCode) ?? '';
+                      // eslint-disable-next-line no-console
+                      console.debug('[SolutionsModal] Use current solution clicked', { len: fresh.length, preview: fresh.slice(0, 120) });
+                      if (editorRef.current) {
+                        editorRef.current.setValue(fresh);
+                      }
+                      setSubmitCode(fresh);
+                    }}
+                    className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800 px-2 py-1 rounded hover:bg-indigo-50 border border-indigo-200 hover:border-indigo-300"
+                    title="Replace the editor content below with the code you currently have for this exercise"
+                  >
+                    {'\u2193 Use current solution'}
+                  </button>
+                </div>
                 <div className="flex-1 min-h-[220px] border border-gray-200 rounded-lg overflow-hidden bg-white">
                   {/* Use `defaultValue` (uncontrolled init), not `value`.
                       @monaco-editor/react's controlled `value` prop has a race

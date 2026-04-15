@@ -55,7 +55,7 @@ export default function ChapterPage() {
   const [celebration, setCelebration] = useState<{ names: string[] } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [serverAnnotations, setServerAnnotations] = useState<ServerAnnotation[]>([]);
-  const [solutionsModal, setSolutionsModal] = useState<{ exerciseId: number; exerciseName: string; currentCode: string } | null>(null);
+  const [solutionsModal, setSolutionsModal] = useState<{ exerciseId: number; exerciseName: string; currentCode: string; blockId: number } | null>(null);
 
   // Timer
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -1428,6 +1428,14 @@ export default function ChapterPage() {
           exerciseId={solutionsModal.exerciseId}
           exerciseName={solutionsModal.exerciseName}
           currentCode={solutionsModal.currentCode}
+          getLatestCode={() => {
+            // Read the freshest live block content at click time, not whatever
+            // was captured when the modal opened.
+            const bid = solutionsModal.blockId;
+            const live = blockContentsRef.current.get(bid);
+            const fallback = blocks.find(b => b.id === bid)?.content ?? '';
+            return live ?? fallback;
+          }}
           onClose={() => setSolutionsModal(null)}
         />
       )}
@@ -1846,6 +1854,7 @@ export default function ChapterPage() {
                                       exerciseId: ex.id,
                                       exerciseName: block.exercise_name!,
                                       currentCode: code,
+                                      blockId: block.id,
                                     });
                                   }}
                                   disabled={!solved}
