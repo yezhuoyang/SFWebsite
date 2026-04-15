@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import Editor, { type BeforeMount } from '@monaco-editor/react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import Editor, { type BeforeMount, type OnMount } from '@monaco-editor/react';
 import {
   getSharedSolutions,
   getMySolutions,
@@ -77,10 +77,29 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
   const [submitCode, setSubmitCode] = useState(currentCode);
   const [submitExplanation, setSubmitExplanation] = useState('');
 
+  // Diagnostic: confirm what we received as the prop on mount.
+  // eslint-disable-next-line no-console
+  console.debug('[SolutionsModal] mount', { exerciseId, exerciseName, currentCodeLen: currentCode?.length, currentCodePreview: (currentCode ?? '').slice(0, 120) });
+
   // Monaco beforeMount: register Coq language + SF theme so <Editor> renders
   // with the same highlighting as the lecture view.
   const handleBeforeMount: BeforeMount = (monaco) => {
     registerCoqLanguage(monaco);
+  };
+
+  // Belt-and-braces: capture the Monaco editor instance and FORCIBLY set the
+  // value on mount. `defaultValue`/`value` props occasionally race with the
+  // lazy Monaco loader and leave the editor blank; `editor.setValue(...)`
+  // after mount can't be missed.
+  const editorRef = useRef<any>(null);
+  const handleEditorMount: OnMount = (editor) => {
+    editorRef.current = editor;
+    const intended = currentCode ?? '';
+    if (editor.getValue() !== intended) {
+      // eslint-disable-next-line no-console
+      console.debug('[SolutionsModal] forcing editor value', { len: intended.length });
+      editor.setValue(intended);
+    }
   };
   const [submitting, setSubmitting] = useState(false);
 
@@ -520,6 +539,7 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
                     defaultValue={submitCode}
                     onChange={(v) => setSubmitCode(v ?? '')}
                     beforeMount={handleBeforeMount}
+                    onMount={handleEditorMount}
                     options={{
                       fontSize: 13,
                       fontFamily: "'JetBrains Mono', 'Courier New', monospace",

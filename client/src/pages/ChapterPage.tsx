@@ -1830,7 +1830,18 @@ export default function ChapterPage() {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (!solved) return;
-                                    const code = blockContentsRef.current.get(block.id) || block.content;
+                                    const live = blockContentsRef.current.get(block.id);
+                                    const code = live ?? block.content ?? '';
+                                    // Diagnostic: track exactly what we ship to the share modal.
+                                    // eslint-disable-next-line no-console
+                                    console.debug('[Solutions] open modal', {
+                                      exerciseName: block.exercise_name,
+                                      blockId: block.id,
+                                      liveLen: live?.length ?? null,
+                                      blockContentLen: block.content?.length ?? null,
+                                      finalLen: code.length,
+                                      preview: code.slice(0, 120),
+                                    });
                                     setSolutionsModal({
                                       exerciseId: ex.id,
                                       exerciseName: block.exercise_name!,
