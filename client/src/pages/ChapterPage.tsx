@@ -953,6 +953,18 @@ export default function ChapterPage() {
     setCompletionContext(getContextNames(contextEntries));
   }, [contextEntries]);
 
+  // Imported entries are filtered by what `Require Import` lines have
+  // actually been EXECUTED. The catalog is preloaded for the whole chapter
+  // but the user shouldn't see e.g. List.app until they've stepped past
+  // `From Coq Require Import List.`
+  const visibleImportedEntries = useMemo<ImportedEntry[]>(() => {
+    if (!coqState.highlights) return [];
+    const processed = coqState.highlights.processedRange || [];
+    if (processed.length === 0) return [];
+    const maxLine0 = Math.max(...processed.map(r => r.end.line));
+    return importedEntries.filter(e => e.import_line <= maxLine0);
+  }, [importedEntries, coqState.highlights]);
+
   // Disabled: never programmatically move the cursor.
   // The user controls their cursor position — vscoqtop's moveCursor
   // notifications are ignored to prevent cursor jumping between blocks.
@@ -2018,7 +2030,7 @@ export default function ChapterPage() {
             {rightTab === 'context' && (
               <ContextPanel
                 entries={contextEntries}
-                importedEntries={importedEntries}
+                importedEntries={visibleImportedEntries}
                 onJumpTo={(blockId, _line) => navigateToBlock(blockId)}
               />
             )}

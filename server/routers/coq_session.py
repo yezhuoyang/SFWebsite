@@ -206,6 +206,7 @@ async def get_chapter_imports(volume_id: str, chapter_name: str):
                 "signature": e.signature,
                 "module": e.module,
                 "chapter_name": e.chapter_name,
+                "import_line": e.import_line,
             }
             for e in entries
         ],

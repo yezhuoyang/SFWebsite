@@ -197,6 +197,9 @@ export interface ImportedEntry {
   signature: string;       // first-line signature for hover
   module: string;          // e.g. "PLF.Maps" or "Coq.Bool.Bool"
   chapter_name: string | null;  // set if from a SF chapter (so UI can link)
+  import_line: number;     // 0-indexed line where its `Require Import` lives;
+                            // client uses this to gate visibility on what's
+                            // actually been executed.
 }
 
 export const getChapterImports = (volumeId: string, chapterName: string) =>

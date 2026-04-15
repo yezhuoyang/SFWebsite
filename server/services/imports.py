@@ -27,6 +27,9 @@ class ImportedEntry:
     signature: str      # First line / type signature for hover detail
     module: str         # Source module, e.g. "PLF.Maps" or "Coq.Bool.Bool"
     chapter_name: str | None = None  # Set if it came from a SF chapter (so UI can link)
+    import_line: int = 0  # 0-indexed line in this chapter's source where the
+                          # `From X Require Import Y` appears. Used by the
+                          # client to gate visibility on what's been executed.
 
 
 # Regex set mirrors ContextPanel's parser, tuned for *.v source files.
@@ -43,7 +46,7 @@ _NAME_RE = re.compile(
 _NOTATION_NAME_RE = re.compile(r'^\s*Notation\s+"([^"]+)"')
 
 
-def _extract_v_definitions(v_file: Path, module: str, chapter_name: str | None) -> list[ImportedEntry]:
+def _extract_v_definitions(v_file: Path, module: str, chapter_name: str | None, import_line: int) -> list[ImportedEntry]:
     """Best-effort scan of a .v file for top-level vernacular declarations."""
     if not v_file.exists():
         return []
@@ -78,7 +81,10 @@ def _extract_v_definitions(v_file: Path, module: str, chapter_name: str | None) 
         sig = line.strip()
         if len(sig) > 200:
             sig = sig[:197] + "…"
-        out.append(ImportedEntry(kind=kind, name=name, signature=sig, module=module, chapter_name=chapter_name))
+        out.append(ImportedEntry(
+            kind=kind, name=name, signature=sig, module=module,
+            chapter_name=chapter_name, import_line=import_line,
+        ))
     return out
 
 
@@ -211,14 +217,17 @@ _STDLIB: dict[str, list[tuple[str, str, str]]] = {
 }
 
 
-def _stdlib_for(module: str) -> list[ImportedEntry]:
+def _stdlib_for(module: str, import_line: int) -> list[ImportedEntry]:
     """Return curated entries for a Coq stdlib module. Returns [] if we have no
     catalog for that module (just leaves it as an unknown import)."""
     items = _STDLIB.get(module)
     if not items:
         return []
     return [
-        ImportedEntry(kind=kind, name=name, signature=sig, module=module)
+        ImportedEntry(
+            kind=kind, name=name, signature=sig, module=module,
+            import_line=import_line,
+        )
         for (kind, name, sig) in items
     ]
 
@@ -254,10 +263,17 @@ _IMPORT_RE = re.compile(
 )
 
 
-def parse_imports(text: str) -> list[tuple[str, str]]:
-    """Return list of (library, module) pairs from `From X Require Import Y`.
-    `library` is e.g. "PLF" or "Coq"; `module` is e.g. "Maps" or "Init.Nat"."""
-    return [(m.group(1), m.group(2)) for m in _IMPORT_RE.finditer(text)]
+def parse_imports(text: str) -> list[tuple[str, str, int]]:
+    """Return list of (library, module, line_0idx) triples from
+    `From X Require Import Y`. `library` is e.g. "PLF" or "Coq"; `module` is
+    e.g. "Maps" or "Init.Nat"; line_0idx is the 0-indexed line number where
+    the import appears."""
+    out: list[tuple[str, str, int]] = []
+    for m in _IMPORT_RE.finditer(text):
+        # Convert byte offset -> 0-indexed line by counting newlines before it
+        line0 = text.count('\n', 0, m.start())
+        out.append((m.group(1), m.group(2), line0))
+    return out
 
 
 def get_imported_entries(volume_id: str, chapter_name: str) -> list[ImportedEntry]:
@@ -278,13 +294,11 @@ def get_imported_entries(volume_id: str, chapter_name: str) -> list[ImportedEntr
     out: list[ImportedEntry] = []
     seen_modules: set[str] = set()
 
-    for (library, module) in imports:
-        # Same-volume chapter import (e.g. PLF Require Import Maps)
-        # Map the library name back to a volume id (case-insensitive).
-        lib_to_vol = {v["short"]: vid for vid, v in VOLUMES.items()}
-        # Also accept namespace match (e.g. PLF -> plf)
-        lib_to_vol.update({v["namespace"]: vid for vid, v in VOLUMES.items()})
+    lib_to_vol = {v["short"]: vid for vid, v in VOLUMES.items()}
+    lib_to_vol.update({v["namespace"]: vid for vid, v in VOLUMES.items()})
 
+    for (library, module, line0) in imports:
+        # Same-volume chapter import (e.g. PLF Require Import Maps)
         target_vol = lib_to_vol.get(library) or lib_to_vol.get(library.upper())
         if target_vol is not None:
             sib_v = Path(VOLUMES[target_vol]["path"]) / f"{module}.v"
@@ -292,7 +306,9 @@ def get_imported_entries(volume_id: str, chapter_name: str) -> list[ImportedEntr
             if mod_name in seen_modules:
                 continue
             seen_modules.add(mod_name)
-            out.extend(_extract_v_definitions(sib_v, module=mod_name, chapter_name=module))
+            out.extend(_extract_v_definitions(
+                sib_v, module=mod_name, chapter_name=module, import_line=line0,
+            ))
             continue
 
         # Coq stdlib path (e.g. Coq.Init.Nat or just Nat)
@@ -300,10 +316,8 @@ def get_imported_entries(volume_id: str, chapter_name: str) -> list[ImportedEntr
         if canonical in seen_modules:
             continue
         seen_modules.add(canonical)
-        entries = _stdlib_for(canonical)
+        entries = _stdlib_for(canonical, import_line=line0)
         if entries:
             out.extend(entries)
-        # No catalog for this module -> just skip silently. The user will
-        # see only catalogs we know about; unknown imports won't pollute.
 
     return out
