@@ -83,7 +83,7 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
 
   // Diagnostic: confirm what we received as the prop on mount.
   // eslint-disable-next-line no-console
-  console.debug('[SolutionsModal] mount', { exerciseId, exerciseName, currentCodeLen: currentCode?.length, currentCodePreview: (currentCode ?? '').slice(0, 120) });
+  console.log('[SolutionsModal] mount', { exerciseId, exerciseName, currentCodeLen: currentCode?.length, currentCodePreview: (currentCode ?? '').slice(0, 200) });
 
   // Monaco beforeMount: register Coq language + SF theme so <Editor> renders
   // with the same highlighting as the lecture view.
@@ -99,9 +99,13 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
   const handleEditorMount: OnMount = (editor) => {
     editorRef.current = editor;
     const intended = currentCode ?? '';
+    // eslint-disable-next-line no-console
+    console.log('[SolutionsModal] editor onMount', {
+      currentVal: editor.getValue().length,
+      intendedLen: intended.length,
+      willForce: editor.getValue() !== intended,
+    });
     if (editor.getValue() !== intended) {
-      // eslint-disable-next-line no-console
-      console.debug('[SolutionsModal] forcing editor value', { len: intended.length });
       editor.setValue(intended);
     }
   };
@@ -514,6 +518,17 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
                 <p className="text-sm text-gray-600 mb-4 shrink-0">
                   Share a solution for <span className="font-mono font-semibold">{exerciseName}</span>. You can submit multiple different approaches; each one is saved with its own timestamp.
                 </p>
+                {/* Visible diagnostic — captured currentCode length on mount.
+                    If this says 0 the modal received empty bytes and the
+                    "Use current solution" button is your way out. */}
+                <p className="text-[11px] text-gray-400 mb-2 shrink-0 font-mono">
+                  Captured at open: {currentCode?.length ?? 0} chars
+                  {(!currentCode || currentCode.length === 0) && (
+                    <span className="text-amber-600 ml-2">
+                      {'\u26A0 empty \u2014 click "Use current solution" to load it from your editor.'}
+                    </span>
+                  )}
+                </p>
 
                 <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5 shrink-0">
                   Explanation (optional)
@@ -535,11 +550,21 @@ export default function SolutionsModal({ exerciseId, exerciseName, currentCode, 
                     onClick={() => {
                       const fresh = (getLatestCode ? getLatestCode() : currentCode) ?? '';
                       // eslint-disable-next-line no-console
-                      console.debug('[SolutionsModal] Use current solution clicked', { len: fresh.length, preview: fresh.slice(0, 120) });
+                      console.log('[SolutionsModal] Use current solution clicked', {
+                        len: fresh.length,
+                        preview: fresh.slice(0, 200),
+                        haveEditorRef: !!editorRef.current,
+                      });
                       if (editorRef.current) {
                         editorRef.current.setValue(fresh);
                       }
                       setSubmitCode(fresh);
+                      // Surface the value so user can see it even if the editor
+                      // somehow refuses to render — alert is intentional and
+                      // temporary; remove once we've confirmed the data path.
+                      if (!fresh) {
+                        alert('Use current solution: got EMPTY code from the live block. Open DevTools console for details.');
+                      }
                     }}
                     className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800 px-2 py-1 rounded hover:bg-indigo-50 border border-indigo-200 hover:border-indigo-300"
                     title="Replace the editor content below with the code you currently have for this exercise"

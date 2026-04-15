@@ -1429,12 +1429,23 @@ export default function ChapterPage() {
           exerciseName={solutionsModal.exerciseName}
           currentCode={solutionsModal.currentCode}
           getLatestCode={() => {
-            // Read the freshest live block content at click time, not whatever
-            // was captured when the modal opened.
+            // Read the freshest live block content at click time. Try the
+            // Monaco editor instance directly first — it's the source of truth.
             const bid = solutionsModal.blockId;
-            const live = blockContentsRef.current.get(bid);
+            const ed = editorInstancesRef.current.get(bid);
+            const fromMonaco = ed?.getModel?.()?.getValue?.();
+            const fromRef = blockContentsRef.current.get(bid);
             const fallback = blocks.find(b => b.id === bid)?.content ?? '';
-            return live ?? fallback;
+            const code = fromMonaco || fromRef || fallback;
+            // eslint-disable-next-line no-console
+            console.log('[Solutions] getLatestCode', {
+              blockId: bid,
+              monacoLen: fromMonaco?.length ?? null,
+              refLen: fromRef?.length ?? null,
+              fallbackLen: fallback.length,
+              finalLen: code.length,
+            });
+            return code;
           }}
           onClose={() => setSolutionsModal(null)}
         />
@@ -1838,17 +1849,23 @@ export default function ChapterPage() {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (!solved) return;
-                                    const live = blockContentsRef.current.get(block.id);
-                                    const code = live ?? block.content ?? '';
-                                    // Diagnostic: track exactly what we ship to the share modal.
+                                    // Try three sources, in order of freshness:
+                                    //   1. The live Monaco editor instance for this block
+                                    //   2. blockContentsRef (updated on every keystroke)
+                                    //   3. block.content (the React state, possibly stale)
+                                    const ed = editorInstancesRef.current.get(block.id);
+                                    const fromMonaco = ed?.getModel?.()?.getValue?.();
+                                    const fromRef = blockContentsRef.current.get(block.id);
+                                    const code = fromMonaco || fromRef || block.content || '';
                                     // eslint-disable-next-line no-console
-                                    console.debug('[Solutions] open modal', {
+                                    console.log('[Solutions] open modal', {
                                       exerciseName: block.exercise_name,
                                       blockId: block.id,
-                                      liveLen: live?.length ?? null,
+                                      monacoLen: fromMonaco?.length ?? null,
+                                      refLen: fromRef?.length ?? null,
                                       blockContentLen: block.content?.length ?? null,
                                       finalLen: code.length,
-                                      preview: code.slice(0, 120),
+                                      preview: code.slice(0, 200),
                                     });
                                     setSolutionsModal({
                                       exerciseId: ex.id,
