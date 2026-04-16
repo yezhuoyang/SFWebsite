@@ -167,12 +167,26 @@ export class CoqEngine implements CoqObserver {
     const newSentences = parseSentences(text);
 
     // Find divergence point — where do old and new sentences differ?
+    //
+    // IMPORTANT: matching sentence TEXT does not imply matching POSITION.
+    // If the user adds blank lines / comments / whitespace around a
+    // sentence, its `text` is identical but its byte offsets (and hence
+    // line numbers) shift. Previously we kept the stale startPos/endPos,
+    // which made the green "processed" highlight drift away from the real
+    // sentence as the document grew. Refresh positions from the new text
+    // as we walk the matching prefix.
     let divergeIdx = 0;
     while (
       divergeIdx < this.sentences.length &&
       divergeIdx < newSentences.length &&
       this.sentences[divergeIdx].text === newSentences[divergeIdx].text
     ) {
+      const fresh = newSentences[divergeIdx];
+      const old = this.sentences[divergeIdx];
+      old.startOffset = fresh.startOffset;
+      old.endOffset = fresh.endOffset;
+      old.startPos = offsetToLineChar(text, fresh.startOffset);
+      old.endPos = offsetToLineChar(text, fresh.endOffset);
       divergeIdx++;
     }
 
