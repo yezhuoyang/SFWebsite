@@ -116,39 +116,15 @@ async def full_grade(volume_id: str, chapter_name: str) -> GradeResult:
     test_file = Path(vol["path"]) / f"{chapter_name}Test.v"
     test_points = parse_test_file(test_file) if test_file.exists() else {}
 
-    # Parse the original (.orig) file to detect tampering
-    orig_file = Path(vol["path"]) / f"{chapter_name}.v.orig"
-    original_exercises_by_name = {}
-    if orig_file.exists():
-        try:
-            for orig_ex in parse_exercises(orig_file):
-                original_exercises_by_name[orig_ex.name] = orig_ex
-        except Exception:
-            pass
-
-    # Detect tampering: an exercise is tampered if its theorem statement was changed.
-    # We check the original file's exercise body and current file's exercise body
-    # for the theorem/lemma signatures.
+    # Per-exercise tamper detection: each exercise is considered tampered
+    # only if ITS OWN template declaration is gone. Unrelated theorems
+    # added/renamed elsewhere are the student's prerogative.
     current_text = v_file.read_text(encoding="utf-8", errors="replace")
-    orig_text = orig_file.read_text(encoding="utf-8", errors="replace") if orig_file.exists() else ""
-
-    def extract_theorem_sigs(text: str, ex_name: str) -> set[str]:
-        """Extract Theorem/Lemma/Definition/Fixpoint statements that mention the exercise name."""
-        sigs = set()
-        # Find statements like "Theorem foo : ..." or "Lemma foo : ..."
-        for m in re.finditer(
-            r'\b(Theorem|Lemma|Definition|Fixpoint|Example|Corollary)\s+(\w+)\b',
-            text,
-        ):
-            sigs.add(m.group(2))
-        return sigs
-
-    # Get original theorem names — these MUST still exist in the user's file
-    expected_theorems: set[str] = set()
-    if orig_text:
-        expected_theorems = extract_theorem_sigs(orig_text, "")
-    current_theorems = extract_theorem_sigs(current_text, "")
-    missing_theorems = expected_theorems - current_theorems
+    _IDENT_RE = re.compile(
+        r'\b(?:Theorem|Lemma|Definition|Fixpoint|Example|Corollary|'
+        r'Inductive|Fact|Remark|Proposition|CoFixpoint|Function)\s+(\w+)\b'
+    )
+    current_names = {m.group(1) for m in _IDENT_RE.finditer(current_text)}
 
     results = []
     for ex in exercises:
@@ -156,7 +132,6 @@ async def full_grade(volume_id: str, chapter_name: str) -> GradeResult:
 
         # Detect: compile error
         if not compiled_ok:
-            # Find the first error mentioning this exercise's name (best effort)
             error_excerpt = _extract_error_for_exercise(compile_output, ex.name)
             results.append(ExerciseGradeResult(
                 exercise_name=ex.name,
@@ -170,19 +145,22 @@ async def full_grade(volume_id: str, chapter_name: str) -> GradeResult:
             ))
             continue
 
-        # Detect: tampering — original theorem statement deleted/renamed
-        # Only check if we have original data and this is a serious test theorem
-        # (we use a conservative heuristic: if missing theorems are nonzero AND
-        #  this exercise's parsed status is "completed", flag it)
-        if missing_theorems and ex.status == "completed":
+        # Detect: tampering — only check that THIS exercise's own theorem /
+        # definition still exists in the file. We don't care about unrelated
+        # theorems being added or renamed; each exercise is graded against
+        # its own target only. This matches user intent: you should be able
+        # to add as many helper lemmas as you like, rearrange the file, or
+        # skip ahead — as long as you didn't delete the template declaration
+        # for the exercise being graded.
+        if ex.status == "completed" and ex.name not in current_names:
             results.append(ExerciseGradeResult(
                 exercise_name=ex.name,
                 status="tampered",
                 points_earned=0.0,
                 feedback=(
-                    f"\u26A0 It looks like you removed or renamed the original theorem(s): "
-                    f"{', '.join(sorted(missing_theorems)[:3])}. "
-                    f"You should not delete or rename the template — only fill in the proof body."
+                    f"\u26A0 The template declaration for `{ex.name}` is missing. "
+                    f"You can add helper lemmas freely, but don't delete or rename "
+                    f"the original Theorem/Lemma that this exercise was asking you to prove."
                 ),
             ))
             continue
@@ -291,27 +269,19 @@ async def full_grade_exercise(
         test_points = parse_test_file(test_file) if test_file.exists() else {}
         pts = test_points.get(exercise_name, float(ex.stars if ex else target.stars))
 
-        # Tampering detection against the original .v.orig
-        orig_file = Path(vol["path"]) / f"{chapter_name}.v.orig"
-        orig_text = orig_file.read_text(encoding="utf-8", errors="replace") if orig_file.exists() else ""
-
-        def extract_theorem_sigs(t: str) -> set[str]:
-            return {
-                m.group(2)
-                for m in re.finditer(
-                    r'\b(Theorem|Lemma|Definition|Fixpoint|Example|Corollary)\s+(\w+)\b',
-                    t,
-                )
-            }
-
-        # Only compare theorems within the truncated region: lines up to the
-        # ORIGINAL file's same cutoff. This avoids false "tampered" flags from
-        # content the user simply hasn't reached yet.
-        orig_lines = orig_text.split("\n")
-        orig_truncated = "\n".join(orig_lines[:cutoff])
-        expected = extract_theorem_sigs(orig_truncated)
-        got = extract_theorem_sigs(truncated)
-        missing = expected - got
+        # Tamper detection: did the user remove THIS exercise's theorem/
+        # definition? We only check the target's own identifier. Previously
+        # we compared the full set of theorems between original-truncated
+        # and user-truncated at the same line number, but that falsely
+        # accused students who added many helper lemmas above the target
+        # (their truncation extends past the original's, so theorems that
+        # originally appeared AFTER the target show up as "missing").
+        _IDENT_RE = re.compile(
+            r'\b(?:Theorem|Lemma|Definition|Fixpoint|Example|Corollary|'
+            r'Inductive|Fact|Remark|Proposition|CoFixpoint|Function)\s+(\w+)\b'
+        )
+        declared_names = {m.group(1) for m in _IDENT_RE.finditer(truncated)}
+        target_missing = exercise_name not in declared_names
 
         if not compiled_ok:
             err = _extract_error_for_exercise(compile_output, exercise_name) or _short_compile_error(compile_output)
@@ -332,7 +302,7 @@ async def full_grade_exercise(
                 compile_output=compile_output,
             )
 
-        if missing and ex and ex.status == "completed":
+        if target_missing and ex and ex.status == "completed":
             return GradeResult(
                 volume_id=volume_id,
                 chapter_name=chapter_name,
@@ -342,9 +312,10 @@ async def full_grade_exercise(
                     status="tampered",
                     points_earned=0.0,
                     feedback=(
-                        f"\u26A0 It looks like you removed or renamed the original theorem(s): "
-                        f"{', '.join(sorted(missing)[:3])}. "
-                        f"Don't delete or rename the template — only fill in the proof body."
+                        f"\u26A0 The template declaration for `{exercise_name}` is missing. "
+                        f"You can add as many helper lemmas as you like, but don't delete "
+                        f"or rename the original Theorem/Lemma that this exercise was asking "
+                        f"you to prove."
                     ),
                 )],
             )
