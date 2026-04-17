@@ -43,6 +43,9 @@ export default function ChapterPage() {
   const [importedEntries, setImportedEntries] = useState<ImportedEntry[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<SaveResult | null>(null);
+  // Bumped every time a grade finishes; LeaderboardWidget uses it as a
+  // refresh key so the side panel shows fresh counts after a solve.
+  const [progressVersion, setProgressVersion] = useState(0);
   const [visibleSolution, setVisibleSolution] = useState<{ name: string; data: SolutionData } | null>(null);
   const [activeBlockId, setActiveBlockId] = useState<number | null>(null);
   const [tocOpen, setTocOpen] = useState(true);
@@ -736,6 +739,11 @@ export default function ChapterPage() {
           setCelebration({ names: newlyCompleted });
           setTimeout(() => setCelebration(null), 4000);
         }
+        // Always bump after a grade response — even if nothing new was
+        // completed, the server's Progress row may have flipped status
+        // (e.g. compile_error -> not_started), and counts/points may have
+        // changed. The leaderboard widgets watch this key.
+        setProgressVersion(v => v + 1);
       }
       // Also persist current edits
       saveBlockEdits(authUser?.id, volumeId, chapterName, blockContentsRef.current);
@@ -2043,17 +2051,20 @@ export default function ChapterPage() {
                   chapterName={chapterName}
                   title={`Top in ${chapterName}`}
                   limit={10}
+                  refreshKey={progressVersion}
                 />
                 <LeaderboardWidget
                   scope="volume"
                   volumeId={volumeId}
                   title={`Top in ${volumeId.toUpperCase()}`}
                   limit={10}
+                  refreshKey={progressVersion}
                 />
                 <LeaderboardWidget
                   scope="global"
                   title="Global Top"
                   limit={10}
+                  refreshKey={progressVersion}
                 />
               </div>
             )}

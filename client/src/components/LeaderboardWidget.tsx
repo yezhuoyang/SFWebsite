@@ -15,10 +15,14 @@ interface Props {
   limit?: number;
   /** compact = small fixed-width card; full = wider with more details */
   variant?: 'compact' | 'full';
+  /** Bump this to force an immediate re-fetch (e.g. after grading a
+   *  solution). Included in the effect dependency list. */
+  refreshKey?: number;
 }
 
 export default function LeaderboardWidget({
   scope, volumeId, chapterName, title, limit = 10, variant = 'compact',
+  refreshKey = 0,
 }: Props) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,7 +43,7 @@ export default function LeaderboardWidget({
       .finally(() => { if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
-  }, [scope, volumeId, chapterName, limit]);
+  }, [scope, volumeId, chapterName, limit, refreshKey]);
 
   const headerLabel = title || (
     scope === 'global' ? 'Global Leaderboard' :
