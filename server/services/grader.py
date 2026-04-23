@@ -6,10 +6,74 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from server.config import COQC_PATH, VOLUMES
+from server.config import CHAPTER_ORDER, COQC_PATH, VOLUMES
 from server.services.parser import parse_exercises, parse_test_file
 
 logger = logging.getLogger(__name__)
+
+
+async def _rebuild_predecessors(volume_id: str, chapter_name: str) -> str | None:
+    """Recompile every same-volume chapter that appears BEFORE `chapter_name`
+    in the canonical CHAPTER_ORDER whose .vo is stale or missing. Required
+    because editing-and-grading chapters out of order leaves .vo files with
+    mismatched signatures: Induction.vo may be compiled against one version
+    of Basics.vo while the current Basics.vo is different, producing
+    "Compiled library LF.X makes inconsistent assumptions over library LF.Y".
+
+    Rule: if any predecessor is rebuilt, EVERY later predecessor must also
+    be rebuilt (their digests encode the old one).
+
+    Returns None on success, or an error string describing which
+    predecessor failed.
+    """
+    order = CHAPTER_ORDER.get(volume_id, [])
+    try:
+        idx = order.index(chapter_name)
+    except ValueError:
+        return None
+    if idx == 0:
+        return None  # first chapter — no predecessors to worry about
+
+    vol = VOLUMES[volume_id]
+    vol_path = str(vol["path"])
+
+    needs_rebuild = False
+    for pred in order[:idx]:
+        v_file = Path(vol_path) / f"{pred}.v"
+        vo_file = Path(vol_path) / f"{pred}.vo"
+        if not v_file.exists():
+            continue
+        should_compile = needs_rebuild or (
+            not vo_file.exists() or vo_file.stat().st_mtime < v_file.stat().st_mtime
+        )
+        if not should_compile:
+            continue
+        needs_rebuild = True  # every later predecessor now also needs rebuild
+
+        cmd = [str(COQC_PATH)] + vol["coq_flags"] + [f"{pred}.v"]
+        logger.info(f"Rebuilding predecessor: {' '.join(cmd)} (cwd={vol_path})")
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=vol_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=180)
+            if proc.returncode != 0:
+                output = (stdout.decode() + "\n" + stderr.decode()).strip()
+                # Keep error text short for the UI
+                excerpt = _short_compile_error(output)
+                return (
+                    f"Earlier chapter `{pred}.v` failed to compile, which "
+                    f"blocks grading of `{chapter_name}.v`. Fix errors in "
+                    f"`{pred}.v` first.\n\n{excerpt}"
+                )
+        except asyncio.TimeoutError:
+            return f"Recompiling `{pred}.v` timed out (180s)"
+        except Exception as e:
+            return f"Recompiling `{pred}.v` failed: {e}"
+    return None
 
 
 @dataclass
@@ -90,26 +154,31 @@ async def full_grade(volume_id: str, chapter_name: str) -> GradeResult:
     if not v_file.exists():
         return GradeResult(volume_id, chapter_name, False, [], f"{chapter_name}.v not found")
 
-    # First try to compile
-    cmd = [str(COQC_PATH)] + vol["coq_flags"] + [f"{chapter_name}.v"]
-    logger.info(f"Compiling: {' '.join(cmd)} in {vol_path}")
-
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            cwd=vol_path,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
-        compile_output = (stdout.decode() + "\n" + stderr.decode()).strip()
-        compiled_ok = proc.returncode == 0
-    except asyncio.TimeoutError:
-        compile_output = "Compilation timed out (120s)"
+    # Rebuild stale predecessor .vo files first so transitive imports line up.
+    predecessor_err = await _rebuild_predecessors(volume_id, chapter_name)
+    if predecessor_err:
+        # Can't grade this chapter if earlier chapters don't compile cleanly.
+        compile_output = predecessor_err
         compiled_ok = False
-    except Exception as e:
-        compile_output = str(e)
-        compiled_ok = False
+    else:
+        cmd = [str(COQC_PATH)] + vol["coq_flags"] + [f"{chapter_name}.v"]
+        logger.info(f"Compiling: {' '.join(cmd)} in {vol_path}")
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=vol_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+            compile_output = (stdout.decode() + "\n" + stderr.decode()).strip()
+            compiled_ok = proc.returncode == 0
+        except asyncio.TimeoutError:
+            compile_output = "Compilation timed out (120s)"
+            compiled_ok = False
+        except Exception as e:
+            compile_output = str(e)
+            compiled_ok = False
 
     # Parse exercises in current file
     exercises = parse_exercises(v_file)
@@ -241,25 +310,35 @@ async def full_grade_exercise(
     try:
         temp_path.write_text(truncated, encoding="utf-8")
 
-        cmd = [str(COQC_PATH)] + vol["coq_flags"] + [temp_path.name]
-        logger.info(f"Per-exercise compile: {' '.join(cmd)} in {vol_path}")
-
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                cwd=vol_path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=90)
-            compile_output = (stdout.decode() + "\n" + stderr.decode()).strip()
-            compiled_ok = proc.returncode == 0
-        except asyncio.TimeoutError:
-            compile_output = "Compilation timed out (90s)"
+        # Rebuild stale predecessor .vo files before compiling. Without this,
+        # editing Basics.v and grading it, then editing Induction.v and
+        # grading it, then trying to grade a per-exercise in List.v triggers
+        # "Compiled library LF.Induction makes inconsistent assumptions over
+        # library LF.Basics" because Induction.vo was compiled against an
+        # older Basics.vo digest.
+        predecessor_err = await _rebuild_predecessors(volume_id, chapter_name)
+        if predecessor_err:
+            compile_output = predecessor_err
             compiled_ok = False
-        except Exception as e:
-            compile_output = str(e)
-            compiled_ok = False
+        else:
+            cmd = [str(COQC_PATH)] + vol["coq_flags"] + [temp_path.name]
+            logger.info(f"Per-exercise compile: {' '.join(cmd)} in {vol_path}")
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    cwd=vol_path,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=90)
+                compile_output = (stdout.decode() + "\n" + stderr.decode()).strip()
+                compiled_ok = proc.returncode == 0
+            except asyncio.TimeoutError:
+                compile_output = "Compilation timed out (90s)"
+                compiled_ok = False
+            except Exception as e:
+                compile_output = str(e)
+                compiled_ok = False
 
         # Re-parse the truncated file to find the target exercise's final status
         truncated_exercises = parse_exercises(temp_path)
