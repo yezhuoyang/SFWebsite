@@ -188,12 +188,27 @@ async def full_grade(volume_id: str, chapter_name: str) -> GradeResult:
     # Per-exercise tamper detection: each exercise is considered tampered
     # only if ITS OWN template declaration is gone. Unrelated theorems
     # added/renamed elsewhere are the student's prerogative.
+    #
+    # Important: many SF exercises use a GROUP label as their name (e.g.
+    # `list_funs` asks for `nonzeros`, `oddmembers`, `countoddmembers` —
+    # none of which is literally called "list_funs"). For those, we can't
+    # require the label to be declared. We only enforce "declared in
+    # current" when the name WAS declared in the .v.orig template.
     current_text = v_file.read_text(encoding="utf-8", errors="replace")
     _IDENT_RE = re.compile(
         r'\b(?:Theorem|Lemma|Definition|Fixpoint|Example|Corollary|'
         r'Inductive|Fact|Remark|Proposition|CoFixpoint|Function)\s+(\w+)\b'
     )
     current_names = {m.group(1) for m in _IDENT_RE.finditer(current_text)}
+
+    orig_file = Path(vol["path"]) / f"{chapter_name}.v.orig"
+    orig_names: set[str] = set()
+    if orig_file.exists():
+        try:
+            orig_text = orig_file.read_text(encoding="utf-8", errors="replace")
+            orig_names = {m.group(1) for m in _IDENT_RE.finditer(orig_text)}
+        except Exception:
+            pass
 
     results = []
     for ex in exercises:
@@ -214,14 +229,14 @@ async def full_grade(volume_id: str, chapter_name: str) -> GradeResult:
             ))
             continue
 
-        # Detect: tampering — only check that THIS exercise's own theorem /
-        # definition still exists in the file. We don't care about unrelated
-        # theorems being added or renamed; each exercise is graded against
-        # its own target only. This matches user intent: you should be able
-        # to add as many helper lemmas as you like, rearrange the file, or
-        # skip ahead — as long as you didn't delete the template declaration
-        # for the exercise being graded.
-        if ex.status == "completed" and ex.name not in current_names:
+        # Detect: tampering — only applies when the exercise's name was a
+        # declared identifier in the ORIGINAL template. For group-label
+        # exercises (e.g. `list_funs` which asks for nonzeros / oddmembers /
+        # countoddmembers) the label itself is never declared, so skip the
+        # check and rely on compile + no-Admitted.
+        if (ex.name in orig_names
+                and ex.status == "completed"
+                and ex.name not in current_names):
             results.append(ExerciseGradeResult(
                 exercise_name=ex.name,
                 status="tampered",
@@ -360,7 +375,23 @@ async def full_grade_exercise(
             r'Inductive|Fact|Remark|Proposition|CoFixpoint|Function)\s+(\w+)\b'
         )
         declared_names = {m.group(1) for m in _IDENT_RE.finditer(truncated)}
-        target_missing = exercise_name not in declared_names
+
+        # Only enforce "target declaration present" when the name was a
+        # real identifier in the ORIGINAL template. Many SF exercises use
+        # group labels (e.g. `list_funs` bundles nonzeros/oddmembers/
+        # countoddmembers) — the label itself is never declared, so the
+        # tamper check would always fire as a false positive.
+        orig_file = Path(vol["path"]) / f"{chapter_name}.v.orig"
+        orig_has_target = False
+        if orig_file.exists():
+            try:
+                orig_text = orig_file.read_text(encoding="utf-8", errors="replace")
+                orig_has_target = any(
+                    m.group(1) == exercise_name for m in _IDENT_RE.finditer(orig_text)
+                )
+            except Exception:
+                pass
+        target_missing = orig_has_target and exercise_name not in declared_names
 
         if not compiled_ok:
             err = _extract_error_for_exercise(compile_output, exercise_name) or _short_compile_error(compile_output)
