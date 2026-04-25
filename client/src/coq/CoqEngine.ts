@@ -69,6 +69,13 @@ export class CoqEngine implements CoqObserver {
   private sentences: ManagedSentence[] = [];
   private nextSid = 2;  // sid 1 is the init state
 
+  // Helper notation injection (jsCoq 8.17 workaround) — see HELPER_NOTATION
+  // below. Once `assertion_scope`/`custom assn` are in scope, we emit ONE
+  // extra Add carrying a `__sfassn ( e )` notation declaration. Subsequent
+  // user sentences chain off the helper's sid (instead of the trigger's).
+  private _helperSid = -1;             // sid of the injected helper, -1 if not active
+  private _injectHelperAfterIdx = -1;  // sentences[] index to inject helper AFTER; -1 = none/done
+
   // Execution state
   private executionIndex = -1;  // index into sentences[] of last processed sentence (-1 = none)
   private executing = false;    // true while waiting for Add/Exec callbacks
@@ -219,6 +226,18 @@ export class CoqEngine implements CoqObserver {
         startPos: offsetToLineChar(text, s.startOffset),
         endPos: offsetToLineChar(text, s.endOffset),
       });
+    }
+
+    // Recompute helper-trigger index from the (possibly updated) list. We
+    // pick the EARLIEST sentence that brings assertion_scope into scope —
+    // helper Add fires once, right after that sentence's Add. If the user
+    // edits the document such that the trigger gets cancelled (i.e. it's
+    // beyond the new divergence point), `_helperSid` is reset below so we
+    // re-inject on the next pass.
+    this._injectHelperAfterIdx = this.sentences.findIndex(s => isHelperTrigger(s.text));
+    if (this._injectHelperAfterIdx < 0 || this._injectHelperAfterIdx >= divergeIdx) {
+      // Trigger sentence is no longer processed → forget the active helper.
+      this._helperSid = -1;
     }
 
     // Update highlights
@@ -480,8 +499,24 @@ export class CoqEngine implements CoqObserver {
     sentence.phase = 'added';
 
     // tip_sid is the sid of the previously processed sentence, or 1 (init state)
-    const tipSid = idx > 0 ? this.sentences[idx - 1].sid : 1;
+    const prevSid = idx > 0 ? this.sentences[idx - 1].sid : 1;
+    const tipSid = this._maybeInjectHelper(idx - 1, prevSid);
     this.worker.add(tipSid, sentence.sid, this.transformForWorker(sentence.text));
+  }
+
+  /**
+   * If `prevIdx` is the recorded helper-trigger and the helper hasn't been
+   * Added yet (or has been cancelled), fire the helper Add and return the
+   * helper's sid (so the caller chains the next Add off it). Otherwise
+   * return `prevSid` unchanged.
+   */
+  private _maybeInjectHelper(prevIdx: number, prevSid: number): number {
+    if (prevIdx !== this._injectHelperAfterIdx) return prevSid;
+    if (this._helperSid > 0) return this._helperSid;
+    const helperSid = this.nextSid++;
+    this.worker.add(prevSid, helperSid, HELPER_NOTATION);
+    this._helperSid = helperSid;
+    return helperSid;
   }
 
   /**
@@ -542,7 +577,8 @@ export class CoqEngine implements CoqObserver {
     }
     const s = this.sentences[nextIdx];
     s.phase = 'added';
-    const tipSid = nextIdx > 0 ? this.sentences[nextIdx - 1].sid : 1;
+    const prevSid = nextIdx > 0 ? this.sentences[nextIdx - 1].sid : 1;
+    const tipSid = this._maybeInjectHelper(nextIdx - 1, prevSid);
     this.worker.add(tipSid, s.sid, this.transformForWorker(s.text));
     this.emitHighlights();
     // Wait for coqAdded to fire the next one.
@@ -561,6 +597,13 @@ export class CoqEngine implements CoqObserver {
           this.syntheticFired.delete(this.sentences[i].sid);
         }
         this.callbacks.onActivityTrim?.(trimSids);
+      }
+      // STM cancel propagates to descendants. If the cancellation includes
+      // the helper-trigger sentence (cancelIdx <= triggerIdx), the helper
+      // Add — which chains off the trigger — is also cancelled. Clear
+      // `_helperSid` so the next forward step re-injects.
+      if (this._injectHelperAfterIdx >= 0 && cancelIdx <= this._injectHelperAfterIdx) {
+        this._helperSid = -1;
       }
       this.executionIndex = targetIdx;
       this.diagnostics = [];
@@ -585,6 +628,13 @@ export class CoqEngine implements CoqObserver {
   }
 
   coqAdded(sid: number, _loc: unknown): void {
+    // Helper sids are NOT tracked in `this.sentences` — they're transparent
+    // STM nodes carrying just the helper-notation declaration. Treat their
+    // coqAdded as a no-op for UI/state, but still chain the batch.
+    if (sid === this._helperSid) {
+      if (this._batchExec) this._addNextInBatch();
+      return;
+    }
     const sentence = this.sentences.find(s => s.sid === sid);
     if (!sentence) return;
     sentence.phase = 'executing';
@@ -896,6 +946,34 @@ const PKG_DIRS: Record<string, string[][]> = {
  * `Notation` declaration apart from a Theorem that happens to be preceded
  * by a doc comment).
  */
+/**
+ * Helper notation injected into the worker after `Require ... Hoare.` (or,
+ * when editing Hoare.v itself, after `Open Scope assertion_scope.`). The
+ * `__sfassn ( e )` form lets the rewriter wrap each `{{ e }}` in a token
+ * sequence with a unique non-`{{` prefix that can't collide with the
+ * level-2 triple notation. `e` is parsed in `custom assn at level 99`,
+ * exactly like the original `{{ e }}` shorthand, so semantics are
+ * preserved.
+ */
+const HELPER_NOTATION =
+  `Notation "'__sfassn' '(' e ')'" := e (only parsing, at level 0, e custom assn at level 99) : assertion_scope.`;
+
+/**
+ * Match a sentence that brings `assertion_scope` / `custom assn` into scope
+ * (or, in Hoare.v itself, declares them). After such a sentence we can
+ * Add the HELPER_NOTATION declaration.
+ */
+function isHelperTrigger(text: string): boolean {
+  const stripped = stripLeadingComments(text);
+  // Imports of PLF/SECF Hoare bring everything in via .vo
+  if (/^From\s+(?:PLF|SECF)\s+Require\s+(?:Import|Export)\s+(?:[A-Za-z_][\w.]*\s+)*Hoare\b/.test(stripped)) return true;
+  // Hoare.v itself: after the `{{ e }}` shorthand declaration, custom assn
+  // and assertion_scope both exist. Detect `Open Scope assertion_scope.`
+  // as a stable post-shorthand anchor.
+  if (/^Open\s+Scope\s+assertion_scope\b/.test(stripped)) return true;
+  return false;
+}
+
 function stripLeadingComments(text: string): string {
   let i = 0;
   const n = text.length;
@@ -1032,20 +1110,20 @@ function rewriteHoareTriplesDepthAware(text: string): string {
             }
           }
         }
-        // Wrap each `{{ e }}` as `({{ e }} : Assertion)`. The `: Assertion`
-        // annotation forces Coq 8.17 to commit to the assertion shorthand
-        // instead of the level-2 triple notation: after `{{e}}` the parser
-        // sees `:`, which is not a valid `c` (custom com level 99), so the
-        // triple alternative fails on the SAME token (rather than only on
-        // a closing `)` later, where 8.17 doesn't reliably backtrack out
-        // of the triple it half-committed to).
+        // Replace every `{{ e }}` with `__sfassn ( e )`. Coq 8.17's parser
+        // commits to the level-2 `{{ P }} c {{ Q }}` triple as soon as it
+        // sees `{{` and never backtracks (even when the next token rules
+        // the triple out, e.g. `:` or `)`). The synthetic `__sfassn ( e )`
+        // notation has a unique non-`{{` prefix, so it can never collide
+        // with the triple. The notation itself is declared by injecting
+        // an extra Notation Vernacular ahead of every sentence (see
+        // `transformForWorker`).
         if (isTriple) {
-          out += `(valid_hoare_triple ({{${innerP}}} : Assertion) <{ ${middle} }> ({{${innerQ}}} : Assertion))`;
+          out += `(valid_hoare_triple (__sfassn ( ${innerP} )) <{ ${middle} }> (__sfassn ( ${innerQ} )))`;
           i = endQ;
           continue;
         }
-        const prev = out.length > 0 ? out[out.length - 1] : '';
-        out += prev === '(' ? `{{${innerP}}} : Assertion` : `({{${innerP}}} : Assertion)`;
+        out += `(__sfassn ( ${innerP} ))`;
         i = endP;
         continue;
       }
