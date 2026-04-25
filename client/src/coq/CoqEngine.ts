@@ -506,20 +506,13 @@ export class CoqEngine implements CoqObserver {
 
   /**
    * If `prevIdx` is the recorded helper-trigger and the helper hasn't been
-   * Added yet (or has been cancelled), fire an Exec on the trigger and
-   * then the helper Add. The Exec is required because `Require Import
-   * Hoare.` only registers `custom assn` / `assertion_scope` at EXECUTE
-   * time, not parse/Add time — without it the helper's notation
-   * declaration fails to parse with `Unknown custom entry: assn`. The
-   * worker queue is FIFO, so queuing Exec(trigger) immediately before
-   * Add(helper) guarantees the entries are in scope when the helper is
-   * parsed. Returns the helper's sid so the caller chains the next user
-   * Add off it.
+   * Added yet (or has been cancelled), fire the helper Add and return the
+   * helper's sid (so the caller chains the next Add off it). Otherwise
+   * return `prevSid` unchanged.
    */
   private _maybeInjectHelper(prevIdx: number, prevSid: number): number {
     if (prevIdx !== this._injectHelperAfterIdx) return prevSid;
     if (this._helperSid > 0) return this._helperSid;
-    this.worker.exec(prevSid);
     const helperSid = this.nextSid++;
     this.worker.add(prevSid, helperSid, HELPER_NOTATION);
     this._helperSid = helperSid;
