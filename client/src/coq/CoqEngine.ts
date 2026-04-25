@@ -397,24 +397,39 @@ export class CoqEngine implements CoqObserver {
     out = out.replace(/\{\{(?!\s)/g, '{{ ');
     out = out.replace(/(?<!\s)\}\}/g, ' }}');
 
-    // 5) Bypass the `{{ P }} c {{ Q }}` Hoare-triple notation entirely
-    //    when all three positions are bare identifiers (the typical
-    //    theorem-statement form like `{{P}} c {{Q}}` in plf/Hoare.v).
-    //    Coq 8.17's parser commits the wrong way between the level-2
-    //    shorter notation `{{ e }}` and the level-2 triple `{{ P }} c {{ Q }}`,
-    //    yielding "'{{' expected after [custom:com level 99]". Rewriting
-    //    to the underlying `(valid_hoare_triple P c Q)` call sidesteps
-    //    both notations.
+    // 5) Bypass the `{{ P }} c {{ Q }}` Hoare-triple notation entirely.
+    //    Coq 8.17's parser is unable to reliably disambiguate the level-2
+    //    triple notation from the level-2 shorter `{{ e }}` assertion
+    //    notation, yielding "'{{' expected after [custom:com level 99]"
+    //    even on simple-ident statements like `{{P}} c {{Q}}` and
+    //    on sequenced ones like `{{P}} c1; c2 {{R}}`.
     //
-    //    NOT applied if the sentence is itself a Notation declaration
-    //    (the pattern `{{ P }} c {{ Q }}` lives inside a "..." string
-    //    there, but we belt-and-braces skip the whole sentence anyway).
-    //    Complex triples in proofs (`{{X = 5}} skip {{X = 5}}`) don't
-    //    match the strict ident-only pattern and pass through unchanged.
+    //    Rewrite ALL triples (regardless of complexity) to a direct
+    //    (valid_hoare_triple ({{P}}) <{c}> ({{Q}})) call:
+    //      - the function name is consistent across every Hoare.v module
+    //        (each module redeclares the notation but always wraps
+    //        valid_hoare_triple, so the rewritten call resolves to the
+    //        right `valid_hoare_triple` in the surrounding scope)
+    //      - each assertion is wrapped in parens with a SHORTER notation
+    //        invocation `({{...}})` — inside parens followed immediately
+    //        by `)`, the longer triple notation fails to match (it
+    //        requires `c {{...}}` after the first `}}`), so the parser
+    //        unambiguously picks the shorter `{{ e }}` notation
+    //      - the middle `c` is wrapped in `<{...}>` (the outer com_scope
+    //        notation from Imp.v) so the custom-com parser handles
+    //        `c1; c2` and similar sequencing correctly
+    //
+    //    Inner-content regex `[^{}]+?` keeps each {{...}} self-contained;
+    //    middle content must contain neither `{{` nor `}}` (matches all
+    //    SF Hoare proof code).
+    //
+    //    Skipped when the sentence is itself a (Reserved) Notation
+    //    declaration — the triple pattern lives inside a "..." literal
+    //    there and must not be substituted.
     if (!/^\s*(?:Reserved\s+)?Notation\b/.test(out)) {
       out = out.replace(
-        /\{\{\s*([A-Za-z_]\w*)\s*\}\}\s+([A-Za-z_]\w*)\s+\{\{\s*([A-Za-z_]\w*)\s*\}\}/g,
-        '(valid_hoare_triple $1 $2 $3)',
+        /\{\{\s*([^{}]+?)\s*\}\}\s+([^{}]+?)\s+\{\{\s*([^{}]+?)\s*\}\}/g,
+        '(valid_hoare_triple ({{$1}}) <{ $2 }> ({{$3}}))',
       );
     }
 
