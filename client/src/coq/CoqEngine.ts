@@ -397,12 +397,32 @@ export class CoqEngine implements CoqObserver {
     out = out.replace(/\{\{(?!\s)/g, '{{ ');
     out = out.replace(/(?<!\s)\}\}/g, ' }}');
 
+    // 5) Bypass the `{{ P }} c {{ Q }}` Hoare-triple notation entirely
+    //    when all three positions are bare identifiers (the typical
+    //    theorem-statement form like `{{P}} c {{Q}}` in plf/Hoare.v).
+    //    Coq 8.17's parser commits the wrong way between the level-2
+    //    shorter notation `{{ e }}` and the level-2 triple `{{ P }} c {{ Q }}`,
+    //    yielding "'{{' expected after [custom:com level 99]". Rewriting
+    //    to the underlying `(valid_hoare_triple P c Q)` call sidesteps
+    //    both notations.
+    //
+    //    NOT applied if the sentence is itself a Notation declaration
+    //    (the pattern `{{ P }} c {{ Q }}` lives inside a "..." string
+    //    there, but we belt-and-braces skip the whole sentence anyway).
+    //    Complex triples in proofs (`{{X = 5}} skip {{X = 5}}`) don't
+    //    match the strict ident-only pattern and pass through unchanged.
+    if (!/^\s*(?:Reserved\s+)?Notation\b/.test(out)) {
+      out = out.replace(
+        /\{\{\s*([A-Za-z_]\w*)\s*\}\}\s+([A-Za-z_]\w*)\s+\{\{\s*([A-Za-z_]\w*)\s*\}\}/g,
+        '(valid_hoare_triple $1 $2 $3)',
+      );
+    }
+
     // TEMP diagnostic — only fires for sentences containing {{ so it
-    // doesn't spam the console. Capture exactly what we ship for the
-    // Hoare-triple lines so we can see whether the padding lands.
+    // doesn't spam the console.
     if (text.includes('{{')) {
       // eslint-disable-next-line no-console
-      console.log('[CoqEngine] sentence with {{ -> worker:', JSON.stringify(out));
+      console.log('[CoqEngine] sentence with {{ -> worker:', JSON.stringify(out).slice(0, 400));
     }
 
     return out;
