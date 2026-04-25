@@ -73,8 +73,16 @@ export class CoqEngine implements CoqObserver {
   // below. Once `assertion_scope`/`custom assn` are in scope, we emit ONE
   // extra Add carrying a `__sfassn ( e )` notation declaration. Subsequent
   // user sentences chain off the helper's sid (instead of the trigger's).
+  //
+  // Two-phase injection: the trigger's effects (loading Hoare.vo via
+  // `Require Import`, registering `custom assn`) are only applied at
+  // EXECUTE time, not Add time. So we MUST wait for the trigger's
+  // `feedProcessed` callback before parsing the helper. Otherwise the
+  // helper Add fails with `Unknown custom entry: assn.`.
   private _helperSid = -1;             // sid of the injected helper, -1 if not active
   private _injectHelperAfterIdx = -1;  // sentences[] index to inject helper AFTER; -1 = none/done
+  private _helperWaitTriggerSid = -1;  // sid we're waiting on `feedProcessed` for; -1 = not waiting
+  private _helperDeferredUserIdx = -1; // sentence index whose Add was deferred; -1 = none
 
   // Execution state
   private executionIndex = -1;  // index into sentences[] of last processed sentence (-1 = none)
@@ -238,6 +246,8 @@ export class CoqEngine implements CoqObserver {
     if (this._injectHelperAfterIdx < 0 || this._injectHelperAfterIdx >= divergeIdx) {
       // Trigger sentence is no longer processed → forget the active helper.
       this._helperSid = -1;
+      this._helperWaitTriggerSid = -1;
+      this._helperDeferredUserIdx = -1;
     }
 
     // Update highlights
@@ -496,34 +506,49 @@ export class CoqEngine implements CoqObserver {
 
     this.executing = true;
     this.messages = [];
-    sentence.phase = 'added';
 
     // tip_sid is the sid of the previously processed sentence, or 1 (init state)
     const prevSid = idx > 0 ? this.sentences[idx - 1].sid : 1;
-    const tipSid = this._maybeInjectHelper(idx - 1, prevSid);
+    const tipSid = this._maybeInjectHelper(idx - 1, prevSid, idx);
+    if (tipSid < 0) {
+      // Helper injection deferred (waiting on trigger feedProcessed). Keep
+      // the sentence pending; we'll re-enter executeSentence(idx) once the
+      // helper is in place.
+      return;
+    }
+    sentence.phase = 'added';
     this.worker.add(tipSid, sentence.sid, this.transformForWorker(sentence.text));
   }
 
   /**
    * If `prevIdx` is the recorded helper-trigger and the helper hasn't been
-   * Added yet (or has been cancelled), fire an Exec on the trigger and
-   * then the helper Add. The Exec is required because `Require Import
-   * Hoare.` only registers `custom assn` / `assertion_scope` at EXECUTE
-   * time, not parse/Add time — without it the helper's notation
-   * declaration fails to parse with `Unknown custom entry: assn`. The
-   * worker queue is FIFO, so queuing Exec(trigger) immediately before
-   * Add(helper) guarantees the entries are in scope when the helper is
-   * parsed. Returns the helper's sid so the caller chains the next user
-   * Add off it.
+   * Added yet (or has been cancelled), KICK OFF an asynchronous injection:
+   *   1. Queue `worker.exec(triggerSid)` — forces the trigger (Require
+   *      Import Hoare) to actually execute, which is when `custom assn`
+   *      gets registered. (Just queuing Add(helper) right after Add(trigger)
+   *      is not enough: STM Add only parses, it doesn't execute the
+   *      Require — so the helper's `e custom assn at level 99` parse
+   *      fails with `Unknown custom entry: assn.`)
+   *   2. Remember the user-sentence index we're deferring (`userIdx`) and
+   *      return -1 to signal the caller to skip its Add. The caller MUST
+   *      reset the sentence's phase back to 'pending' so we'll find it
+   *      again later.
+   *   3. When `feedProcessed(triggerSid)` fires we Add the helper.
+   *   4. When `coqAdded(helperSid)` fires we resume the deferred Add via
+   *      `_addNextInBatch` (batch) or `executeSentence` (single-step).
+   *
+   * Returns the helper's sid (chain off it) once it's been added; -1 if
+   * the call deferred and the user Add must be skipped this turn; or
+   * `prevSid` unchanged when no injection is needed.
    */
-  private _maybeInjectHelper(prevIdx: number, prevSid: number): number {
+  private _maybeInjectHelper(prevIdx: number, prevSid: number, userIdx: number): number {
     if (prevIdx !== this._injectHelperAfterIdx) return prevSid;
     if (this._helperSid > 0) return this._helperSid;
+    if (this._helperWaitTriggerSid > 0) return -1; // already in flight
+    this._helperWaitTriggerSid = prevSid;
+    this._helperDeferredUserIdx = userIdx;
     this.worker.exec(prevSid);
-    const helperSid = this.nextSid++;
-    this.worker.add(prevSid, helperSid, HELPER_NOTATION);
-    this._helperSid = helperSid;
-    return helperSid;
+    return -1;
   }
 
   /**
@@ -583,9 +608,14 @@ export class CoqEngine implements CoqObserver {
       return;
     }
     const s = this.sentences[nextIdx];
-    s.phase = 'added';
     const prevSid = nextIdx > 0 ? this.sentences[nextIdx - 1].sid : 1;
-    const tipSid = this._maybeInjectHelper(nextIdx - 1, prevSid);
+    const tipSid = this._maybeInjectHelper(nextIdx - 1, prevSid, nextIdx);
+    if (tipSid < 0) {
+      // Helper injection deferred. Leave the sentence pending; it will be
+      // picked up again when the helper's coqAdded fires _addNextInBatch.
+      return;
+    }
+    s.phase = 'added';
     this.worker.add(tipSid, s.sid, this.transformForWorker(s.text));
     this.emitHighlights();
     // Wait for coqAdded to fire the next one.
@@ -611,6 +641,8 @@ export class CoqEngine implements CoqObserver {
       // `_helperSid` so the next forward step re-injects.
       if (this._injectHelperAfterIdx >= 0 && cancelIdx <= this._injectHelperAfterIdx) {
         this._helperSid = -1;
+        this._helperWaitTriggerSid = -1;
+        this._helperDeferredUserIdx = -1;
       }
       this.executionIndex = targetIdx;
       this.diagnostics = [];
@@ -636,10 +668,17 @@ export class CoqEngine implements CoqObserver {
 
   coqAdded(sid: number, _loc: unknown): void {
     // Helper sids are NOT tracked in `this.sentences` — they're transparent
-    // STM nodes carrying just the helper-notation declaration. Treat their
-    // coqAdded as a no-op for UI/state, but still chain the batch.
+    // STM nodes carrying just the helper-notation declaration. When the
+    // helper's coqAdded fires, resume whichever Add chain we deferred.
     if (sid === this._helperSid) {
-      if (this._batchExec) this._addNextInBatch();
+      const deferredIdx = this._helperDeferredUserIdx;
+      this._helperDeferredUserIdx = -1;
+      if (this._batchExec) {
+        this._addNextInBatch();
+      } else if (deferredIdx >= 0) {
+        // Single-step: re-enter executeSentence for the deferred sentence.
+        this.executeSentence(deferredIdx);
+      }
       return;
     }
     const sentence = this.sentences.find(s => s.sid === sid);
@@ -667,6 +706,17 @@ export class CoqEngine implements CoqObserver {
   }
 
   feedProcessed(sid: number): void {
+    // If we were waiting on the helper-trigger to finish executing, this
+    // is when `custom assn` becomes available — fire the helper Add now.
+    if (sid === this._helperWaitTriggerSid) {
+      this._helperWaitTriggerSid = -1;
+      const helperSid = this.nextSid++;
+      this._helperSid = helperSid;
+      this.worker.add(sid, helperSid, HELPER_NOTATION);
+      // Don't return — we still want to mark the trigger as 'processed'
+      // and run the normal feedProcessed bookkeeping below.
+    }
+
     const idx = this.sentences.findIndex(s => s.sid === sid);
     if (idx < 0) return;
 
