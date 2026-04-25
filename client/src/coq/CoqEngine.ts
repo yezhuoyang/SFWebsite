@@ -449,12 +449,21 @@ export class CoqEngine implements CoqObserver {
     //    chapters' `Arguments tm_var _%_string.`
     out = out.replace(/%_(\w+)/g, '%$1');
 
-    // TEMP diagnostic — only fires for sentences containing {{ so it
-    // doesn't spam the console.
-    if (text.includes('{{')) {
-      // eslint-disable-next-line no-console
-      console.log('[CoqEngine] sentence with {{ -> worker:', JSON.stringify(out).slice(0, 400));
-    }
+    // 7) Coq 8.17 treats `deprecated-hint-without-locality` as a *fatal*
+    //    warning: a bare `Hint Unfold/Resolve/Constructors X : db.` outside
+    //    a section aborts the worker. SF chapters (plf/Hoare.v, HoareAsLogic.v
+    //    and many others) use the bare form throughout. Prepend `#[export]`
+    //    when no explicit locality attribute is present — semantically
+    //    equivalent in 8.17 and the recommended migration target.
+    //
+    //    Skip if the sentence already carries any `#[...]` attribute, or
+    //    starts with `Local`/`Global`/`Export`. Anchor at start-of-sentence
+    //    (after optional whitespace) so we don't touch e.g. comments or
+    //    embedded references to "Hint" inside proofs.
+    out = out.replace(
+      /^(\s*)(Hint\s+(?:Unfold|Resolve|Constructors|Rewrite|Extern|Immediate|Transparent|Opaque|Mode|Cut|View|Variables|Type)\b)/,
+      '$1#[export] $2',
+    );
 
     return out;
   }
