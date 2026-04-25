@@ -433,6 +433,17 @@ export class CoqEngine implements CoqObserver {
       );
     }
 
+    // 6) Coq 8.18+ scope-discrimination syntax `%_<key>` is not
+    //    understood by Coq 8.17; it reports "Unknown scope delimiting
+    //    key _<key>" because it parses the `%` as a delimiter intro
+    //    and `_<key>` as the literal key name. Drop the leading
+    //    underscore — for our purposes the basic `%<key>` form is
+    //    functionally equivalent.
+    //
+    //    Found in plf/Hoare.v `(P%_assertion)` and several STLC
+    //    chapters' `Arguments tm_var _%_string.`
+    out = out.replace(/%_(\w+)/g, '%$1');
+
     // TEMP diagnostic — only fires for sentences containing {{ so it
     // doesn't spam the console.
     if (text.includes('{{')) {
