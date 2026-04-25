@@ -386,16 +386,11 @@ export class CoqEngine implements CoqObserver {
       (_m, sp1, val, sp2) => `!->${sp1}${val} ; empty_st${sp2})`,
     );
 
-    // 4) Pad `{{...}}` Hoare-triple braces with whitespace.
-    //    Coq 8.17's custom-entry notation parser (used by SF's
-    //    `Notation "{{ P }} c {{ Q }}" :=` in Hoare.v with
-    //    `c custom com at level 99`) can fail to disambiguate between
-    //    the triple `{{P}} c {{Q}}` and the assertion-only `{{P}}` when
-    //    the braces hug the content with no whitespace. The notation
-    //    declarations themselves use space-padded patterns
-    //    (`{{ P }}`, `{{ Q }}`), so insert spaces if missing. Idempotent.
-    out = out.replace(/\{\{(?!\s)/g, '{{ ');
-    out = out.replace(/(?<!\s)\}\}/g, ' }}');
+    // 4) (removed) — earlier attempt padded {{...}} braces with
+    //    whitespace, but rule 5 below already matches with or without
+    //    padding, AND padding broke Notation declarations like
+    //    `Notation "'skip' '{{' P '}}'" :=` by inserting spaces inside
+    //    the quoted symbol pattern.
 
     // 5) Bypass the `{{ P }} c {{ Q }}` Hoare-triple notation entirely.
     //    Coq 8.17's parser is unable to reliably disambiguate the level-2
@@ -427,10 +422,20 @@ export class CoqEngine implements CoqObserver {
     //    declaration — the triple pattern lives inside a "..." literal
     //    there and must not be substituted.
     if (!/^\s*(?:Reserved\s+)?Notation\b/.test(out)) {
-      out = out.replace(
-        /\{\{\s*([^{}]+?)\s*\}\}\s+([^{}]+?)\s+\{\{\s*([^{}]+?)\s*\}\}/g,
-        '(valid_hoare_triple ({{$1}}) <{ $2 }> ({{$3}}))',
-      );
+      // Middle MUST start with a letter, underscore, or open paren — com
+      // programs look like (`c`, `skip`, `X := 5`, `c1; c2`, `(c1; c2)`,
+      // `if ...`, `while ...`). Non-Hoare-triple notations like
+      // `{{P}} <<->> {{Q}}` (assertion equivalence) or `{{P}} -> {{Q}}`
+      // (assertion implication) start with `<` or `-` and are correctly
+      // NOT matched.
+      //
+      // ALSO: only fire at top-level — NOT inside `<{ ... }>` (com_scope
+      // brackets). In Hoare2.v's dcom_scope, patterns like
+      // `<{ while ... do {{True}} skip {{True}} end }>` use `{{P}}` as
+      // a *decorated-command annotation*, not as a Hoare-triple
+      // assertion. We track the `<{` / `}>` depth and only rewrite at
+      // depth 0.
+      out = rewriteHoareTriplesDepthAware(out);
     }
 
     // 6) Coq 8.18+ scope-discrimination syntax `%_<key>` is not
@@ -872,6 +877,51 @@ const PKG_DIRS: Record<string, string[][]> = {
   'sf-VFA':          [['VFA']],
   'sf-SLF':          [['SLF']],
 };
+
+/**
+ * Rewrite top-level Hoare triples `{{P}} c {{Q}}` to direct
+ * `(valid_hoare_triple ({{P}}) <{c}> ({{Q}}))` calls. Critically,
+ * tracks `<{ ... }>` (com_scope) bracket depth and only fires at
+ * depth 0 — `{{P}}` patterns inside `<{ ... }>` are dcom_scope
+ * annotations (PLF Hoare2.v's decorated commands), not Hoare-triple
+ * assertions, and must be left alone.
+ */
+const HOARE_TRIPLE_RE =
+  /^\{\{\s*([^{}]+?)\s*\}\}\s+([A-Za-z_(][^{}]*?)\s+\{\{\s*([^{}]+?)\s*\}\}/;
+
+function rewriteHoareTriplesDepthAware(text: string): string {
+  let out = '';
+  let depth = 0;
+  let i = 0;
+  const n = text.length;
+  while (i < n) {
+    // Enter / leave `<{ ... }>` brackets
+    if (text[i] === '<' && text[i + 1] === '{') {
+      depth++;
+      out += '<{';
+      i += 2;
+      continue;
+    }
+    if (text[i] === '}' && text[i + 1] === '>' && depth > 0) {
+      depth--;
+      out += '}>';
+      i += 2;
+      continue;
+    }
+    // Try the triple pattern only at top level
+    if (depth === 0 && text[i] === '{' && text[i + 1] === '{') {
+      const m = text.slice(i).match(HOARE_TRIPLE_RE);
+      if (m) {
+        out += `(valid_hoare_triple ({{${m[1]}}}) <{ ${m[2]} }> ({{${m[3]}}}))`;
+        i += m[0].length;
+        continue;
+      }
+    }
+    out += text[i];
+    i++;
+  }
+  return out;
+}
 
 /**
  * Shorten a sentence for display in the activity log — strip leading comments,
