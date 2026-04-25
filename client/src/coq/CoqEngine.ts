@@ -1032,14 +1032,20 @@ function rewriteHoareTriplesDepthAware(text: string): string {
             }
           }
         }
+        // Wrap each `{{ e }}` as `({{ e }} : Assertion)`. The `: Assertion`
+        // annotation forces Coq 8.17 to commit to the assertion shorthand
+        // instead of the level-2 triple notation: after `{{e}}` the parser
+        // sees `:`, which is not a valid `c` (custom com level 99), so the
+        // triple alternative fails on the SAME token (rather than only on
+        // a closing `)` later, where 8.17 doesn't reliably backtrack out
+        // of the triple it half-committed to).
         if (isTriple) {
-          out += `(valid_hoare_triple ({{${innerP}}}) <{ ${middle} }> ({{${innerQ}}}))`;
+          out += `(valid_hoare_triple ({{${innerP}}} : Assertion) <{ ${middle} }> ({{${innerQ}}} : Assertion))`;
           i = endQ;
           continue;
         }
-        // Not a triple — wrap as standalone, unless already in parens.
         const prev = out.length > 0 ? out[out.length - 1] : '';
-        out += prev === '(' ? `{{${innerP}}}` : `({{${innerP}}})`;
+        out += prev === '(' ? `{{${innerP}}} : Assertion` : `({{${innerP}}} : Assertion)`;
         i = endP;
         continue;
       }
