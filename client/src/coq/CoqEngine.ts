@@ -420,8 +420,11 @@ export class CoqEngine implements CoqObserver {
     //
     //    Skipped when the sentence is itself a (Reserved) Notation
     //    declaration — the triple pattern lives inside a "..." literal
-    //    there and must not be substituted.
-    if (!/^\s*(?:Reserved\s+)?Notation\b/.test(out)) {
+    //    there and must not be substituted. The skip-check strips leading
+    //    `(* ... *)` and `(** ... *)` comments first, since SF chapters
+    //    routinely precede a Notation declaration with a doc comment that
+    //    becomes part of the same sentence.
+    if (!/^\s*(?:Reserved\s+)?Notation\b/.test(stripLeadingComments(out))) {
       // Middle MUST start with a letter, underscore, or open paren — com
       // programs look like (`c`, `skip`, `X := 5`, `c1; c2`, `(c1; c2)`,
       // `if ...`, `while ...`). Non-Hoare-triple notations like
@@ -888,15 +891,64 @@ const PKG_DIRS: Record<string, string[][]> = {
 };
 
 /**
- * Rewrite top-level Hoare triples `{{P}} c {{Q}}` to direct
- * `(valid_hoare_triple ({{P}}) <{c}> ({{Q}}))` calls. Critically,
- * tracks `<{ ... }>` (com_scope) bracket depth and only fires at
- * depth 0 — `{{P}}` patterns inside `<{ ... }>` are dcom_scope
- * annotations (PLF Hoare2.v's decorated commands), not Hoare-triple
- * assertions, and must be left alone.
+ * Strip leading whitespace and `(* ... *)` / `(** ... *)` comments from a
+ * sentence so we can dispatch on its first real token (e.g. tell a
+ * `Notation` declaration apart from a Theorem that happens to be preceded
+ * by a doc comment).
  */
-const HOARE_TRIPLE_RE =
-  /^\{\{\s*([^{}]+?)\s*\}\}\s+([A-Za-z_(][^{}]*?)\s+\{\{\s*([^{}]+?)\s*\}\}/;
+function stripLeadingComments(text: string): string {
+  let i = 0;
+  const n = text.length;
+  while (i < n) {
+    while (i < n && (text[i] === ' ' || text[i] === '\t' || text[i] === '\n' || text[i] === '\r')) i++;
+    if (i + 1 < n && text[i] === '(' && text[i + 1] === '*') {
+      let depth = 1; i += 2;
+      while (i < n && depth > 0) {
+        if (i + 1 < n && text[i] === '(' && text[i + 1] === '*') { depth++; i += 2; }
+        else if (i + 1 < n && text[i] === '*' && text[i + 1] === ')') { depth--; i += 2; }
+        else i++;
+      }
+      continue;
+    }
+    break;
+  }
+  return text.slice(i);
+}
+
+/**
+ * Rewrite top-level Hoare triples `{{P}} c {{Q}}` to direct
+ * `(valid_hoare_triple ({{P}}) <{c}> ({{Q}}))` calls, AND wrap any remaining
+ * standalone `{{ e }}` assertions in extra parens.
+ *
+ * Why both: Coq 8.17 cannot disambiguate `{{ e }}` (level 2 assertion
+ * shorthand) from `{{ P }} c {{ Q }}` (level 2 triple) and commits to the
+ * triple after seeing `{{`. Rewriting full triples as direct calls covers
+ * the multi-assertion case; wrapping every other `{{ e }}` in parens covers
+ * the standalone case (e.g. `Theorem foo : {{ X = 0 }}.`) — inside parens
+ * the parser commits to a complete sub-term, sidestepping the ambiguity.
+ *
+ * Tracks `<{ ... }>` (com_scope) bracket depth and only fires at depth 0 —
+ * `{{P}}` patterns inside `<{ ... }>` are dcom_scope annotations (PLF
+ * Hoare2.v's decorated commands), not Hoare-triple assertions, and must be
+ * left alone.
+ */
+/**
+ * Find the matching `}}` for a `{{` at position `start`, respecting nested
+ * `{{ ... }}` (e.g. `{{ $(fun st => ({{P}}) st) }}`). Returns the index just
+ * past the closing `}}`, or -1 if unbalanced.
+ */
+function endOfAssertion(text: string, start: number): number {
+  if (text[start] !== '{' || text[start + 1] !== '{') return -1;
+  let depth = 1;
+  let j = start + 2;
+  const n = text.length;
+  while (j < n && depth > 0) {
+    if (text[j] === '{' && text[j + 1] === '{') { depth++; j += 2; }
+    else if (text[j] === '}' && text[j + 1] === '}') { depth--; j += 2; }
+    else j++;
+  }
+  return depth === 0 ? j : -1;
+}
 
 function rewriteHoareTriplesDepthAware(text: string): string {
   let out = '';
@@ -904,7 +956,33 @@ function rewriteHoareTriplesDepthAware(text: string): string {
   let i = 0;
   const n = text.length;
   while (i < n) {
-    // Enter / leave `<{ ... }>` brackets
+    // Skip `(* ... *)` comments verbatim — the matcher would otherwise glue
+    // a comment's trailing `{{...}}` to the next sentence's `{{...}}`.
+    if (text[i] === '(' && text[i + 1] === '*') {
+      let cdepth = 1;
+      out += '(*';
+      let j = i + 2;
+      while (j < n && cdepth > 0) {
+        if (text[j] === '(' && text[j + 1] === '*') { cdepth++; out += '(*'; j += 2; }
+        else if (text[j] === '*' && text[j + 1] === ')') { cdepth--; out += '*)'; j += 2; }
+        else { out += text[j]; j++; }
+      }
+      i = j;
+      continue;
+    }
+    // Skip "..." string literals — the triple notation declaration's
+    // pattern lives inside one and must not be rewritten.
+    if (text[i] === '"') {
+      out += '"'; let j = i + 1;
+      while (j < n) {
+        if (text[j] === '"' && text[j + 1] === '"') { out += '""'; j += 2; }
+        else if (text[j] === '"') { out += '"'; j++; break; }
+        else { out += text[j]; j++; }
+      }
+      i = j;
+      continue;
+    }
+    // Track `<{ ... }>` (com_scope) bracket depth.
     if (text[i] === '<' && text[i + 1] === '{') {
       depth++;
       out += '<{';
@@ -917,12 +995,52 @@ function rewriteHoareTriplesDepthAware(text: string): string {
       i += 2;
       continue;
     }
-    // Try the triple pattern only at top level
+    // Try triple, then standalone-assertion wrapping. Both only at depth 0
+    // (inside `<{...}>` the `{{...}}` patterns are dcom annotations).
     if (depth === 0 && text[i] === '{' && text[i + 1] === '{') {
-      const m = text.slice(i).match(HOARE_TRIPLE_RE);
-      if (m) {
-        out += `(valid_hoare_triple ({{${m[1]}}}) <{ ${m[2]} }> ({{${m[3]}}}))`;
-        i += m[0].length;
+      const endP = endOfAssertion(text, i);
+      if (endP > 0) {
+        const innerP = text.slice(i + 2, endP - 2).trim();
+        // Look for a triple: skip whitespace, require middle to start with
+        // letter/`_`/`(`, scan for next top-level `{{`.
+        let k = endP;
+        while (k < n && (text[k] === ' ' || text[k] === '\t' || text[k] === '\n' || text[k] === '\r')) k++;
+        const middleStart = k;
+        let isTriple = false;
+        let endQ = -1;
+        let middle = '';
+        let innerQ = '';
+        if (k < n && /[A-Za-z_(]/.test(text[k])) {
+          // Scan forward to the next `{{` at this nesting level. Stop on
+          // sentence-internal terminators that can't be part of a com.
+          while (k < n) {
+            if (text[k] === '{' && text[k + 1] === '{') break;
+            // A `(*` inside the candidate middle disqualifies the triple
+            // (we've crossed into a comment that's not part of any com).
+            if (text[k] === '(' && text[k + 1] === '*') { k = -1; break; }
+            // `}}` without a matching `{{` means we're past the sentence.
+            if (text[k] === '}' && text[k + 1] === '}') { k = -1; break; }
+            k++;
+          }
+          if (k > 0 && k < n) {
+            const me = endOfAssertion(text, k);
+            if (me > 0) {
+              middle = text.slice(middleStart, k).trim();
+              innerQ = text.slice(k + 2, me - 2).trim();
+              endQ = me;
+              isTriple = middle.length > 0;
+            }
+          }
+        }
+        if (isTriple) {
+          out += `(valid_hoare_triple ({{${innerP}}}) <{ ${middle} }> ({{${innerQ}}}))`;
+          i = endQ;
+          continue;
+        }
+        // Not a triple — wrap as standalone, unless already in parens.
+        const prev = out.length > 0 ? out[out.length - 1] : '';
+        out += prev === '(' ? `{{${innerP}}}` : `({{${innerP}}})`;
+        i = endP;
         continue;
       }
     }
