@@ -397,6 +397,14 @@ export class CoqEngine implements CoqObserver {
     out = out.replace(/\{\{(?!\s)/g, '{{ ');
     out = out.replace(/(?<!\s)\}\}/g, ' }}');
 
+    // TEMP diagnostic — only fires for sentences containing {{ so it
+    // doesn't spam the console. Capture exactly what we ship for the
+    // Hoare-triple lines so we can see whether the padding lands.
+    if (text.includes('{{')) {
+      // eslint-disable-next-line no-console
+      console.log('[CoqEngine] sentence with {{ -> worker:', JSON.stringify(out));
+    }
+
     return out;
   }
 
