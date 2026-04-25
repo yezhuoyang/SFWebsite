@@ -386,6 +386,17 @@ export class CoqEngine implements CoqObserver {
       (_m, sp1, val, sp2) => `!->${sp1}${val} ; empty_st${sp2})`,
     );
 
+    // 4) Pad `{{...}}` Hoare-triple braces with whitespace.
+    //    Coq 8.17's custom-entry notation parser (used by SF's
+    //    `Notation "{{ P }} c {{ Q }}" :=` in Hoare.v with
+    //    `c custom com at level 99`) can fail to disambiguate between
+    //    the triple `{{P}} c {{Q}}` and the assertion-only `{{P}}` when
+    //    the braces hug the content with no whitespace. The notation
+    //    declarations themselves use space-padded patterns
+    //    (`{{ P }}`, `{{ Q }}`), so insert spaces if missing. Idempotent.
+    out = out.replace(/\{\{(?!\s)/g, '{{ ');
+    out = out.replace(/(?<!\s)\}\}/g, ' }}');
+
     return out;
   }
 
