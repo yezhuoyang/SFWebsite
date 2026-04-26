@@ -133,10 +133,15 @@ export class CoqEngine implements CoqObserver {
     console.log('[CoqEngine] Boot complete');
 
     // 3. LoadPkg for each package (raw directive, not JSON-stringified)
+    //    Append a cache-busting query to defeat HTTP/IndexedDB caches —
+    //    the bundled SF .coq-pkg files were rebuilt server-side; without
+    //    the bust, browsers serve a stale .vo and `Declare Custom Entry
+    //    assn` etc. don't show up. Bump CACHE_BUST when packages change.
     const packages = VOLUME_PACKAGES[volumeId] || VOLUME_PACKAGES.lf;
     const pkgBaseUrl = this.basePath + 'coq-pkgs/';
+    const CACHE_BUST = '20260426';
     for (const pkg of packages) {
-      this.worker.sendDirective(['LoadPkg', pkgBaseUrl + pkg + '.coq-pkg']);
+      this.worker.sendDirective(['LoadPkg', `${pkgBaseUrl}${pkg}.coq-pkg?v=${CACHE_BUST}`]);
     }
 
     // 4. Wait for all LoadedPkg events
