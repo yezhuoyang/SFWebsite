@@ -231,7 +231,7 @@ export default function ChapterTOC({ volumeId, currentSlug, iframeRef, serverPro
               return (
                 <li key={`${entry.anchor}-${i}`}>
                   <div
-                    className={`flex items-center gap-1 rounded transition-colors ${
+                    className={`flex flex-wrap items-center gap-1 rounded transition-colors ${
                       entry.isExercise ? 'hover:bg-emerald-50/60' : 'hover:bg-gray-50'
                     }`}
                     style={{ paddingLeft: `${0.25 + (entry.level - 1) * 0.75}rem` }}
