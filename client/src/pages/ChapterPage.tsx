@@ -23,7 +23,9 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useRef, useState } from 'react';
 import ChapterTOC from '../components/ChapterTOC';
+import ChapterProgressBar from '../components/ChapterProgressBar';
 import TutorPanel from '../components/TutorPanel';
+import { useChapterProgress } from '../coq/exerciseGrading';
 
 export default function ChapterPage() {
   const { volumeId, chapterName } = useParams<{ volumeId: string; chapterName: string }>();
@@ -35,6 +37,11 @@ export default function ChapterPage() {
 
   // Strip any `.v` suffix the URL might carry; SF pages are <Chapter>.html.
   const chapter = (chapterName ?? '').replace(/\.v$/, '');
+
+  // Per-user per-chapter progress. Drives the sticky progress bar and
+  // the TOC checkmarks. `refresh()` is called from inside ChapterTOC
+  // after each successful Grade.
+  const { progress, refresh: refreshProgress } = useChapterProgress(volumeId ?? '', chapter);
 
   // With cross-origin iframe to coq.vercel.app, we can't read the
   // iframe's location to detect internal navigations. Users navigate
@@ -62,24 +69,28 @@ export default function ChapterPage() {
         volumeId={volumeId}
         currentSlug={chapter}
         iframeRef={iframeRef}
-        onGraded={() => setGradeVersion(v => v + 1)}
+        serverProgress={progress}
+        refreshProgress={refreshProgress}
+        onGraded={() => { setGradeVersion(v => v + 1); refreshProgress(); }}
       />
-      <iframe
-        ref={iframeRef}
-        // `key={src}` forces a fresh iframe on chapter change. The
-        // cross-origin iframe gives us no API to imperatively navigate
-        // it without a reload anyway, so a remount is fine.
-        key={src}
-        title={`${volumeId} / ${chapter}`}
-        src={src}
-        className="flex-1 border-0 bg-white"
-        style={{ height: '100vh' }}
-        // `credentialless` lets a COEP=require-corp parent embed a
-        // cross-origin iframe without the iframe's host having to send
-        // CORP. Chrome 110+.
-        // @ts-expect-error not in React's IframeHTMLAttributes yet
-        credentialless="true"
-      />
+      <div className="flex-1 flex flex-col min-w-0 bg-white">
+        <ChapterProgressBar progress={progress} />
+        <iframe
+          ref={iframeRef}
+          // `key={src}` forces a fresh iframe on chapter change. The
+          // cross-origin iframe gives us no API to imperatively navigate
+          // it without a reload anyway, so a remount is fine.
+          key={src}
+          title={`${volumeId} / ${chapter}`}
+          src={src}
+          className="flex-1 border-0 bg-white"
+          // `credentialless` lets a COEP=require-corp parent embed a
+          // cross-origin iframe without the iframe's host having to send
+          // CORP. Chrome 110+.
+          // @ts-expect-error not in React's IframeHTMLAttributes yet
+          credentialless="true"
+        />
+      </div>
       <TutorPanel volumeId={volumeId} chapterSlug={chapter} iframeRef={iframeRef} />
     </div>
   );

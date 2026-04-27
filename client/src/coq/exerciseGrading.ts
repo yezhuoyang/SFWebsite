@@ -19,7 +19,8 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import { saveChapterFile, type ExerciseGrade } from '../api/client';
+import { saveChapterFile, getChapterProgress, type ExerciseGrade, type ChapterProgress } from '../api/client';
+import { useAuth } from '../contexts/AuthContext';
 
 /** localStorage key for the user's pasted chapter code. */
 function bufferKey(volumeId: string, slug: string): string {
@@ -98,4 +99,29 @@ export function parseExerciseName(headingText: string): string | null {
   if (!headingText.startsWith('Exercise:')) return null;
   const m = headingText.match(/\(([A-Za-z_][A-Za-z_0-9]*)\)\s*$/);
   return m ? m[1] : null;
+}
+
+/** Fetches and caches the current user's per-chapter exercise progress
+ *  from the server. Refreshes when (volume, slug, user) changes, and
+ *  exposes a `refresh()` function the Grade button can call after each
+ *  submission. Returns null while loading or when not signed in. */
+export function useChapterProgress(volumeId: string, slug: string) {
+  const { user } = useAuth();
+  const [progress, setProgress] = useState<ChapterProgress | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!user) {
+      setProgress(null);
+      return;
+    }
+    getChapterProgress(volumeId, slug)
+      .then(p => { if (!cancelled) setProgress(p); })
+      .catch(() => { if (!cancelled) setProgress(null); });
+    return () => { cancelled = true; };
+  }, [volumeId, slug, user, refreshTick]);
+
+  const refresh = useCallback(() => setRefreshTick(t => t + 1), []);
+  return { progress, refresh };
 }

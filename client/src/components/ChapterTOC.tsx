@@ -23,12 +23,17 @@ import {
   useExerciseGrades,
   parseExerciseName,
 } from '../coq/exerciseGrading';
-import type { ExerciseGrade } from '../api/client';
+import type { ChapterProgress, ExerciseGrade } from '../api/client';
 
 interface Props {
   volumeId: string;
   currentSlug: string;
   iframeRef: React.RefObject<HTMLIFrameElement | null>;
+  /** Per-user per-chapter exercise status from the server (via the
+   *  parent's `useChapterProgress`). Drives the ✓ marks in the TOC. */
+  serverProgress: ChapterProgress | null;
+  /** Refetch server progress (called after a successful Grade). */
+  refreshProgress: () => void;
   onGraded?: () => void;
 }
 
@@ -99,7 +104,7 @@ function jumpTo(iframeRef: React.RefObject<HTMLIFrameElement | null>, volumeId: 
   iframe.src = `https://coq.vercel.app/ext/sf/${volumeId}/full/${slug}.html#${anchor}`;
 }
 
-export default function ChapterTOC({ volumeId, currentSlug, iframeRef, onGraded }: Props) {
+export default function ChapterTOC({ volumeId, currentSlug, iframeRef, serverProgress, refreshProgress, onGraded }: Props) {
   const navigate = useNavigate();
   const chapters = SF_CHAPTERS[volumeId] ?? [];
   const idx = chapters.findIndex(c => c.slug === currentSlug);
@@ -120,7 +125,14 @@ export default function ChapterTOC({ volumeId, currentSlug, iframeRef, onGraded 
 
   const ingestGrades = (received: ExerciseGrade[]) => {
     received.forEach(recordGrade);
+    // Pull fresh server-side progress so the sidebar checkmarks reflect
+    // the new persisted state.
+    refreshProgress();
   };
+
+  // Build a quick lookup: exercise name → server-side status.
+  const serverStatusByName = new Map<string, ChapterProgress['exercises'][number]>();
+  serverProgress?.exercises.forEach(ex => serverStatusByName.set(ex.name, ex));
 
   return (
     <aside className="w-72 shrink-0 bg-white border-r border-gray-200/80 flex flex-col h-full overflow-hidden">
@@ -210,7 +222,14 @@ export default function ChapterTOC({ volumeId, currentSlug, iframeRef, onGraded 
           <ul className="space-y-0.5">
             {toc.map((entry, i) => {
               const exName = entry.isExercise ? parseExerciseName(entry.text) : null;
-              const grade = exName ? grades[exName] : undefined;
+              const localGrade = exName ? grades[exName] : undefined;
+              const serverEx = exName ? serverStatusByName.get(exName) : undefined;
+              // Server is authoritative for "already solved" — its status
+              // covers grades made by this user in past sessions on any
+              // device. Local grade is the fresh result from this session
+              // (used for inline error feedback before the next refetch).
+              const effectiveStatus = serverEx?.status ?? localGrade?.status;
+              const isCompleted = effectiveStatus === 'completed';
               return (
                 <li key={`${entry.anchor}-${i}`}>
                   <div
@@ -222,12 +241,18 @@ export default function ChapterTOC({ volumeId, currentSlug, iframeRef, onGraded 
                     <button
                       onClick={() => jumpTo(iframeRef, volumeId, currentSlug, entry.anchor)}
                       className={`flex-1 min-w-0 text-left px-1 py-1 text-[12px] leading-snug transition-colors ${
-                        entry.isExercise ? 'text-emerald-700 font-medium' : 'text-gray-700'
+                        entry.isExercise
+                          ? isCompleted ? 'text-emerald-800 font-semibold' : 'text-emerald-700 font-medium'
+                          : 'text-gray-700'
                       }`}
                       title={entry.text}
                     >
                       <span className="block truncate">
-                        {entry.isExercise && <span className="text-[9px] text-emerald-600 mr-1">●</span>}
+                        {entry.isExercise && (
+                          isCompleted
+                            ? <span className="text-emerald-600 mr-1" aria-label="solved">✓</span>
+                            : <span className="text-[9px] text-emerald-600 mr-1">●</span>
+                        )}
                         {entry.text}
                       </span>
                     </button>
@@ -238,7 +263,15 @@ export default function ChapterTOC({ volumeId, currentSlug, iframeRef, onGraded 
                         exerciseName={exName}
                         code={code}
                         setCode={setCode}
-                        result={grade}
+                        // Synthesize a result from server progress when no
+                        // local grade is present yet, so the button color
+                        // shows the right status on first page load.
+                        result={localGrade ?? (serverEx ? {
+                          name: serverEx.name,
+                          status: serverEx.status,
+                          points: serverEx.points,
+                          gradedAt: serverEx.last_graded_at ? Date.parse(serverEx.last_graded_at) : 0,
+                        } : undefined)}
                         onResult={ingestGrades}
                         onCompleted={onGraded}
                         onNeedCode={() => setNeedCodeTick(t => t + 1)}

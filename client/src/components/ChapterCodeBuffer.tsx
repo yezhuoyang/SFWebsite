@@ -16,6 +16,7 @@
 
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { useChapterCodeBuffer } from '../coq/exerciseGrading';
+import { getChapterFile } from '../api/client';
 
 interface Props {
   volumeId: string;
@@ -57,6 +58,22 @@ export default function ChapterCodeBuffer({ volumeId, chapterSlug, flashTick }: 
     }
   };
 
+  const [loadingSaved, setLoadingSaved] = useState(false);
+  const loadSavedSubmission = async () => {
+    setSyncMsg(null);
+    setLoadingSaved(true);
+    try {
+      const file = await getChapterFile(volumeId, chapterSlug);
+      setCode(file.content);
+      setOpen(true);
+      setSyncMsg(`Loaded ${file.content.split('\n').length} lines from your last saved submission.`);
+    } catch (e) {
+      setSyncMsg(`Couldn't load saved submission: ${(e as Error).message}`);
+    } finally {
+      setLoadingSaved(false);
+    }
+  };
+
   return (
     <div className="border-t border-gray-100 bg-gray-50/60">
       {/* Header row: status + sync button + expand toggle. */}
@@ -72,6 +89,14 @@ export default function ChapterCodeBuffer({ volumeId, chapterSlug, flashTick }: 
         <span className="ml-auto text-[10px] text-gray-400 font-mono">
           {hasCode ? `${lineCount} lines` : 'empty'}
         </span>
+        <button
+          onClick={loadSavedSubmission}
+          disabled={loadingSaved}
+          className="text-[10px] px-2 py-0.5 rounded bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+          title="Load your last submission for this chapter from the server"
+        >
+          {loadingSaved ? '…' : 'Load saved'}
+        </button>
         <button
           onClick={syncFromClipboard}
           disabled={syncing}

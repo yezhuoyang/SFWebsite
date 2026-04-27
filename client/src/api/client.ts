@@ -423,3 +423,29 @@ export const createAnnotation = (data: {
 
 export const deleteAnnotation = (id: number) =>
   fetch(`${BASE}/annotations/${id}`, { method: 'DELETE', headers: authHeaders() });
+
+// --- Per-user per-chapter progress ---
+
+export interface ChapterExerciseProgress {
+  name: string;
+  stars: number;
+  difficulty: string;
+  modifier: string | null;
+  status: 'completed' | 'not_started' | 'compile_error' | 'tampered';
+  points: number;
+  points_earned: number;
+  last_graded_at: string | null;
+}
+
+export interface ChapterProgress {
+  volume_id: string;
+  chapter_name: string;
+  exercises: ChapterExerciseProgress[];
+  completed: number;
+  total: number;
+  points_total: number;
+  points_earned: number;
+}
+
+export const getChapterProgress = (volumeId: string, chapterName: string) =>
+  fetchJSON<ChapterProgress>(`${BASE}/progress/chapter/${volumeId}/${encodeURIComponent(chapterName)}`);
