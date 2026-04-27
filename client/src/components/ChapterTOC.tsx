@@ -16,7 +16,6 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { SF_CHAPTERS, getChapter, type ChapterEntry } from '../data/sfChapters';
 import { STATIC_VOLUMES } from '../data/sfVolumes';
-import ChapterCodeBuffer from './ChapterCodeBuffer';
 import ExerciseGradeButton from './ExerciseGradeButton';
 import {
   useChapterCodeBuffer,
@@ -121,7 +120,6 @@ export default function ChapterTOC({ volumeId, currentSlug, iframeRef, serverPro
   const toc = useChapterToc(volumeId, currentSlug);
   const { code, setCode } = useChapterCodeBuffer(volumeId, currentSlug);
   const { grades, recordGrade } = useExerciseGrades(volumeId, currentSlug);
-  const [needCodeTick, setNeedCodeTick] = useState(0);
 
   const ingestGrades = (received: ExerciseGrade[]) => {
     received.forEach(recordGrade);
@@ -274,7 +272,6 @@ export default function ChapterTOC({ volumeId, currentSlug, iframeRef, serverPro
                         } : undefined)}
                         onResult={ingestGrades}
                         onCompleted={onGraded}
-                        onNeedCode={() => setNeedCodeTick(t => t + 1)}
                       />
                     )}
                   </div>
@@ -285,15 +282,6 @@ export default function ChapterTOC({ volumeId, currentSlug, iframeRef, serverPro
         )}
       </nav>
 
-      {/* "Your code" paste buffer pinned at the bottom (collapsible).
-          Each Exercise → Grade button reads from this. */}
-      {!isVolumeNav && (
-        <ChapterCodeBuffer
-          volumeId={volumeId}
-          chapterSlug={currentSlug}
-          flashTick={needCodeTick}
-        />
-      )}
     </aside>
   );
 }
