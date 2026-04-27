@@ -74,7 +74,12 @@ export default function ChapterPage() {
         onGraded={() => { setGradeVersion(v => v + 1); refreshProgress(); }}
       />
       <div className="flex-1 flex flex-col min-w-0 bg-white">
-        <ChapterProgressBar progress={progress} />
+        <ChapterProgressBar
+          progress={progress}
+          volumeId={volumeId}
+          chapterSlug={chapter}
+          onGraded={() => { setGradeVersion(v => v + 1); refreshProgress(); }}
+        />
         <iframe
           ref={iframeRef}
           // `key={src}` forces a fresh iframe on chapter change. The
