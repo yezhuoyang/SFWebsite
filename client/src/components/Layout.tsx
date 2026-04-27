@@ -6,6 +6,7 @@ import { SFLogo } from './VolumeIllustrations';
 import { PLSELogo } from './PLSELogo';
 import { countVolumeLocalCompleted } from '../utils/storage';
 import { useAuth } from '../contexts/AuthContext';
+import { STATIC_VOLUMES } from '../data/sfVolumes';
 
 const VOLUME_COLORS: Record<string, string> = {
   lf: 'bg-blue-500',
@@ -23,8 +24,10 @@ export default function Layout() {
 
   useEffect(() => {
     // Re-fetch when the auth user changes — the per-user completion counts
-    // baked into /volumes responses depend on the JWT we send.
-    getVolumes().then(setVolumes).catch(console.error);
+    // baked into /volumes responses depend on the JWT we send. If the
+    // FastAPI server isn't reachable, fall back to the four built-in SF
+    // volumes so the sidebar still renders.
+    getVolumes().then(setVolumes).catch(() => setVolumes(STATIC_VOLUMES));
   }, [user?.id]);
 
   return (
@@ -51,7 +54,7 @@ export default function Layout() {
             return (
               <Link
                 key={v.id}
-                to={`/volume/${v.id}`}
+                to={`/volume/${v.id}/chapter/Preface`}
                 className={`block p-3 rounded-xl transition-all ${
                   isActive
                     ? 'bg-indigo-50 ring-1 ring-indigo-200/60'

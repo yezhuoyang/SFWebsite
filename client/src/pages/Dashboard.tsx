@@ -2,42 +2,61 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { getVolumes } from '../api/client';
 import type { Volume } from '../types';
-import { VOLUME_ILLUSTRATIONS } from '../components/VolumeIllustrations';
+import { STATIC_VOLUMES } from '../data/sfVolumes';
 import { PLSELogo, UCLACSLogo } from '../components/PLSELogo';
 import { countVolumeLocalCompleted } from '../utils/storage';
 import LeaderboardWidget from '../components/LeaderboardWidget';
 import { useAuth } from '../contexts/AuthContext';
 
-const VOLUME_META: Record<string, { gradient: string; accent: string; desc: string; topics: string[] }> = {
+/**
+ * Volume metadata in the SF book series style. Colors and cover icons
+ * mirror coq.vercel.app/ext/sf/ \u2014 see the source CSS table.logical /
+ * .language_found / .algo / .slf classes.
+ */
+interface VolumeMeta {
+  number: number;
+  italicTitle: string;
+  description: string;
+  cover: string;       // path under /sf-covers/ (downloaded from upstream)
+  tabColor: string;    // top band color
+  bodyColor: string;   // translucent body color
+}
+const VOLUME_META: Record<string, VolumeMeta> = {
   lf: {
-    gradient: 'from-blue-500 to-indigo-600',
-    accent: 'text-blue-600',
-    desc: 'Functional programming, logic, and proof basics in Rocq',
-    topics: ['Induction', 'Pattern matching', 'Proof trees', 'Propositions as types'],
+    number: 1,
+    italicTitle: 'Logical Foundations',
+    description:
+      'Logical Foundations is the entry-point to the series. It covers functional programming, basic concepts of logic, computer-assisted theorem proving, and Coq.',
+    cover: '/sf-covers/lf_icon.jpg',
+    tabColor: '#91a1d1',
+    bodyColor: 'rgba(144, 160, 209, 0.5)',
   },
   plf: {
-    gradient: 'from-violet-500 to-purple-600',
-    accent: 'text-violet-600',
-    desc: 'Type systems, Hoare logic, and small-step semantics',
-    topics: ['Lambda calculus', 'Type judgments', 'Progress & preservation', 'Hoare triples'],
+    number: 2,
+    italicTitle: 'Programming Language Foundations',
+    description:
+      'Programming Language Foundations surveys the theory of programming languages, including operational semantics, Hoare logic, and static type systems.',
+    cover: '/sf-covers/plf_icon.jpg',
+    tabColor: '#b25959',
+    bodyColor: 'rgba(178, 88, 88, 0.5)',
   },
   vfa: {
-    gradient: 'from-emerald-500 to-green-600',
-    accent: 'text-emerald-600',
-    desc: 'Verified sorting, search trees, and priority queues',
-    topics: ['BST invariants', 'Red-black trees', 'Sorting correctness', 'ADT specs'],
+    number: 3,
+    italicTitle: 'Verified Functional Algorithms',
+    description:
+      'Verified Functional Algorithms shows how a variety of fundamental data structures can be specified and mechanically verified.',
+    cover: '/sf-covers/vfa_icon.jpg',
+    tabColor: '#c2c26c',
+    bodyColor: 'rgba(194, 194, 108, 0.5)',
   },
   slf: {
-    gradient: 'from-amber-500 to-orange-600',
-    accent: 'text-amber-600',
-    desc: 'Separation logic for reasoning about heap programs',
-    topics: ['Heap predicates', 'Frame rule', 'Points-to (\u21a6)', 'Separating conjunction (\u2217)'],
-  },
-  secf: {
-    gradient: 'from-rose-500 to-red-600',
-    accent: 'text-rose-600',
-    desc: 'Noninterference, information flow, and constant-time',
-    topics: ['Security lattice', 'IFC typing', 'Noninterference', 'Constant-time'],
+    number: 6,
+    italicTitle: 'Separation Logic Foundations',
+    description:
+      'Separation Logic Foundations introduces the core ideas and techniques of separation logic for reasoning about heap-manipulating programs.',
+    cover: '/sf-covers/slf-icon.png',
+    tabColor: 'rgb(219, 178, 127)',
+    bodyColor: 'rgba(219, 178, 127, 0.5)',
   },
 };
 
@@ -51,7 +70,9 @@ export default function Dashboard() {
   useEffect(() => {
     // Re-fetch when the auth user changes — the per-user completion counts
     // baked into /volumes responses depend on the JWT we send.
-    getVolumes().then(setVolumes).catch(console.error);
+    // If the API isn't reachable (Phase 0 dev: FastAPI may not be running),
+    // fall back to the four built-in SF volumes so navigation still works.
+    getVolumes().then(setVolumes).catch(() => setVolumes(STATIC_VOLUMES));
   }, [authUser?.id]);
 
   // Overlay this user's localStorage grades onto server-reported counts.
@@ -105,69 +126,15 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 2-column layout: volumes left, leaderboard right */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
-        {/* Left: Volume cards */}
-        <div className="space-y-5 min-w-0">
-        {volumesWithLocal.map((v) => {
-          const meta = VOLUME_META[v.id] || { gradient: 'from-gray-500 to-gray-600', accent: 'text-gray-600', desc: '', topics: [] };
-          const pct = v.exercise_count > 0
-            ? Math.round((v.completed_count / v.exercise_count) * 100)
-            : 0;
-          const Illustration = VOLUME_ILLUSTRATIONS[v.id];
-
-          return (
-            <Link
-              key={v.id}
-              to={`/volume/${v.id}`}
-              className="group block bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md hover:border-gray-200 transition-all duration-200"
-            >
-              <div className={`h-1.5 bg-gradient-to-r ${meta.gradient}`} />
-              <div className="flex items-stretch">
-                {/* Left: content */}
-                <div className="flex-1 p-7">
-                  <div className="flex items-center gap-3 mb-3">
-                    <span className={`text-xs font-bold font-mono px-2.5 py-1 rounded-lg bg-gradient-to-r ${meta.gradient} text-white shadow-sm`}>
-                      {v.namespace}
-                    </span>
-                  </div>
-
-                  <h3 className="text-xl font-bold text-gray-900 mb-1.5 group-hover:text-indigo-700 transition-colors">
-                    {v.name}
-                  </h3>
-                  <p className="text-sm text-gray-500 mb-4 leading-relaxed max-w-md">{meta.desc}</p>
-
-                  {/* Topic pills */}
-                  <div className="flex flex-wrap gap-1.5 mb-5">
-                    {meta.topics.map(topic => (
-                      <span key={topic} className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-gray-50 text-gray-500 border border-gray-150">
-                        {topic}
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* Progress bar */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 max-w-xs bg-gray-100 rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full bg-gradient-to-r ${meta.gradient} transition-all`}
-                        style={{ width: `${Math.max(pct, 1)}%` }}
-                      />
-                    </div>
-                    <span className="text-sm text-gray-500 font-mono font-medium">
-                      {v.completed_count}/{v.exercise_count}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Right: illustration */}
-                <div className="w-64 shrink-0 flex items-center justify-center p-2 bg-gray-50/80 border-l border-gray-100/80 group-hover:bg-gray-50 transition-colors">
-                  {Illustration && <Illustration />}
-                </div>
-              </div>
-            </Link>
-          );
-        })}
+      {/* 2-column layout: volume books left, leaderboard right */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8">
+        {/* Left: SF-book-style volume grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 content-start">
+          {volumesWithLocal.map(v => {
+            const meta = VOLUME_META[v.id];
+            if (!meta) return null;
+            return <VolumeBook key={v.id} volume={v} meta={meta} />;
+          })}
         </div>
 
         {/* Right: Global leaderboard (sticky) */}
@@ -181,5 +148,67 @@ export default function Dashboard() {
         </aside>
       </div>
     </div>
+  );
+}
+
+/**
+ * SF-book-series-styled card: a colored "tab" header with `Volume N`,
+ * a tinted body containing the italic title + description and the
+ * book cover thumbnail. Mirrors coq.vercel.app/ext/sf/ visually.
+ */
+function VolumeBook({ volume, meta }: { volume: Volume; meta: VolumeMeta }) {
+  const pct = volume.exercise_count > 0
+    ? Math.round((volume.completed_count / volume.exercise_count) * 100)
+    : 0;
+  return (
+    <Link
+      // Land on the volume's first chapter (Preface) so the sidebar
+      // immediately shows an in-chapter outline. The user can navigate
+      // to other chapters via the sidebar's Prev/Next buttons or by
+      // clicking links inside the iframe (those still work for reading
+      // — they just won't update our sidebar's outline since the iframe
+      // is cross-origin).
+      to={`/volume/${volume.id}/chapter/Preface`}
+      className="group block rounded-md overflow-hidden shadow-sm hover:shadow-lg transition-shadow"
+      style={{ backgroundColor: meta.bodyColor }}
+    >
+      {/* Top tab band with "Volume N" */}
+      <div
+        className="px-3 py-1.5 text-white text-[13px] font-semibold tracking-wide"
+        style={{ backgroundColor: meta.tabColor }}
+      >
+        Volume {meta.number}
+      </div>
+
+      {/* Body: description + cover */}
+      <div className="p-4 flex flex-col items-center text-center">
+        <p className="text-[13px] leading-snug font-semibold text-gray-800 mb-3 text-left w-full">
+          <i>{meta.italicTitle}</i>
+          {' '}
+          <span className="font-normal">
+            {meta.description.replace(meta.italicTitle, '').replace(/^\s+/, '')}
+          </span>
+        </p>
+        <img
+          src={meta.cover}
+          alt={`${meta.italicTitle} cover`}
+          className="w-44 h-auto shadow-md group-hover:shadow-lg transition-shadow"
+          loading="lazy"
+        />
+        {volume.exercise_count > 0 && (
+          <div className="mt-3 w-full">
+            <div className="bg-white/60 rounded-full h-1.5 overflow-hidden">
+              <div
+                className="h-full transition-all"
+                style={{ width: `${Math.max(pct, 1)}%`, backgroundColor: meta.tabColor }}
+              />
+            </div>
+            <p className="text-[11px] text-gray-700 font-medium mt-1">
+              {volume.completed_count}/{volume.exercise_count} exercises
+            </p>
+          </div>
+        )}
+      </div>
+    </Link>
   );
 }

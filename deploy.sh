@@ -71,9 +71,21 @@ echo ""
 echo "[5/7] Patching Stdlib imports and compiling Coq files..."
 python3 setup.py
 
-# --- 6. Seed database ---
+# --- 6. Seed / refresh exercise metadata (preserves user data) ---
 echo ""
-echo "[6/7] Seeding exercise database..."
+echo "[6/7] Refreshing exercise metadata (idempotent — user data preserved)..."
+# Belt-and-suspenders: snapshot the DB before touching it. If anything
+# goes wrong, restore from this file.
+DB_FILE="$INSTALL_DIR/sf_learning.db"
+if [ -f "$DB_FILE" ]; then
+    BACKUP_DIR="$INSTALL_DIR/db-backups"
+    mkdir -p "$BACKUP_DIR"
+    BACKUP_PATH="$BACKUP_DIR/sf_learning_$(date -u +%Y%m%dT%H%M%SZ).db"
+    cp "$DB_FILE" "$BACKUP_PATH"
+    echo "  Backed up DB → $BACKUP_PATH"
+    # Keep only the 10 most recent backups.
+    ls -t "$BACKUP_DIR"/sf_learning_*.db 2>/dev/null | tail -n +11 | xargs -r rm
+fi
 python3 -m server.seed_db
 
 # --- 7. Environment file ---
