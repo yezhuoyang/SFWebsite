@@ -56,33 +56,50 @@ export default function ExerciseGradeButton({
     e.preventDefault();
     e.stopPropagation();
     setError(null);
-
-    // Always try the clipboard first — the user almost certainly just
-    // copied their freshest edit. Fall back to the persisted buffer
-    // only if the clipboard is empty / permission is denied.
-    let codeToGrade = '';
-    try {
-      const clip = await navigator.clipboard.readText();
-      if (clip.trim()) {
-        codeToGrade = clip;
-        setCode(clip);
-      }
-    } catch {
-      /* permission denied — fall through */
-    }
-    if (!codeToGrade.trim()) codeToGrade = code;
-
-    if (!codeToGrade.trim()) {
-      setError('Copy your chapter code first: click in the IDE → Ctrl+A → Ctrl+C → Submit.');
-      return;
-    }
-    try {
-      await requireLogin('Sign in to submit exercises.');
-    } catch {
-      return;
-    }
+    // Flip submitting on immediately so the user gets visible feedback
+    // ("…" spinner) the moment they click — even before the clipboard /
+    // login dance resolves.
     setSubmitting(true);
     try {
+      // Resolve the code to grade. Three strategies in order:
+      //   1. System clipboard (the click is a user gesture, so most
+      //      modern browsers allow this).
+      //   2. The persisted chapter buffer (in case a previous submission
+      //      already cached it).
+      //   3. A native window.prompt() — last-resort fallback that works
+      //      even when clipboard permission is denied / unsupported, so
+      //      the button always *does something*.
+      let codeToGrade = '';
+      let clipboardError: unknown = null;
+      try {
+        const clip = await navigator.clipboard.readText();
+        if (clip.trim()) {
+          codeToGrade = clip;
+          setCode(clip);
+        }
+      } catch (err) {
+        clipboardError = err;
+      }
+      if (!codeToGrade.trim()) codeToGrade = code;
+      if (!codeToGrade.trim()) {
+        const promptMsg = clipboardError
+          ? "Couldn't read clipboard (permission denied?). Paste your chapter code below:"
+          : 'Paste your full chapter code below (or copy from the IDE first with Ctrl+A, Ctrl+C, then click Submit again):';
+        const pasted = window.prompt(promptMsg, '');
+        if (pasted && pasted.trim()) {
+          codeToGrade = pasted;
+          setCode(pasted);
+        }
+      }
+      if (!codeToGrade.trim()) {
+        setError('No code to submit. Copy from the IDE (Ctrl+A, Ctrl+C) and click Submit again.');
+        return;
+      }
+      try {
+        await requireLogin('Sign in to submit exercises.');
+      } catch {
+        return;
+      }
       const { all, target } = await gradeExercise(volumeId, chapterSlug, exerciseName, codeToGrade);
       onResult(all);
       if (target?.status === 'completed') onCompleted?.();
@@ -140,11 +157,11 @@ export default function ExerciseGradeButton({
         )}
       </button>
       {error && (
-        <p className="basis-full text-[10px] text-red-700 bg-red-50 border-l-2 border-red-300 px-2 py-1 mt-1 ml-2 break-words font-mono leading-snug">
-          {error}
+        <p className="basis-full text-[11px] text-red-800 bg-red-50 border border-red-200 rounded px-2 py-1.5 mt-1 break-words font-mono leading-snug">
+          <strong className="not-italic mr-1">⚠</strong>{error}
           <button
             onClick={() => setError(null)}
-            className="ml-2 underline opacity-60 hover:opacity-100"
+            className="ml-2 text-[10px] underline opacity-70 hover:opacity-100"
           >
             dismiss
           </button>

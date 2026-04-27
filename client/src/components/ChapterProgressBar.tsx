@@ -39,39 +39,47 @@ export default function ChapterProgressBar({ progress, volumeId, chapterSlug, on
 
   const handleSubmit = async () => {
     setFeedback(null);
-
-    // Always try the clipboard first — the user's freshest edit lives
-    // there, and the click is a user gesture that lets us read it.
-    // Fall back to the persisted buffer only if the clipboard is empty
-    // or permission is denied.
-    let codeToGrade = '';
-    try {
-      const clip = await navigator.clipboard.readText();
-      if (clip.trim()) {
-        codeToGrade = clip;
-        setCode(clip);
-      }
-    } catch {
-      /* permission denied — fall through */
-    }
-    if (!codeToGrade.trim()) codeToGrade = code;
-
-    if (!codeToGrade.trim()) {
-      setFeedback({
-        kind: 'error',
-        message: 'Copy your chapter code first: click in the IDE → Ctrl+A → Ctrl+C → Submit.',
-      });
-      return;
-    }
-
-    try {
-      await requireLogin('Sign in to submit your solution.');
-    } catch {
-      return;
-    }
-
+    // Flip the spinner on immediately so the user gets visible feedback
+    // the moment they click — before the clipboard / login dance resolves.
     setSubmitting(true);
     try {
+      // Resolve the code in three strategies (clipboard → buffer → prompt)
+      // so the button always *does something*, even when clipboard
+      // permission is denied or unsupported.
+      let codeToGrade = '';
+      let clipboardError: unknown = null;
+      try {
+        const clip = await navigator.clipboard.readText();
+        if (clip.trim()) {
+          codeToGrade = clip;
+          setCode(clip);
+        }
+      } catch (err) {
+        clipboardError = err;
+      }
+      if (!codeToGrade.trim()) codeToGrade = code;
+      if (!codeToGrade.trim()) {
+        const promptMsg = clipboardError
+          ? "Couldn't read clipboard (permission denied?). Paste your full chapter code below:"
+          : 'Paste your full chapter code below (or copy from the IDE first with Ctrl+A, Ctrl+C, then Submit again):';
+        const pasted = window.prompt(promptMsg, '');
+        if (pasted && pasted.trim()) {
+          codeToGrade = pasted;
+          setCode(pasted);
+        }
+      }
+      if (!codeToGrade.trim()) {
+        setFeedback({
+          kind: 'error',
+          message: 'No code to submit. Copy from the IDE (Ctrl+A, Ctrl+C) and click Submit again.',
+        });
+        return;
+      }
+      try {
+        await requireLogin('Sign in to submit your solution.');
+      } catch {
+        return;
+      }
       const result = await saveChapterFile(volumeId, chapterSlug, codeToGrade);
       result.exercises.forEach((ex: ExerciseGrade) => recordGrade(ex));
       onGraded();
