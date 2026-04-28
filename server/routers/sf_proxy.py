@@ -126,8 +126,18 @@ def _filter_response_headers(upstream_headers: httpx.Headers) -> dict[str, str]:
 def _filter_request_headers(req: Request) -> dict[str, str]:
     out: dict[str, str] = {}
     for k, v in req.headers.items():
-        if k.lower() in _DROP_REQUEST_HEADERS:
+        kl = k.lower()
+        if kl in _DROP_REQUEST_HEADERS:
             continue
+        if kl == "accept-encoding":
+            # Only ask for compressions httpx can decode out of the
+            # box. The browser's default `gzip, deflate, br, zstd`
+            # would otherwise have upstream send brotli, which httpx
+            # 0.28 leaves un-decoded — `upstream.text` then returns
+            # raw brotli bytes interpreted as latin-1 and our HTML
+            # rewrite breaks subtly (no <head> match, fallback
+            # prepends <base> to garbage).
+            v = "gzip, deflate"
         out[k] = v
     return out
 
