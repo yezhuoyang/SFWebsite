@@ -48,11 +48,16 @@ export default function CodePasteModal({
     requestAnimationFrame(() => taRef.current?.focus());
     // Try the clipboard once on open — if the user did Ctrl+A, Ctrl+C
     // in the IDE just before clicking Submit, this auto-fills the
-    // textarea so they only need to click Grade.
+    // textarea so they only need to click Grade. We only accept
+    // clipboard content that plausibly looks like an SF chapter (≥200
+    // chars and contains some Coq keyword); otherwise it's likely a
+    // stale unrelated copy.
     (async () => {
       try {
         const clip = await navigator.clipboard.readText();
-        if (clip && clip.trim() && clip.trim() !== initial.trim()) {
+        const looksLikeChapter = clip && clip.length >= 200 &&
+          /\b(Require|From|Import|Theorem|Lemma|Definition|Inductive|Fixpoint|Module|Example)\b/.test(clip);
+        if (looksLikeChapter && clip.trim() !== initial.trim()) {
           setCode(clip);
           setInfo('Auto-filled from clipboard. Edit if needed, then click Grade.');
         }

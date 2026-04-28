@@ -41,6 +41,12 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
   ]);
 }
 
+/** Plausibility check — see ExerciseGradeButton for rationale. */
+function looksLikeChapter(s: string): boolean {
+  if (s.length < 200) return false;
+  return /\b(Require|From|Import|Theorem|Lemma|Definition|Inductive|Fixpoint|Module|Example)\b/.test(s);
+}
+
 export default function ChapterProgressBar({ progress, volumeId, chapterSlug, onGraded }: Props) {
   const { requireLogin } = useAuth();
   const notify = useNotify();
@@ -114,16 +120,16 @@ export default function ChapterProgressBar({ progress, volumeId, chapterSlug, on
     let codeToGrade = '';
     try {
       const clip = await withTimeout(navigator.clipboard.readText(), 1500);
-      if (clip && clip.trim()) {
+      if (clip && looksLikeChapter(clip)) {
         codeToGrade = clip;
         setCode(clip);
       }
     } catch {
       /* permission denied — fall through */
     }
-    if (!codeToGrade.trim()) codeToGrade = code;
+    if (!codeToGrade && looksLikeChapter(code)) codeToGrade = code;
 
-    if (codeToGrade.trim()) {
+    if (codeToGrade) {
       submitWith(codeToGrade);
       return;
     }

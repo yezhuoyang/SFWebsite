@@ -54,6 +54,20 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
   ]);
 }
 
+/** Heuristic: does this string plausibly look like a full SF chapter
+ *  source? We require at least 200 chars AND the presence of at least
+ *  one structural Coq keyword. Stale clipboard contents (a single
+ *  identifier, an English sentence, etc.) get rejected client-side
+ *  rather than triggering the server's "near-empty" guard at 10 chars.
+ *
+ *  The grader compiles the file from the top down, so it needs the
+ *  imports / dependencies of the chapter — a single theorem snippet
+ *  isn't useful even if it's > 10 chars. */
+function looksLikeChapter(s: string): boolean {
+  if (s.length < 200) return false;
+  return /\b(Require|From|Import|Theorem|Lemma|Definition|Inductive|Fixpoint|Module|Example)\b/.test(s);
+}
+
 export default function ExerciseGradeButton({
   volumeId,
   chapterSlug,
@@ -180,23 +194,25 @@ export default function ExerciseGradeButton({
     let codeToGrade = '';
     try {
       const clip = await withTimeout(navigator.clipboard.readText(), 1500);
-      if (clip && clip.trim()) {
+      if (clip && looksLikeChapter(clip)) {
         codeToGrade = clip;
         setCode(clip);
       }
     } catch {
       /* permission denied / no focus — fall through */
     }
-    if (!codeToGrade.trim()) codeToGrade = code;
+    if (!codeToGrade && looksLikeChapter(code)) codeToGrade = code;
 
-    if (codeToGrade.trim()) {
-      // Fast path: had code in clipboard or buffer — grade immediately.
-      // submitWith will reset submitting in its finally block.
+    if (codeToGrade) {
+      // Fast path: had plausible chapter code in clipboard or buffer —
+      // grade immediately. submitWith will reset submitting in its
+      // finally block.
       submitWith(codeToGrade);
       return;
     }
-    // Slow path: open the paste modal so the user can paste manually
-    // or load their last submission from the server.
+    // Slow path: clipboard / buffer don't look like real chapter code
+    // (probably a stale single-line copy). Open the paste modal so the
+    // user can paste the full chapter or load their last submission.
     setSubmitting(false);
     setShowModal(true);
   };
