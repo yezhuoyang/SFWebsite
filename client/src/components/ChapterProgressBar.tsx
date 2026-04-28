@@ -18,6 +18,7 @@ import { saveChapterFile, type ChapterProgress, type ExerciseGrade } from '../ap
 import { useAuth } from '../contexts/AuthContext';
 import { useChapterCodeBuffer, useExerciseGrades } from '../coq/exerciseGrading';
 import CodePasteModal from './CodePasteModal';
+import { useNotify } from './Toast';
 
 interface Props {
   progress: ChapterProgress | null;
@@ -42,6 +43,7 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
 
 export default function ChapterProgressBar({ progress, volumeId, chapterSlug, onGraded }: Props) {
   const { requireLogin } = useAuth();
+  const notify = useNotify();
   const { code, setCode } = useChapterCodeBuffer(volumeId, chapterSlug);
   const { recordGrade } = useExerciseGrades(volumeId, chapterSlug);
   const [submitting, setSubmitting] = useState(false);
@@ -65,32 +67,38 @@ export default function ChapterProgressBar({ progress, volumeId, chapterSlug, on
     }
     setSubmitting(true);
     try {
+      // eslint-disable-next-line no-console
+      console.log('[ChapterProgressBar] grading', { volumeId, chapterSlug, codeChars: codeToGrade.length });
       const result = await saveChapterFile(volumeId, chapterSlug, codeToGrade);
+      // eslint-disable-next-line no-console
+      console.log('[ChapterProgressBar] result', result);
       result.exercises.forEach((ex: ExerciseGrade) => recordGrade(ex));
       onGraded();
       const okCount = result.exercises.filter(e => e.status === 'completed').length;
       const failCount = result.exercises.filter(e => e.status === 'compile_error' || e.status === 'tampered').length;
+      const admittedCount = result.exercises.filter(e => e.status === 'not_started').length;
       if (okCount === 0 && failCount > 0) {
         const first = result.exercises.find(e => e.status === 'compile_error' || e.status === 'tampered');
-        setFeedback({
-          kind: 'error',
-          message: first?.feedback || first?.error_detail || `${failCount} exercise(s) failed to compile.`,
-        });
+        const msg = first?.feedback || first?.error_detail || `${failCount} exercise(s) failed to compile.`;
+        setFeedback({ kind: 'error', message: msg });
+        notify({ kind: 'error', title: `Grading: ${failCount} failed`, message: msg, duration: 0 });
       } else if (failCount > 0) {
-        setFeedback({
-          kind: 'partial',
-          message: `Graded — ${okCount} completed, ${failCount} failed.`,
-        });
+        const msg = `${okCount} completed, ${failCount} failed${admittedCount ? `, ${admittedCount} still Admitted` : ''}.`;
+        setFeedback({ kind: 'partial', message: msg });
+        notify({ kind: 'warning', title: 'Partial success', message: msg, duration: 0 });
+      } else if (okCount > 0) {
+        const msg = `${okCount} exercise(s) completed${admittedCount ? `, ${admittedCount} still Admitted` : ''}.`;
+        setFeedback({ kind: 'ok', message: msg });
+        notify({ kind: 'success', title: 'Graded ✓', message: msg });
       } else {
-        setFeedback({
-          kind: 'ok',
-          message: okCount > 0
-            ? `Graded — ${okCount} exercise(s) completed.`
-            : 'Submitted. No completed exercises detected (check for Admitted / FILL IN HERE).',
-        });
+        const msg = 'No completed exercises detected. Replace Admitted / FILL IN HERE with your proofs.';
+        setFeedback({ kind: 'ok', message: msg });
+        notify({ kind: 'warning', title: 'Nothing graded', message: msg, duration: 0 });
       }
     } catch (err) {
-      setFeedback({ kind: 'error', message: (err as Error).message || 'Grading failed.' });
+      const msg = (err as Error).message || 'Grading failed.';
+      setFeedback({ kind: 'error', message: msg });
+      notify({ kind: 'error', title: 'Grading failed', message: msg });
     } finally {
       setSubmitting(false);
     }

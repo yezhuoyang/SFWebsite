@@ -26,6 +26,7 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { gradeExercise, type ExerciseGradingResult } from '../coq/exerciseGrading';
 import CodePasteModal from './CodePasteModal';
+import { useNotify } from './Toast';
 
 interface Props {
   volumeId: string;
@@ -64,6 +65,7 @@ export default function ExerciseGradeButton({
   onCompleted,
 }: Props) {
   const { requireLogin } = useAuth();
+  const notify = useNotify();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -74,6 +76,7 @@ export default function ExerciseGradeButton({
   const submitWith = async (codeToGrade: string) => {
     if (!codeToGrade.trim()) {
       setError('No code to submit. Copy from the IDE (Ctrl+A, Ctrl+C) and click Submit again.');
+      notify({ kind: 'warning', title: 'No code submitted', message: 'Copy your chapter code from the IDE first (Ctrl+A, Ctrl+C).' });
       setSubmitting(false);
       return;
     }
@@ -85,14 +88,64 @@ export default function ExerciseGradeButton({
       } catch {
         return;
       }
-      const { all, target } = await gradeExercise(volumeId, chapterSlug, exerciseName, codeToGrade);
+      // eslint-disable-next-line no-console
+      console.log('[ExerciseGradeButton] grading', { exerciseName, codeChars: codeToGrade.length });
+      const { all, target, rawError } = await gradeExercise(volumeId, chapterSlug, exerciseName, codeToGrade);
+      // eslint-disable-next-line no-console
+      console.log('[ExerciseGradeButton] result', { exerciseName, target, all, rawError });
       onResult(all);
-      if (target?.status === 'completed') onCompleted?.();
-      if (target && target.status !== 'completed') {
-        setError(target.feedback || target.error_detail || target.status);
+      if (!target) {
+        // The server compiled the file but didn't include this exercise
+        // in its results — usually means the heading name parsed in the
+        // sidebar doesn't match the exercise name in the DB.
+        notify({
+          kind: 'warning',
+          title: `Exercise "${exerciseName}" not recognized`,
+          message: rawError
+            ? `Server compile output:\n${rawError.slice(0, 400)}`
+            : `The grader didn't return a result for this exercise. Try the global "Submit & Grade" button at the top.`,
+          duration: 0,
+        });
+        return;
+      }
+      if (target.status === 'completed') {
+        onCompleted?.();
+        notify({
+          kind: 'success',
+          title: `✓ ${exerciseName} — completed!`,
+          message: `${target.points} pt earned${target.feedback ? '. ' + target.feedback : ''}`,
+        });
+        return;
+      }
+      // status === 'compile_error' | 'tampered' | 'not_started'
+      const detail = target.feedback || target.error_detail || target.status;
+      setError(detail);
+      if (target.status === 'not_started') {
+        notify({
+          kind: 'warning',
+          title: `${exerciseName}: still has Admitted / FILL IN HERE`,
+          message: 'Replace the placeholder with your actual proof, then Submit again.',
+          duration: 0,
+        });
+      } else if (target.status === 'tampered') {
+        notify({
+          kind: 'warning',
+          title: `${exerciseName}: original definitions modified`,
+          message: detail,
+          duration: 0,
+        });
+      } else {
+        notify({
+          kind: 'error',
+          title: `${exerciseName}: proof failed to compile`,
+          message: detail,
+          duration: 0,
+        });
       }
     } catch (err) {
-      setError((err as Error).message || 'Grading failed.');
+      const msg = (err as Error).message || 'Grading failed.';
+      setError(msg);
+      notify({ kind: 'error', title: 'Grading failed', message: msg });
     } finally {
       setSubmitting(false);
     }

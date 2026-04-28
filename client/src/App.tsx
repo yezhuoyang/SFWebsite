@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { NotifyProvider } from './components/Toast';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import ChapterPage from './pages/ChapterPage';
@@ -23,6 +24,7 @@ function VolumeRedirect() {
 export default function App() {
   return (
     <AuthProvider>
+     <NotifyProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -44,6 +46,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+     </NotifyProvider>
     </AuthProvider>
   );
 }
