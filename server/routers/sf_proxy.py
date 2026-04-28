@@ -103,10 +103,15 @@ def _isolation_headers() -> dict[str, str]:
 
 
 def _filter_response_headers(upstream_headers: httpx.Headers) -> dict[str, str]:
+    """Pick the headers we want to forward, lowercasing keys so the
+    caller can `pop("content-encoding", None)` without worrying about
+    whatever case the upstream server used (Vercel sends
+    `Content-Encoding`, plain dicts are case-sensitive)."""
     out: dict[str, str] = {}
     for k, v in upstream_headers.items():
-        if k.lower() in _FORWARD_RESPONSE_HEADERS:
-            out[k] = v
+        kl = k.lower()
+        if kl in _FORWARD_RESPONSE_HEADERS:
+            out[kl] = v
     out.update(_isolation_headers())
     return out
 
