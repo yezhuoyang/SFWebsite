@@ -198,11 +198,50 @@ def extract_chapter_segments(html_text: str) -> list[tuple[str, str]]:
     return parser.segments
 
 
+# Exercise heading as it appears in the HTML's extracted text:
+#   "Exercise: 1 star, standard (foo)"
+#   "Exercise: 2 stars, advanced, optional (bar)"
+# The full line plus everything until the line break (so we capture
+# the exercise name in parens). parse_exercises in
+# server/services/parser.py requires `(** **** Exercise: ...` ALL on
+# one line, so we lift each match into its own dedicated comment.
+_EXERCISE_LINE_RE = re.compile(
+    r'^\s*(Exercise:\s+\d+\s+stars?[^\n]*?\([A-Za-z_][A-Za-z_0-9]*\))',
+    re.MULTILINE,
+)
+
+
 def _wrap_as_doc_comment(prose: str) -> str:
-    """Turn extracted prose text into a Coq `(** ... *)` doc comment.
-    Escape any `*)` inside (would close the comment prematurely)."""
+    """Turn extracted prose text into Coq doc comments.
+
+    coqdoc merges adjacent source `(** ... *)` blocks into a single
+    `<div class="doc">`, so one prose segment can contain *multiple*
+    Exercise headings. We:
+      * Escape any `*)` inside the prose (would close the comment
+        prematurely).
+      * Split each `Exercise: N stars... (name)` line out into its
+        own dedicated `(** **** Exercise: ... (name) *)` comment.
+        The grader's regex requires `(**` and `****` and `Exercise:`
+        all on the same line, which a single big multi-line comment
+        fails to satisfy.
+    """
     safe = prose.replace('*)', '* )')
-    return f'(**\n{safe}\n*)'
+
+    chunks: list[str] = []
+    last = 0
+    for m in _EXERCISE_LINE_RE.finditer(safe):
+        before = safe[last:m.start()].strip()
+        if before:
+            chunks.append(f'(**\n{before}\n*)')
+        # One-line exercise comment so parse_exercises matches.
+        chunks.append(f'(** **** {m.group(1)} *)')
+        last = m.end()
+    tail = safe[last:].strip()
+    if tail:
+        chunks.append(f'(**\n{tail}\n*)')
+    if not chunks:
+        return f'(**\n{safe}\n*)'
+    return '\n\n'.join(chunks)
 
 
 def reassemble_v_from_html(html_text: str, user_blocks: list[str]) -> str:
