@@ -231,17 +231,17 @@ export default function ChapterTOC({ volumeId, currentSlug, iframeRef, serverPro
               // SF has many "Exercise:" headings that are manual-grade
               // (paragraph-form answers, not Coq proofs to compile —
               // e.g. "triples", "assertions", "valid_triples" in PLF/Hoare).
-              // The grader's DB only contains theorem-style exercises, so
-              // showing Submit on the manual ones leads to a confusing
+              // The DB has them but they don't survive a coqc round-trip,
+              // so showing Submit on them leads to a confusing
               // "Exercise not recognized" response. Render Submit only
-              // when the server knows the exercise. While progress is
-              // still loading (serverProgress === null) we render the
-              // button optimistically — hiding it later would feel
-              // jumpy.
+              // when the server says the exercise is auto-gradable
+              // (is_manual === false). While progress is still loading
+              // (serverProgress === null) we render the button
+              // optimistically — hiding it later would feel jumpy.
               const isAutoGradable = exName != null && (
-                serverProgress == null || serverStatusByName.has(exName)
+                serverProgress == null || (serverEx != null && !serverEx.is_manual)
               );
-              const isManualOnly = entry.isExercise && exName != null && serverProgress != null && !serverStatusByName.has(exName);
+              const isManualOnly = entry.isExercise && exName != null && serverEx != null && serverEx.is_manual;
               return (
                 <li key={`${entry.anchor}-${i}`}>
                   <div

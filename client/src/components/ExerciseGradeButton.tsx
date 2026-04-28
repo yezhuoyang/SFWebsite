@@ -95,15 +95,22 @@ export default function ExerciseGradeButton({
       console.log('[ExerciseGradeButton] result', { exerciseName, target, all, rawError });
       onResult(all);
       if (!target) {
-        // The server compiled the file but didn't include this exercise
-        // in its results — usually means the heading name parsed in the
-        // sidebar doesn't match the exercise name in the DB.
+        // Most common cause: the user's submitted code is a partial
+        // snippet (one theorem they wrote) and the grader can't locate
+        // the target Exercise: header in it. Less common: a name
+        // mismatch between the sidebar heading and the DB. Either way,
+        // the actionable advice is "copy the *whole* chapter from the IDE".
+        const looksTruncated = rawError && /not found in/i.test(rawError);
         notify({
           kind: 'warning',
-          title: `Exercise "${exerciseName}" not recognized`,
-          message: rawError
-            ? `Server compile output:\n${rawError.slice(0, 400)}`
-            : `The grader didn't return a result for this exercise. Try the global "Submit & Grade" button at the top.`,
+          title: looksTruncated
+            ? `Couldn't find "${exerciseName}" in your code`
+            : `Exercise "${exerciseName}" not recognized`,
+          message: looksTruncated
+            ? 'You probably copied just one theorem instead of the whole chapter. Click in the IDE → Ctrl+A → Ctrl+C → click Submit again.'
+            : (rawError
+              ? `Server output:\n${rawError.slice(0, 400)}`
+              : `The grader didn't return a result. Try the global "Submit & Grade" button at the top.`),
           duration: 0,
         });
         return;

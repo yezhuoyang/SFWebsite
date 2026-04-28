@@ -84,6 +84,11 @@ async def chapter_progress(
             "points": float(ex.points or 0),
             "points_earned": float(pts_earned),
             "last_graded_at": last_graded,
+            # Manual-grade exercises (`Definition manual_grade_for_<name>`)
+            # are paragraph-form answers, not auto-gradable Coq proofs.
+            # The client uses this to hide the per-exercise Submit button
+            # on these (it would always return "not found" through coqc).
+            "is_manual": bool(ex.is_manual),
         })
 
     return {

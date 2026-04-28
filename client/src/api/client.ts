@@ -435,6 +435,10 @@ export interface ChapterExerciseProgress {
   points: number;
   points_earned: number;
   last_graded_at: string | null;
+  /** True when the exercise is paragraph-form (manual_grade_for_<name>)
+   *  and not an auto-compilable Coq proof. The client uses this to
+   *  hide the per-exercise Submit button. */
+  is_manual: boolean;
 }
 
 export interface ChapterProgress {
