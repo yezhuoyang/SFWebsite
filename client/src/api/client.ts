@@ -112,6 +112,26 @@ export const resetChapterFile = (volumeId: string, chapterName: string) =>
     method: 'POST',
   });
 
+/** Grade by sending the per-block edits read from the same-origin
+ *  iframe. The server splices them into the original chapter source
+ *  before running coqc — that way prose comments + Exercise headers
+ *  (which the grader needs) survive the round-trip. */
+export const gradeChapterBlocks = (
+  volumeId: string,
+  chapterName: string,
+  blocks: string[],
+  targetExercise?: string,
+) =>
+  fetchJSON<SaveResult>(`${BASE}/coq/file/${volumeId}/${chapterName}/blocks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(
+      targetExercise
+        ? { blocks, target_exercise: targetExercise }
+        : { blocks }
+    ),
+  });
+
 export interface TutorContextEntry {
   kind: string;
   name: string;

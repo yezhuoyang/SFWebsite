@@ -213,6 +213,68 @@ async def get_chapter_imports(volume_id: str, chapter_name: str):
     }
 
 
+async def _save_and_grade_internal(
+    volume_id: str, chapter_name: str, content: str,
+    target_exercise: str | None,
+    user: "User | None",
+    session: AsyncSession,
+) -> dict:
+    """Shared core: save the chapter file, run the grader, persist
+    progress for the current user. Both the legacy `PUT /coq/file/...`
+    and the new `POST /coq/file/.../blocks` (same-origin iframe path)
+    funnel into this."""
+    if volume_id not in VOLUMES:
+        raise HTTPException(status_code=404, detail=f"Unknown volume: {volume_id}")
+    if not content or len(content.strip()) < 10:
+        raise HTTPException(status_code=400, detail="Refusing to save empty or near-empty content")
+    vol = VOLUMES[volume_id]
+    v_file = Path(vol["path"]) / f"{chapter_name}.v"
+    if not v_file.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {chapter_name}.v")
+
+    # Create .orig backup on first save (for reset + splice).
+    orig_file = Path(vol["path"]) / f"{chapter_name}.v.orig"
+    if not orig_file.exists():
+        import shutil
+        shutil.copy2(str(v_file), str(orig_file))
+        logger.info(f"Created backup: {orig_file}")
+
+    v_file.write_text(content, encoding="utf-8")
+
+    from server.services.grader import full_grade, full_grade_exercise
+    from server.services.progress_tracker import update_progress_from_grade
+
+    if target_exercise:
+        grade_result = await full_grade_exercise(volume_id, chapter_name, target_exercise)
+    else:
+        grade_result = await full_grade(volume_id, chapter_name)
+
+    user_id = user.id if user else None
+    await update_progress_from_grade(session, grade_result, user_id)
+
+    exercises = [
+        {
+            "name": ex.exercise_name,
+            "status": ex.status,
+            "points": ex.points_earned,
+            "feedback": ex.feedback,
+            "error_detail": ex.error_detail,
+        }
+        for ex in grade_result.exercises
+    ]
+    completed = sum(1 for ex in grade_result.exercises if ex.status == "completed")
+    total = len(grade_result.exercises)
+
+    return {
+        "status": "saved",
+        "graded": True,
+        "completed": completed,
+        "total": total,
+        "exercises": exercises,
+        "compile_output": grade_result.compile_output,
+    }
+
+
 @router.put("/coq/file/{volume_id}/{chapter_name}")
 async def save_chapter_file(
     volume_id: str, chapter_name: str, body: dict,
@@ -285,6 +347,49 @@ async def save_chapter_file(
     }
 
 
+@router.post("/coq/file/{volume_id}/{chapter_name}/blocks")
+async def grade_from_blocks(
+    volume_id: str, chapter_name: str, body: dict,
+    user: "User | None" = Depends(get_optional_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Grade a chapter from per-block edits read from the same-origin SF
+    iframe. The client sends the user-edited contents of every
+    `<div class="code">` (one CodeMirror instance each) in document
+    order, and we splice them into the corresponding code regions of
+    the original chapter `.v.orig` (preserving prose comments + Exercise
+    headers — both are critical for the grader).
+
+    Body fields:
+        blocks: list[str]            — one entry per editable code block,
+                                        in document order. Required.
+        target_exercise: str | None  — same as the legacy endpoint.
+    """
+    if volume_id not in VOLUMES:
+        raise HTTPException(status_code=404, detail=f"Unknown volume: {volume_id}")
+    blocks = body.get("blocks")
+    if not isinstance(blocks, list) or not blocks:
+        raise HTTPException(status_code=400, detail="Body must include a non-empty `blocks` list")
+    target_exercise = body.get("target_exercise")
+    vol = VOLUMES[volume_id]
+    v_file = Path(vol["path"]) / f"{chapter_name}.v"
+    orig_file = Path(vol["path"]) / f"{chapter_name}.v.orig"
+    if not v_file.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {chapter_name}.v")
+    # Splice into the original chapter source if we have a backup,
+    # otherwise the current .v (which on first run is the original).
+    template_file = orig_file if orig_file.exists() else v_file
+    template_text = template_file.read_text(encoding="utf-8", errors="replace")
+
+    from server.services.coq_splice import splice_blocks, SpliceError
+    try:
+        content = splice_blocks(template_text, [str(b) for b in blocks])
+    except SpliceError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    return await _save_and_grade_internal(
+        volume_id, chapter_name, content, target_exercise, user, session,
+    )
 
 
 @router.post("/coq/file/{volume_id}/{chapter_name}/reset")

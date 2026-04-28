@@ -93,14 +93,24 @@ function useChapterToc(volumeId: string, slug: string): TocEntry[] {
   return toc;
 }
 
-/** Cross-origin iframes don't expose contentDocument, so we navigate
- *  the iframe to the same chapter URL with the anchor fragment — the
- *  browser scrolls to that anchor on load. Triggers a reload, which is
- *  unfortunate but unavoidable cross-origin. */
+/** Now that the iframe is same-origin (via /sfproxy), we could scroll
+ *  inside it directly — but reusing the URL+anchor approach keeps the
+ *  jump robust against page state changes. */
 function jumpTo(iframeRef: React.RefObject<HTMLIFrameElement | null>, volumeId: string, slug: string, anchor: string) {
   const iframe = iframeRef.current;
   if (!iframe) return;
-  iframe.src = `https://coq.vercel.app/ext/sf/${volumeId}/full/${slug}.html#${anchor}`;
+  // Try a same-document scroll first (fast, no reload, preserves
+  // CodeMirror state). Fall back to iframe.src navigation if the
+  // anchor isn't there yet.
+  try {
+    const doc = iframe.contentDocument;
+    const target = doc?.getElementById(anchor);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+  } catch { /* same-origin should not throw, but be defensive */ }
+  iframe.src = `/sfproxy/chapter/${volumeId}/${slug}.html#${anchor}`;
 }
 
 export default function ChapterTOC({ volumeId, currentSlug, iframeRef, serverProgress, refreshProgress, onGraded }: Props) {
@@ -281,6 +291,7 @@ export default function ChapterTOC({ volumeId, currentSlug, iframeRef, serverPro
                         volumeId={volumeId}
                         chapterSlug={currentSlug}
                         exerciseName={exName}
+                        iframeRef={iframeRef}
                         code={code}
                         setCode={setCode}
                         // Synthesize a result from server progress when no

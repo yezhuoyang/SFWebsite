@@ -51,6 +51,13 @@ app.include_router(solutions.router, prefix="/api")
 app.include_router(annotations_api.router, prefix="/api")
 app.include_router(presence.router, prefix="/api")
 
+# Same-origin proxy for the upstream SF book + jsCoq IDE (lets the
+# parent React app read the editor DOM directly — see
+# server/routers/sf_proxy.py for rationale). Registered BEFORE the
+# SPA catchall so /wa/... and /sfproxy/... aren't rerouted to React.
+from server.routers import sf_proxy  # noqa: E402
+app.include_router(sf_proxy.router)
+
 # Mount SF HTML volumes for reading
 for vol_id, vol_cfg in VOLUMES.items():
     vol_path = vol_cfg["path"]

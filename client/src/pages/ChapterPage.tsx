@@ -3,21 +3,15 @@
  *
  *   [ ChapterTOC | iframe SF book + jsCoq IDE ]
  *
- * The TOC is a React component that lists the volume's chapters and
- * navigates between them. The iframe loads coq.vercel.app's working SF
- * book + jsCoq IDE — we don't touch its DOM (cross-origin) so the
- * font / rendering / Coq behavior stay exactly as on the upstream site.
+ * The iframe loads our same-origin proxy of coq.vercel.app's SF book +
+ * jsCoq IDE (see server/routers/sf_proxy.py for the proxy details).
+ * Same-origin means the parent React app can read the iframe's
+ * CodeMirror instances directly, so the per-exercise Submit button
+ * doesn't need a clipboard hop — it just walks the iframe DOM,
+ * collects each editor's value, and POSTs them to the splice/grade
+ * endpoint.
  *
  * URL: `/volume/:volumeId/chapter/:chapterName` (unchanged).
- *
- * Phase 1 plan: replace the cross-origin iframe with a same-origin
- * page hosting wacoq locally. That'll let us read the proof state and
- * student code from the iframe via postMessage / direct property access,
- * which is what's needed to drive grading and AI feedback.
- *
- * The legacy block-based ChapterPage (Monaco, per-exercise grading,
- * tutor, annotations) is preserved at ChapterPage.legacy.tsx for
- * reference while we re-graft those features.
  */
 
 import { useParams, useNavigate } from 'react-router-dom';
@@ -52,16 +46,12 @@ export default function ChapterPage() {
     return <div style={{ padding: 24 }}>Missing chapter parameters.</div>;
   }
 
-  // Direct cross-origin iframe to upstream. We tried a same-origin
-  // proxy in `vite.config.ts` to enable React → iframe state reads
-  // (for grading / tutor), but wacoq's COOP+COEP + SharedArrayBuffer
-  // constraints made that brittle. Letting the upstream serve the
-  // whole IDE as a self-consistent unit is reliable.
-  //
-  // Consequence: React can't read `iframe.contentWindow.coq`. The
-  // GradePanel / TutorPanel will need a paste-textarea fallback so
-  // students can submit their code separately.
-  const src = `https://coq.vercel.app/ext/sf/${volumeId}/full/${chapter}.html`;
+  // Same-origin proxy to coq.vercel.app/ext/sf/<vol>/full/<chapter>.html.
+  // The server inserts a <base href> so relative asset URLs still load
+  // from upstream, and proxies the absolute /wa/... wacoq runtime paths.
+  // Result: same DOM as upstream, but at our origin — React can read
+  // iframe.contentDocument and walk the CodeMirror instances directly.
+  const src = `/sfproxy/chapter/${volumeId}/${chapter}.html`;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-white">
@@ -78,20 +68,18 @@ export default function ChapterPage() {
           progress={progress}
           volumeId={volumeId}
           chapterSlug={chapter}
+          iframeRef={iframeRef}
           onGraded={() => { setGradeVersion(v => v + 1); refreshProgress(); }}
         />
         <iframe
           ref={iframeRef}
-          // `key={src}` forces a fresh iframe on chapter change. The
-          // cross-origin iframe gives us no API to imperatively navigate
-          // it without a reload anyway, so a remount is fine.
+          // `key={src}` forces a fresh iframe on chapter change.
           key={src}
           title={`${volumeId} / ${chapter}`}
           src={src}
           className="flex-1 border-0 bg-white"
-          // `credentialless` lets a COEP=require-corp parent embed a
-          // cross-origin iframe without the iframe's host having to send
-          // CORP. Chrome 110+.
+          // `credentialless` matches the parent's COEP so SharedArrayBuffer
+          // (required by wacoq) keeps working in the iframe.
           // @ts-expect-error not in React's IframeHTMLAttributes yet
           credentialless="true"
         />

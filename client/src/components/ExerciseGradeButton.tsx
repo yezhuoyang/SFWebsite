@@ -1,30 +1,27 @@
 /**
  * Per-exercise "Submit" button rendered next to each Exercise heading
  * in the chapter sidebar TOC. Clicking it submits the chapter code to
- * the legacy grading endpoint with `target_exercise` set, triggering
- * the server's per-exercise compile-and-grade flow (truncate-at-end-
- * marker + Admitted / tamper detection).
+ * the grading endpoint with `target_exercise` set.
  *
- * Code-resolution flow on click:
- *   1. window.focus() — pull focus out of the cross-origin iframe so
- *      the clipboard API will let us read.
- *   2. clipboard.readText() with a 1500ms timeout — workflow is
- *      "edit in iframe IDE → Ctrl+A → Ctrl+C → click Submit".
- *   3. Persisted chapter buffer (in case clipboard is empty / denied
- *      but we already cached code from a previous submission).
- *   4. CodePasteModal — last-resort textarea modal so the button
- *      always *does something* visible when clicked, even when
- *      clipboard permission is denied.
- *
- * Layout note: this returns a fragment of (button, optional feedback
- * line, optional modal). The parent row uses `flex-wrap`, and the
- * feedback line uses `basis-full` so it drops to its own line beneath
- * the row when set.
+ * Code-resolution flow on click (in order):
+ *   1. **Read iframe DOM** — the iframe is now same-origin (via
+ *      /sfproxy), so we walk every CodeMirror instance and POST the
+ *      array of edited blocks to the server's splice endpoint. The
+ *      server reassembles the chapter file (prose comments + Exercise
+ *      headers preserved) before grading. This is the happy path —
+ *      no clipboard, no modal.
+ *   2. Clipboard.readText() with timeout — fallback if the iframe
+ *      hasn't finished loading or the DOM read fails.
+ *   3. Persisted chapter buffer.
+ *   4. CodePasteModal — last-resort textarea so the button still does
+ *      something visible if everything else falls through.
  */
 
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { gradeExercise, type ExerciseGradingResult } from '../coq/exerciseGrading';
+import { gradeChapterBlocks } from '../api/client';
+import { readChapterBlocks } from '../coq/iframeReader';
 import CodePasteModal from './CodePasteModal';
 import { useNotify } from './Toast';
 
@@ -32,6 +29,8 @@ interface Props {
   volumeId: string;
   chapterSlug: string;
   exerciseName: string;
+  /** Same-origin SF iframe — the happy-path read source. */
+  iframeRef: React.RefObject<HTMLIFrameElement | null>;
   /** Current chapter code buffer (from useChapterCodeBuffer). */
   code: string;
   /** Persist a fresh buffer to localStorage (clipboard auto-sync uses this). */
@@ -72,6 +71,7 @@ export default function ExerciseGradeButton({
   volumeId,
   chapterSlug,
   exerciseName,
+  iframeRef,
   code,
   setCode,
   result,
@@ -86,11 +86,97 @@ export default function ExerciseGradeButton({
 
   const status = result?.status;
 
-  /** Run the actual grade once we know what code to submit. */
+  /** Process a grade result (shared between block-submit and
+   *  full-content-submit paths). */
+  const processResult = (
+    all: import('../api/client').ExerciseGrade[],
+    target: import('../api/client').ExerciseGrade | undefined,
+    rawError: string | null | undefined,
+  ) => {
+    onResult(all);
+    if (!target) {
+      const looksTruncated = rawError && /not found in/i.test(rawError);
+      notify({
+        kind: 'warning',
+        title: looksTruncated
+          ? `Couldn't find "${exerciseName}" in your code`
+          : `Exercise "${exerciseName}" not recognized`,
+        message: looksTruncated
+          ? 'The chapter source is missing this exercise header. Reload the chapter and try again.'
+          : (rawError
+            ? `Server output:\n${rawError.slice(0, 400)}`
+            : `The grader didn't return a result. Try the global "Submit & Grade" button at the top.`),
+        duration: 0,
+      });
+      return;
+    }
+    if (target.status === 'completed') {
+      onCompleted?.();
+      notify({
+        kind: 'success',
+        title: `✓ ${exerciseName} — completed!`,
+        message: `${target.points} pt earned${target.feedback ? '. ' + target.feedback : ''}`,
+      });
+      return;
+    }
+    const detail = target.feedback || target.error_detail || target.status;
+    setError(detail);
+    if (target.status === 'not_started') {
+      notify({
+        kind: 'warning',
+        title: `${exerciseName}: still has Admitted / FILL IN HERE`,
+        message: 'Replace the placeholder with your actual proof, then Submit again.',
+        duration: 0,
+      });
+    } else if (target.status === 'tampered') {
+      notify({
+        kind: 'warning',
+        title: `${exerciseName}: original definitions modified`,
+        message: detail,
+        duration: 0,
+      });
+    } else {
+      notify({
+        kind: 'error',
+        title: `${exerciseName}: proof failed to compile`,
+        message: detail,
+        duration: 0,
+      });
+    }
+  };
+
+  /** Submit using the same-origin iframe DOM read (preferred). */
+  const submitWithBlocks = async (blocks: string[]) => {
+    setError(null);
+    setSubmitting(true);
+    try {
+      try {
+        await requireLogin('Sign in to submit exercises.');
+      } catch {
+        return;
+      }
+      // eslint-disable-next-line no-console
+      console.log('[ExerciseGradeButton] grading via blocks', { exerciseName, count: blocks.length });
+      const result = await gradeChapterBlocks(volumeId, chapterSlug, blocks, exerciseName);
+      const target = result.exercises.find(e => e.name === exerciseName);
+      // eslint-disable-next-line no-console
+      console.log('[ExerciseGradeButton] result', { exerciseName, target, exercises: result.exercises });
+      processResult(result.exercises, target, result.compile_output);
+    } catch (err) {
+      const msg = (err as Error).message || 'Grading failed.';
+      setError(msg);
+      notify({ kind: 'error', title: 'Grading failed', message: msg });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  /** Legacy: submit a full chapter file (string) — used by clipboard /
+   *  modal fallback paths. */
   const submitWith = async (codeToGrade: string) => {
     if (!codeToGrade.trim()) {
-      setError('No code to submit. Copy from the IDE (Ctrl+A, Ctrl+C) and click Submit again.');
-      notify({ kind: 'warning', title: 'No code submitted', message: 'Copy your chapter code from the IDE first (Ctrl+A, Ctrl+C).' });
+      setError('No code to submit.');
+      notify({ kind: 'warning', title: 'No code submitted' });
       setSubmitting(false);
       return;
     }
@@ -103,66 +189,9 @@ export default function ExerciseGradeButton({
         return;
       }
       // eslint-disable-next-line no-console
-      console.log('[ExerciseGradeButton] grading', { exerciseName, codeChars: codeToGrade.length });
+      console.log('[ExerciseGradeButton] grading via content', { exerciseName, codeChars: codeToGrade.length });
       const { all, target, rawError } = await gradeExercise(volumeId, chapterSlug, exerciseName, codeToGrade);
-      // eslint-disable-next-line no-console
-      console.log('[ExerciseGradeButton] result', { exerciseName, target, all, rawError });
-      onResult(all);
-      if (!target) {
-        // Most common cause: the user's submitted code is a partial
-        // snippet (one theorem they wrote) and the grader can't locate
-        // the target Exercise: header in it. Less common: a name
-        // mismatch between the sidebar heading and the DB. Either way,
-        // the actionable advice is "copy the *whole* chapter from the IDE".
-        const looksTruncated = rawError && /not found in/i.test(rawError);
-        notify({
-          kind: 'warning',
-          title: looksTruncated
-            ? `Couldn't find "${exerciseName}" in your code`
-            : `Exercise "${exerciseName}" not recognized`,
-          message: looksTruncated
-            ? 'You probably copied just one theorem instead of the whole chapter. Click in the IDE → Ctrl+A → Ctrl+C → click Submit again.'
-            : (rawError
-              ? `Server output:\n${rawError.slice(0, 400)}`
-              : `The grader didn't return a result. Try the global "Submit & Grade" button at the top.`),
-          duration: 0,
-        });
-        return;
-      }
-      if (target.status === 'completed') {
-        onCompleted?.();
-        notify({
-          kind: 'success',
-          title: `✓ ${exerciseName} — completed!`,
-          message: `${target.points} pt earned${target.feedback ? '. ' + target.feedback : ''}`,
-        });
-        return;
-      }
-      // status === 'compile_error' | 'tampered' | 'not_started'
-      const detail = target.feedback || target.error_detail || target.status;
-      setError(detail);
-      if (target.status === 'not_started') {
-        notify({
-          kind: 'warning',
-          title: `${exerciseName}: still has Admitted / FILL IN HERE`,
-          message: 'Replace the placeholder with your actual proof, then Submit again.',
-          duration: 0,
-        });
-      } else if (target.status === 'tampered') {
-        notify({
-          kind: 'warning',
-          title: `${exerciseName}: original definitions modified`,
-          message: detail,
-          duration: 0,
-        });
-      } else {
-        notify({
-          kind: 'error',
-          title: `${exerciseName}: proof failed to compile`,
-          message: detail,
-          duration: 0,
-        });
-      }
+      processResult(all, target, rawError);
     } catch (err) {
       const msg = (err as Error).message || 'Grading failed.';
       setError(msg);
@@ -176,21 +205,23 @@ export default function ExerciseGradeButton({
     e.preventDefault();
     e.stopPropagation();
     setError(null);
-    // Diagnostic — if the user reports "nothing happens", this proves
-    // the click handler is at least running.
     // eslint-disable-next-line no-console
     console.log('[ExerciseGradeButton] click', { exerciseName });
-    // Visible feedback the moment the click registers — the button
-    // immediately shows the spinner so the user knows *something*
-    // started, even before clipboard / login resolve.
     setSubmitting(true);
-    // Pull focus out of the cross-origin iframe so the document is
-    // focused when we call clipboard.readText() (Chrome refuses
-    // otherwise). Harmless if focus is already on this document.
-    try { window.focus(); } catch { /* no-op */ }
 
-    // Try the clipboard with a hard 1.5s timeout — `readText` can hang
-    // indefinitely on some browser/permission combinations.
+    // Happy path: read every CodeMirror block from the same-origin
+    // iframe and let the server splice + grade.
+    const blocks = readChapterBlocks(iframeRef.current);
+    if (blocks && blocks.length > 0) {
+      // eslint-disable-next-line no-console
+      console.log('[ExerciseGradeButton] read', { count: blocks.length, totalChars: blocks.reduce((n, b) => n + b.length, 0) });
+      submitWithBlocks(blocks);
+      return;
+    }
+
+    // Fallback: clipboard / buffer / modal (legacy behavior — kicks in
+    // if the iframe DOM isn't ready or the proxy went sideways).
+    try { window.focus(); } catch { /* no-op */ }
     let codeToGrade = '';
     try {
       const clip = await withTimeout(navigator.clipboard.readText(), 1500);
@@ -202,17 +233,10 @@ export default function ExerciseGradeButton({
       /* permission denied / no focus — fall through */
     }
     if (!codeToGrade && looksLikeChapter(code)) codeToGrade = code;
-
     if (codeToGrade) {
-      // Fast path: had plausible chapter code in clipboard or buffer —
-      // grade immediately. submitWith will reset submitting in its
-      // finally block.
       submitWith(codeToGrade);
       return;
     }
-    // Slow path: clipboard / buffer don't look like real chapter code
-    // (probably a stale single-line copy). Open the paste modal so the
-    // user can paste the full chapter or load their last submission.
     setSubmitting(false);
     setShowModal(true);
   };
