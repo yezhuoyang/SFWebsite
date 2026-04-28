@@ -61,14 +61,16 @@ def _get_client() -> httpx.AsyncClient:
     return _client
 
 
-# Headers we forward from upstream to the client.
+# Headers we forward from upstream to the client. Note: NOT
+# cache-control — we override that with no-store below so a bad
+# response (e.g. during a deploy mid-rollout) can't get pinned in the
+# browser's disk cache for an hour.
 _FORWARD_RESPONSE_HEADERS = {
     "content-type",
     "content-length",
     "content-encoding",
     "etag",
     "last-modified",
-    "cache-control",
 }
 
 # Headers we drop from the client's request before forwarding upstream
@@ -99,6 +101,11 @@ def _isolation_headers() -> dict[str, str]:
         "Cross-Origin-Opener-Policy": "same-origin",
         "Cross-Origin-Embedder-Policy": "credentialless",
         "Cross-Origin-Resource-Policy": "cross-origin",
+        # Don't let the browser hold on to stale proxy responses across
+        # deploys. The proxy is cheap — an extra request per page load
+        # is fine compared to debugging "why does it still look broken
+        # after I fixed it 20 minutes ago".
+        "Cache-Control": "no-store, must-revalidate",
     }
 
 
