@@ -142,10 +142,47 @@ def _filter_request_headers(req: Request) -> dict[str, str]:
     return out
 
 
+async def _stream_proxy(upstream_path: str, request: Request) -> StreamingResponse:
+    """Stream a single upstream resource through our origin.
+
+    Used by /wa/* and /sfproxy/asset/*. We pass through the raw bytes
+    (no body rewriting) so large WASM files don't sit in memory and
+    so binary content isn't accidentally re-encoded."""
+    client = _get_client()
+    try:
+        req = client.build_request("GET", upstream_path, headers=_filter_request_headers(request))
+        upstream = await client.send(req, stream=True)
+    except httpx.HTTPError as e:
+        logger.warning("sfproxy: upstream fetch failed for %s: %s", upstream_path, e)
+        raise HTTPException(status_code=502, detail=f"Upstream fetch failed: {e}")
+
+    headers = _filter_response_headers(upstream.headers)
+
+    async def body_iter():
+        try:
+            async for chunk in upstream.aiter_raw():
+                yield chunk
+        finally:
+            await upstream.aclose()
+
+    return StreamingResponse(
+        body_iter(),
+        status_code=upstream.status_code,
+        headers=headers,
+        media_type=upstream.headers.get("content-type"),
+    )
+
+
 @router.get("/sfproxy/chapter/{volume_id}/{chapter_name}.html")
 async def chapter_html(volume_id: str, chapter_name: str, request: Request):
-    """Serve the upstream chapter HTML with <base href> injected so
-    relative asset URLs still resolve to upstream."""
+    """Serve the upstream chapter HTML with <base href> pointing at
+    our asset proxy so every relative URL stays at our origin.
+
+    Critical for wacoq: when its JS modules are loaded same-origin,
+    `import.meta.url` is at our origin, and the runtime's URL
+    construction (workers, .symb.json fetches, etc.) all resolve
+    against us — which means they go through `/wa/` and we control
+    CORS / Worker-script-origin restrictions."""
     upstream_path = f"/ext/sf/{volume_id}/full/{chapter_name}.html"
     client = _get_client()
 
@@ -165,57 +202,37 @@ async def chapter_html(volume_id: str, chapter_name: str, request: Request):
         )
 
     html = upstream.text
-    # Inject a <base href> right after <head> so every relative URL in
-    # the page resolves to the upstream chapter directory. Absolute
-    # paths (/wa/..., etc.) still hit our origin, which is why we have
-    # the /wa/ route below.
-    base_url = f"{UPSTREAM}/ext/sf/{volume_id}/full/"
+    # Point the base at our asset proxy so common/jscoq.js, CSS, etc.
+    # all load through us — this is what makes wacoq's
+    # import.meta.url-based URL construction stay same-origin.
+    base_url = f"/sfproxy/asset/{volume_id}/"
     base_tag = f'<base href="{base_url}" />'
     if "<head>" in html:
         html = html.replace("<head>", f"<head>\n{base_tag}", 1)
     elif "<HEAD>" in html:
         html = html.replace("<HEAD>", f"<HEAD>\n{base_tag}", 1)
     else:
-        # Fallback: prepend if no <head> tag (shouldn't happen for SF).
         html = base_tag + html
 
     headers = _filter_response_headers(upstream.headers)
-    # Recompute content-length since we modified the body.
     headers.pop("content-length", None)
     headers.pop("content-encoding", None)
     return Response(content=html, media_type="text/html; charset=utf-8", headers=headers)
 
 
+@router.get("/sfproxy/asset/{volume_id}/{path:path}")
+async def chapter_asset(volume_id: str, path: str, request: Request):
+    """Proxy any chapter-relative asset (CSS, JS, fonts, images, etc.)
+    so every URL resolved via the chapter's <base href> stays at our
+    origin. The browser treats wacoq's JS modules as same-origin code,
+    which means `new Worker(...)` and CORS-restricted fetches work."""
+    return await _stream_proxy(f"/ext/sf/{volume_id}/full/{path}", request)
+
+
 @router.get("/wa/{path:path}")
-async def wacoq_proxy(path: str, request: Request):
-    """Proxy /wa/* to upstream. wacoq's modules use absolute /wa/...
-    paths that resolve against our origin once the iframe doc is
-    same-origin with us; without this, every wacoq import 404s."""
-    upstream_path = f"/wa/{path}"
-    client = _get_client()
-
-    try:
-        # Stream the response so large WASM blobs don't sit in memory.
-        # We have to issue a `build_request` + `send(stream=True)` to
-        # keep the streaming context open through the response.
-        req = client.build_request("GET", upstream_path, headers=_filter_request_headers(request))
-        upstream = await client.send(req, stream=True)
-    except httpx.HTTPError as e:
-        logger.warning("sfproxy /wa: upstream fetch failed: %s", e)
-        raise HTTPException(status_code=502, detail=f"Upstream fetch failed: {e}")
-
-    headers = _filter_response_headers(upstream.headers)
-
-    async def body_iter():
-        try:
-            async for chunk in upstream.aiter_raw():
-                yield chunk
-        finally:
-            await upstream.aclose()
-
-    return StreamingResponse(
-        body_iter(),
-        status_code=upstream.status_code,
-        headers=headers,
-        media_type=upstream.headers.get("content-type"),
-    )
+async def wacoq_runtime(path: str, request: Request):
+    """Proxy /wa/*. wacoq's modules use absolute /wa/... paths that
+    resolve against our origin once the chapter doc is same-origin;
+    without this, wacoq's package fetches and worker construction
+    can't find their resources."""
+    return await _stream_proxy(f"/wa/{path}", request)
