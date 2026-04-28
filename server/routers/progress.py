@@ -49,7 +49,19 @@ async def chapter_progress(
         )
     )).scalar_one_or_none()
     if chapter is None:
-        raise HTTPException(status_code=404, detail=f"Unknown chapter: {volume_id}/{chapter_name}")
+        # Some pages (Preface, toc, index, etc.) have no exercises and
+        # aren't seeded — return an empty progress envelope rather than
+        # 404'ing, so the client's progress bar / sidebar just shows
+        # "0 / 0 exercises" without surfacing a network error.
+        return {
+            "volume_id": volume_id,
+            "chapter_name": chapter_name,
+            "exercises": [],
+            "completed": 0,
+            "total": 0,
+            "points_total": 0.0,
+            "points_earned": 0.0,
+        }
 
     # Pull all exercises in this chapter + this user's progress for each.
     rows = (await session.execute(
