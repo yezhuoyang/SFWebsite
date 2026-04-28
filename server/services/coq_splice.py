@@ -1,17 +1,23 @@
-"""Splice user-edited Coq code blocks back into the original chapter .v file.
+"""Splice user-edited Coq code blocks back into a chapter .v file.
 
-The same-origin SF iframe lets the React parent read each CodeMirror
-instance, but each editor only contains *one* code region (the text
-between two `(** ... *)` doc comments). To grade, we have to put those
-regions back into the chapter file alongside the prose comments and
-exercise headers — coqdoc structure preserved.
+Two paths:
 
-Strategy: parse the original .v file (`<chapter>.v.orig`, falling back
-to `.v` if no .orig exists) into alternating code / doc-comment
-segments. Replace each non-empty code segment with the user-supplied
-block in order. The number of non-empty code segments must match the
-number of blocks the client sends; if it doesn't, we raise so the
-caller can surface a clear error.
+  1. **Splice into upstream HTML** (preferred). Our .v.orig may be a
+     different revision than the source coqdoc rendered into upstream's
+     HTML — variable renames, added exercises, etc. — and any drift
+     misaligns block indices and produces garbage Coq. Driving the
+     reconstruction from the upstream HTML guarantees the block count
+     matches the iframe's CodeMirror instances exactly (one
+     `<div class="code">` per CodeMirror, in document order). We
+     rebuild the .v as alternating prose comments (from `<div class="doc">`
+     extracted text) and user code (from each CodeMirror's value).
+     This is what the same-origin grade flow uses.
+
+  2. **Splice into a local .v.orig** (legacy). For chapters where we
+     don't have upstream HTML available, fall back to splitting our
+     local .v.orig into `(** ... *)` doc comments vs code segments
+     and replacing the code segments. Brittle when revisions drift,
+     but kept around for environments without upstream access.
 
 Coqdoc treats *only* `(** ... *)` (double-star) as a doc comment;
 regular `(* ... *)` comments stay inside code segments. Both can be
@@ -20,7 +26,10 @@ nested.
 
 from __future__ import annotations
 
+import html as html_module
+import re
 from dataclasses import dataclass
+from html.parser import HTMLParser
 
 
 @dataclass
@@ -102,6 +111,129 @@ def is_substantive_code(text: str) -> bool:
 class SpliceError(ValueError):
     """Raised when the number of user-supplied blocks doesn't match the
     number of substantive code segments in the chapter source."""
+
+
+class _ChapterHTMLParser(HTMLParser):
+    """Walk a coqdoc-rendered chapter HTML and emit (kind, text)
+    tuples in document order, where kind is 'doc' or 'code'.
+
+    coqdoc HTML structure:
+      <div id="main">
+        <div class="doc"> ... prose, may contain nested divs ... </div>
+        <div class="code"> ... Coq source, with <span> + <br/> ... </div>
+        ...
+      </div>
+
+    We track div depth so nested `<div class="paragraph">` inside a doc
+    block doesn't terminate the doc block early."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.segments: list[tuple[str, str]] = []
+        self._kind: str | None = None       # 'doc' / 'code' / None
+        self._open_depth: int = 0
+        self._depth: int = 0
+        self._buf: list[str] = []
+        self._skip_until_depth: int | None = None  # for nested unwanted blocks
+
+    def handle_starttag(self, tag: str, attrs):  # type: ignore[override]
+        if tag == 'br':
+            if self._kind is not None:
+                self._buf.append('\n')
+            return
+        if tag == 'div':
+            self._depth += 1
+            cls = dict(attrs).get('class', '')
+            classes = cls.split()
+            if self._kind is None:
+                if 'doc' in classes:
+                    self._kind = 'doc'
+                    self._open_depth = self._depth
+                    self._buf = []
+                elif 'code' in classes:
+                    self._kind = 'code'
+                    self._open_depth = self._depth
+                    self._buf = []
+
+    def handle_endtag(self, tag: str):  # type: ignore[override]
+        if tag != 'div':
+            return
+        if self._kind is not None and self._depth == self._open_depth:
+            self.segments.append((self._kind, ''.join(self._buf)))
+            self._kind = None
+            self._buf = []
+        self._depth -= 1
+
+    def handle_data(self, data: str):  # type: ignore[override]
+        if self._kind is not None:
+            self._buf.append(data)
+
+    def handle_entityref(self, name: str):  # type: ignore[override]
+        if self._kind is not None:
+            self._buf.append(html_module.unescape(f'&{name};'))
+
+    def handle_charref(self, name: str):  # type: ignore[override]
+        if self._kind is not None:
+            self._buf.append(html_module.unescape(f'&#{name};'))
+
+
+def extract_chapter_segments(html_text: str) -> list[tuple[str, str]]:
+    """Parse the upstream chapter HTML into ('doc', text) / ('code', text)
+    segments in document order. Only segments inside the page's main
+    section are kept."""
+    # Limit parsing to <div id="main"> if present (skips header/menu).
+    main_match = re.search(
+        r'<div id="main"[^>]*>(.*)<!--\s*/main\s*-->|<div id="main"[^>]*>(.*?)</div>\s*<div id="footer"',
+        html_text,
+        re.DOTALL,
+    )
+    if main_match:
+        body = main_match.group(1) or main_match.group(2) or html_text
+    else:
+        # Fallback: parse the entire body.
+        body = html_text
+    parser = _ChapterHTMLParser()
+    parser.feed(body)
+    parser.close()
+    return parser.segments
+
+
+def _wrap_as_doc_comment(prose: str) -> str:
+    """Turn extracted prose text into a Coq `(** ... *)` doc comment.
+    Escape any `*)` inside (would close the comment prematurely)."""
+    safe = prose.replace('*)', '* )')
+    return f'(**\n{safe}\n*)'
+
+
+def reassemble_v_from_html(html_text: str, user_blocks: list[str]) -> str:
+    """Build a Coq .v source by walking the upstream chapter HTML and
+    substituting each `<div class="code">` with the corresponding
+    entry from `user_blocks` (in document order). `<div class="doc">`
+    contents are wrapped as `(** ... *)` so the grader still sees the
+    Exercise: headers it needs.
+
+    Raises SpliceError if user_blocks count doesn't match the HTML's
+    code-block count (these MUST be 1:1 — they come from the same
+    iframe DOM)."""
+    segments = extract_chapter_segments(html_text)
+    code_count = sum(1 for k, _ in segments if k == 'code')
+    if code_count != len(user_blocks):
+        raise SpliceError(
+            f"Block count mismatch: client sent {len(user_blocks)} block(s) but "
+            f"upstream HTML has {code_count} code region(s). The iframe DOM "
+            f"and the proxy HTML have diverged — try reloading the chapter."
+        )
+    out: list[str] = []
+    bi = 0
+    for kind, text in segments:
+        if kind == 'doc':
+            out.append(_wrap_as_doc_comment(text))
+        else:
+            out.append('\n')
+            out.append(user_blocks[bi])
+            out.append('\n')
+            bi += 1
+    return '\n'.join(out)
 
 
 def splice_blocks(orig: str, blocks: list[str]) -> str:

@@ -376,16 +376,40 @@ async def grade_from_blocks(
     orig_file = Path(vol["path"]) / f"{chapter_name}.v.orig"
     if not v_file.exists():
         raise HTTPException(status_code=404, detail=f"File not found: {chapter_name}.v")
-    # Splice into the original chapter source if we have a backup,
-    # otherwise the current .v (which on first run is the original).
-    template_file = orig_file if orig_file.exists() else v_file
-    template_text = template_file.read_text(encoding="utf-8", errors="replace")
 
-    from server.services.coq_splice import splice_blocks, SpliceError
+    from server.services.coq_splice import (
+        splice_blocks, reassemble_v_from_html, SpliceError,
+    )
+
+    # Preferred path: rebuild the .v from the same upstream chapter HTML
+    # the iframe is rendered from. That guarantees block alignment 1:1
+    # with the user's CodeMirror instances even if our local .v.orig has
+    # drifted from upstream's revision.
+    content: str | None = None
     try:
-        content = splice_blocks(template_text, [str(b) for b in blocks])
+        import httpx
+        from server.routers.sf_proxy import UPSTREAM
+        upstream_path = f"{UPSTREAM}/ext/sf/{volume_id}/full/{chapter_name}.html"
+        async with httpx.AsyncClient(timeout=30.0) as fc:
+            r = await fc.get(upstream_path, headers={"Accept-Encoding": "gzip, deflate"})
+        if r.status_code == 200:
+            content = reassemble_v_from_html(r.text, [str(b) for b in blocks])
     except SpliceError as e:
         raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.warning("upstream HTML fetch for splice failed: %s", e)
+        content = None
+
+    # Fallback path: splice into our local .v.orig. Used when upstream
+    # is unreachable. Brittle if revisions have drifted, but better
+    # than failing.
+    if content is None:
+        template_file = orig_file if orig_file.exists() else v_file
+        template_text = template_file.read_text(encoding="utf-8", errors="replace")
+        try:
+            content = splice_blocks(template_text, [str(b) for b in blocks])
+        except SpliceError as e:
+            raise HTTPException(status_code=422, detail=str(e))
 
     return await _save_and_grade_internal(
         volume_id, chapter_name, content, target_exercise, user, session,
