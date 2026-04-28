@@ -74,6 +74,7 @@ export default function ExerciseGradeButton({
   const submitWith = async (codeToGrade: string) => {
     if (!codeToGrade.trim()) {
       setError('No code to submit. Copy from the IDE (Ctrl+A, Ctrl+C) and click Submit again.');
+      setSubmitting(false);
       return;
     }
     setError(null);
@@ -101,38 +102,42 @@ export default function ExerciseGradeButton({
     e.preventDefault();
     e.stopPropagation();
     setError(null);
+    // Diagnostic — if the user reports "nothing happens", this proves
+    // the click handler is at least running.
+    // eslint-disable-next-line no-console
+    console.log('[ExerciseGradeButton] click', { exerciseName });
+    // Visible feedback the moment the click registers — the button
+    // immediately shows the spinner so the user knows *something*
+    // started, even before clipboard / login resolve.
+    setSubmitting(true);
     // Pull focus out of the cross-origin iframe so the document is
     // focused when we call clipboard.readText() (Chrome refuses
     // otherwise). Harmless if focus is already on this document.
     try { window.focus(); } catch { /* no-op */ }
 
     // Try the clipboard with a hard 1.5s timeout — `readText` can hang
-    // indefinitely on some browser/permission combinations, which would
-    // make the button feel broken.
+    // indefinitely on some browser/permission combinations.
     let codeToGrade = '';
-    let clipboardErr: unknown = null;
     try {
       const clip = await withTimeout(navigator.clipboard.readText(), 1500);
       if (clip && clip.trim()) {
         codeToGrade = clip;
         setCode(clip);
-      } else if (clip === null) {
-        clipboardErr = new Error('clipboard read timed out');
       }
-    } catch (err) {
-      clipboardErr = err;
+    } catch {
+      /* permission denied / no focus — fall through */
     }
     if (!codeToGrade.trim()) codeToGrade = code;
 
     if (codeToGrade.trim()) {
-      // Got code from clipboard or buffer — grade immediately.
+      // Fast path: had code in clipboard or buffer — grade immediately.
+      // submitWith will reset submitting in its finally block.
       submitWith(codeToGrade);
       return;
     }
-    // Last resort: open the paste modal. We open it whether or not
-    // there was a clipboard error — the user always sees a clear
-    // affordance to paste their code.
-    void clipboardErr;
+    // Slow path: open the paste modal so the user can paste manually
+    // or load their last submission from the server.
+    setSubmitting(false);
     setShowModal(true);
   };
 
@@ -194,6 +199,8 @@ export default function ExerciseGradeButton({
         open={showModal}
         initial={code}
         title={`Grade exercise: ${exerciseName}`}
+        volumeId={volumeId}
+        chapterSlug={chapterSlug}
         onCancel={() => setShowModal(false)}
         onSubmit={pasted => {
           setShowModal(false);

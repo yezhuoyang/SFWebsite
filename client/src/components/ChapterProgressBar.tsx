@@ -54,11 +54,13 @@ export default function ChapterProgressBar({ progress, volumeId, chapterSlug, on
         kind: 'error',
         message: 'No code to submit. Copy from the IDE (Ctrl+A, Ctrl+C) and click Submit again.',
       });
+      setSubmitting(false);
       return;
     }
     try {
       await requireLogin('Sign in to submit your solution.');
     } catch {
+      setSubmitting(false);
       return;
     }
     setSubmitting(true);
@@ -95,7 +97,10 @@ export default function ChapterProgressBar({ progress, volumeId, chapterSlug, on
   };
 
   const handleSubmit = async () => {
+    // eslint-disable-next-line no-console
+    console.log('[ChapterProgressBar] Submit & Grade click');
     setFeedback(null);
+    setSubmitting(true);
     try { window.focus(); } catch { /* no-op */ }
 
     let codeToGrade = '';
@@ -114,6 +119,7 @@ export default function ChapterProgressBar({ progress, volumeId, chapterSlug, on
       submitWith(codeToGrade);
       return;
     }
+    setSubmitting(false);
     setShowModal(true);
   };
 
@@ -190,6 +196,8 @@ export default function ChapterProgressBar({ progress, volumeId, chapterSlug, on
         open={showModal}
         initial={code}
         title="Grade entire chapter"
+        volumeId={volumeId}
+        chapterSlug={chapterSlug}
         onCancel={() => setShowModal(false)}
         onSubmit={pasted => {
           setShowModal(false);
