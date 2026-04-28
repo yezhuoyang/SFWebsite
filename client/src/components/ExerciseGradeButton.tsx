@@ -5,18 +5,27 @@
  * the server's per-exercise compile-and-grade flow (truncate-at-end-
  * marker + Admitted / tamper detection).
  *
- * Reads the system clipboard on click (the click is a user gesture so
- * the browser allows `clipboard.readText()`), so the workflow is
- * "edit in iframe IDE → Ctrl+A → Ctrl+C → click Submit".
+ * Code-resolution flow on click:
+ *   1. window.focus() — pull focus out of the cross-origin iframe so
+ *      the clipboard API will let us read.
+ *   2. clipboard.readText() with a 1500ms timeout — workflow is
+ *      "edit in iframe IDE → Ctrl+A → Ctrl+C → click Submit".
+ *   3. Persisted chapter buffer (in case clipboard is empty / denied
+ *      but we already cached code from a previous submission).
+ *   4. CodePasteModal — last-resort textarea modal so the button
+ *      always *does something* visible when clicked, even when
+ *      clipboard permission is denied.
  *
  * Layout note: this returns a fragment of (button, optional feedback
- * line). The parent row uses `flex-wrap`, and the feedback line uses
- * `basis-full` so it drops to its own line beneath the row when set.
+ * line, optional modal). The parent row uses `flex-wrap`, and the
+ * feedback line uses `basis-full` so it drops to its own line beneath
+ * the row when set.
  */
 
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { gradeExercise, type ExerciseGradingResult } from '../coq/exerciseGrading';
+import CodePasteModal from './CodePasteModal';
 
 interface Props {
   volumeId: string;
@@ -36,6 +45,14 @@ interface Props {
   onCompleted?: () => void;
 }
 
+/** Race a promise against a timeout. Returns null if the timeout wins. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    p,
+    new Promise<null>(resolve => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
 export default function ExerciseGradeButton({
   volumeId,
   chapterSlug,
@@ -49,52 +66,19 @@ export default function ExerciseGradeButton({
   const { requireLogin } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
   const status = result?.status;
 
-  const handleGrade = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  /** Run the actual grade once we know what code to submit. */
+  const submitWith = async (codeToGrade: string) => {
+    if (!codeToGrade.trim()) {
+      setError('No code to submit. Copy from the IDE (Ctrl+A, Ctrl+C) and click Submit again.');
+      return;
+    }
     setError(null);
-    // Flip submitting on immediately so the user gets visible feedback
-    // ("…" spinner) the moment they click — even before the clipboard /
-    // login dance resolves.
     setSubmitting(true);
     try {
-      // Resolve the code to grade. Three strategies in order:
-      //   1. System clipboard (the click is a user gesture, so most
-      //      modern browsers allow this).
-      //   2. The persisted chapter buffer (in case a previous submission
-      //      already cached it).
-      //   3. A native window.prompt() — last-resort fallback that works
-      //      even when clipboard permission is denied / unsupported, so
-      //      the button always *does something*.
-      let codeToGrade = '';
-      let clipboardError: unknown = null;
-      try {
-        const clip = await navigator.clipboard.readText();
-        if (clip.trim()) {
-          codeToGrade = clip;
-          setCode(clip);
-        }
-      } catch (err) {
-        clipboardError = err;
-      }
-      if (!codeToGrade.trim()) codeToGrade = code;
-      if (!codeToGrade.trim()) {
-        const promptMsg = clipboardError
-          ? "Couldn't read clipboard (permission denied?). Paste your chapter code below:"
-          : 'Paste your full chapter code below (or copy from the IDE first with Ctrl+A, Ctrl+C, then click Submit again):';
-        const pasted = window.prompt(promptMsg, '');
-        if (pasted && pasted.trim()) {
-          codeToGrade = pasted;
-          setCode(pasted);
-        }
-      }
-      if (!codeToGrade.trim()) {
-        setError('No code to submit. Copy from the IDE (Ctrl+A, Ctrl+C) and click Submit again.');
-        return;
-      }
       try {
         await requireLogin('Sign in to submit exercises.');
       } catch {
@@ -111,6 +95,45 @@ export default function ExerciseGradeButton({
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleGrade = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setError(null);
+    // Pull focus out of the cross-origin iframe so the document is
+    // focused when we call clipboard.readText() (Chrome refuses
+    // otherwise). Harmless if focus is already on this document.
+    try { window.focus(); } catch { /* no-op */ }
+
+    // Try the clipboard with a hard 1.5s timeout — `readText` can hang
+    // indefinitely on some browser/permission combinations, which would
+    // make the button feel broken.
+    let codeToGrade = '';
+    let clipboardErr: unknown = null;
+    try {
+      const clip = await withTimeout(navigator.clipboard.readText(), 1500);
+      if (clip && clip.trim()) {
+        codeToGrade = clip;
+        setCode(clip);
+      } else if (clip === null) {
+        clipboardErr = new Error('clipboard read timed out');
+      }
+    } catch (err) {
+      clipboardErr = err;
+    }
+    if (!codeToGrade.trim()) codeToGrade = code;
+
+    if (codeToGrade.trim()) {
+      // Got code from clipboard or buffer — grade immediately.
+      submitWith(codeToGrade);
+      return;
+    }
+    // Last resort: open the paste modal. We open it whether or not
+    // there was a clipboard error — the user always sees a clear
+    // affordance to paste their code.
+    void clipboardErr;
+    setShowModal(true);
   };
 
   // Visual styling per status. Default (unsubmitted) is a prominent
@@ -167,6 +190,19 @@ export default function ExerciseGradeButton({
           </button>
         </p>
       )}
+      <CodePasteModal
+        open={showModal}
+        initial={code}
+        title={`Grade exercise: ${exerciseName}`}
+        onCancel={() => setShowModal(false)}
+        onSubmit={pasted => {
+          setShowModal(false);
+          if (pasted.trim()) {
+            setCode(pasted);
+            submitWith(pasted);
+          }
+        }}
+      />
     </>
   );
 }

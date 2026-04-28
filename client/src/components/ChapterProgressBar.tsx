@@ -5,16 +5,19 @@
  *  1. Show the user's per-exercise progress (X / Y exercises, points, %).
  *  2. Host the prominent **Submit & Grade** button — the obvious thing
  *     the user clicks after editing their proof in the iframe IDE.
- *     The button reads from the system clipboard (so the workflow is
- *     "click in iframe → Ctrl+A → Ctrl+C → Submit") and submits the
- *     whole chapter without a `target_exercise`, letting the server
- *     grade every exercise.
+ *
+ * Code-resolution flow on click matches ExerciseGradeButton:
+ *   1. window.focus() — pull focus out of the cross-origin iframe.
+ *   2. clipboard.readText() with a 1500ms timeout.
+ *   3. Persisted chapter buffer.
+ *   4. CodePasteModal — last-resort textarea modal.
  */
 
 import { useState } from 'react';
 import { saveChapterFile, type ChapterProgress, type ExerciseGrade } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { useChapterCodeBuffer, useExerciseGrades } from '../coq/exerciseGrading';
+import CodePasteModal from './CodePasteModal';
 
 interface Props {
   progress: ChapterProgress | null;
@@ -30,56 +33,36 @@ interface SubmitFeedback {
   message: string;
 }
 
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    p,
+    new Promise<null>(resolve => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
 export default function ChapterProgressBar({ progress, volumeId, chapterSlug, onGraded }: Props) {
   const { requireLogin } = useAuth();
   const { code, setCode } = useChapterCodeBuffer(volumeId, chapterSlug);
   const { recordGrade } = useExerciseGrades(volumeId, chapterSlug);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<SubmitFeedback | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
-  const handleSubmit = async () => {
-    setFeedback(null);
-    // Flip the spinner on immediately so the user gets visible feedback
-    // the moment they click — before the clipboard / login dance resolves.
+  const submitWith = async (codeToGrade: string) => {
+    if (!codeToGrade.trim()) {
+      setFeedback({
+        kind: 'error',
+        message: 'No code to submit. Copy from the IDE (Ctrl+A, Ctrl+C) and click Submit again.',
+      });
+      return;
+    }
+    try {
+      await requireLogin('Sign in to submit your solution.');
+    } catch {
+      return;
+    }
     setSubmitting(true);
     try {
-      // Resolve the code in three strategies (clipboard → buffer → prompt)
-      // so the button always *does something*, even when clipboard
-      // permission is denied or unsupported.
-      let codeToGrade = '';
-      let clipboardError: unknown = null;
-      try {
-        const clip = await navigator.clipboard.readText();
-        if (clip.trim()) {
-          codeToGrade = clip;
-          setCode(clip);
-        }
-      } catch (err) {
-        clipboardError = err;
-      }
-      if (!codeToGrade.trim()) codeToGrade = code;
-      if (!codeToGrade.trim()) {
-        const promptMsg = clipboardError
-          ? "Couldn't read clipboard (permission denied?). Paste your full chapter code below:"
-          : 'Paste your full chapter code below (or copy from the IDE first with Ctrl+A, Ctrl+C, then Submit again):';
-        const pasted = window.prompt(promptMsg, '');
-        if (pasted && pasted.trim()) {
-          codeToGrade = pasted;
-          setCode(pasted);
-        }
-      }
-      if (!codeToGrade.trim()) {
-        setFeedback({
-          kind: 'error',
-          message: 'No code to submit. Copy from the IDE (Ctrl+A, Ctrl+C) and click Submit again.',
-        });
-        return;
-      }
-      try {
-        await requireLogin('Sign in to submit your solution.');
-      } catch {
-        return;
-      }
       const result = await saveChapterFile(volumeId, chapterSlug, codeToGrade);
       result.exercises.forEach((ex: ExerciseGrade) => recordGrade(ex));
       onGraded();
@@ -109,6 +92,29 @@ export default function ChapterProgressBar({ progress, volumeId, chapterSlug, on
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = async () => {
+    setFeedback(null);
+    try { window.focus(); } catch { /* no-op */ }
+
+    let codeToGrade = '';
+    try {
+      const clip = await withTimeout(navigator.clipboard.readText(), 1500);
+      if (clip && clip.trim()) {
+        codeToGrade = clip;
+        setCode(clip);
+      }
+    } catch {
+      /* permission denied — fall through */
+    }
+    if (!codeToGrade.trim()) codeToGrade = code;
+
+    if (codeToGrade.trim()) {
+      submitWith(codeToGrade);
+      return;
+    }
+    setShowModal(true);
   };
 
   const pct = progress && progress.total > 0
@@ -180,6 +186,19 @@ export default function ChapterProgressBar({ progress, volumeId, chapterSlug, on
           </button>
         </div>
       )}
+      <CodePasteModal
+        open={showModal}
+        initial={code}
+        title="Grade entire chapter"
+        onCancel={() => setShowModal(false)}
+        onSubmit={pasted => {
+          setShowModal(false);
+          if (pasted.trim()) {
+            setCode(pasted);
+            submitWith(pasted);
+          }
+        }}
+      />
     </div>
   );
 }
