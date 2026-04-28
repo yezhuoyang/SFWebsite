@@ -228,6 +228,20 @@ export default function ChapterTOC({ volumeId, currentSlug, iframeRef, serverPro
               // (used for inline error feedback before the next refetch).
               const effectiveStatus = serverEx?.status ?? localGrade?.status;
               const isCompleted = effectiveStatus === 'completed';
+              // SF has many "Exercise:" headings that are manual-grade
+              // (paragraph-form answers, not Coq proofs to compile —
+              // e.g. "triples", "assertions", "valid_triples" in PLF/Hoare).
+              // The grader's DB only contains theorem-style exercises, so
+              // showing Submit on the manual ones leads to a confusing
+              // "Exercise not recognized" response. Render Submit only
+              // when the server knows the exercise. While progress is
+              // still loading (serverProgress === null) we render the
+              // button optimistically — hiding it later would feel
+              // jumpy.
+              const isAutoGradable = exName != null && (
+                serverProgress == null || serverStatusByName.has(exName)
+              );
+              const isManualOnly = entry.isExercise && exName != null && serverProgress != null && !serverStatusByName.has(exName);
               return (
                 <li key={`${entry.anchor}-${i}`}>
                   <div
@@ -254,7 +268,15 @@ export default function ChapterTOC({ volumeId, currentSlug, iframeRef, serverPro
                         {entry.text}
                       </span>
                     </button>
-                    {exName && (
+                    {isManualOnly && (
+                      <span
+                        className="shrink-0 text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded"
+                        title="Manual-grade exercise (English-language answer or unsupported by the auto-grader)"
+                      >
+                        manual
+                      </span>
+                    )}
+                    {isAutoGradable && exName && (
                       <ExerciseGradeButton
                         volumeId={volumeId}
                         chapterSlug={currentSlug}
