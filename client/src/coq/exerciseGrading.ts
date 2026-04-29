@@ -27,8 +27,15 @@ function bufferKey(volumeId: string, slug: string): string {
   return `sf:codeBuffer:${volumeId}:${slug}`;
 }
 
+// Bump this when the splice pipeline changes in ways that make old
+// localStorage blocks bad to restore (e.g. previous splice produced
+// content that doesn't match the iframe's current CodeMirrors). The
+// key is part of the localStorage path, so an older version's blocks
+// stay parked but never get loaded again.
+const BLOCKS_SCHEMA_VERSION = 'v3';
+
 function blocksKey(volumeId: string, slug: string): string {
-  return `sf:blocks:${volumeId}:${slug}`;
+  return `sf:blocks:${BLOCKS_SCHEMA_VERSION}:${volumeId}:${slug}`;
 }
 
 /** Persistent per-chapter code buffer. The textarea reads/writes this;
