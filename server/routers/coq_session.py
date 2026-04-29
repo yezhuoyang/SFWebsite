@@ -175,31 +175,48 @@ async def coq_websocket(ws: WebSocket, session_id: str):
 # --- File and block operations (unchanged) ---
 
 @router.get("/coq/file/{volume_id}/{chapter_name}")
-async def get_chapter_file(volume_id: str, chapter_name: str):
+async def get_chapter_file(
+    volume_id: str, chapter_name: str,
+    user: "User | None" = Depends(get_optional_user),
+):
+    """Read the user's last-saved chapter file. Returns the per-user
+    workspace copy when authenticated, falling back to the unmodified
+    global template for anonymous visitors."""
     if volume_id not in VOLUMES:
         raise HTTPException(status_code=404, detail=f"Unknown volume: {volume_id}")
-    vol = VOLUMES[volume_id]
-    v_file = Path(vol["path"]) / f"{chapter_name}.v"
+    user_id = user.id if user else None
+    # Per-user workspace (or global template for anonymous).
+    vp = _user_vol_path(user_id, volume_id) if user_id else Path(VOLUMES[volume_id]["path"])
+    v_file = vp / f"{chapter_name}.v"
     if not v_file.exists():
-        raise HTTPException(status_code=404, detail=f"File not found: {chapter_name}.v")
+        # Fallback to global template — useful when a logged-in user
+        # has touched some chapters but not this one yet.
+        global_v = Path(VOLUMES[volume_id]["path"]) / f"{chapter_name}.v"
+        if not global_v.exists():
+            raise HTTPException(status_code=404, detail=f"File not found: {chapter_name}.v")
+        v_file = global_v
     content = v_file.read_text(encoding="utf-8", errors="replace")
     return {"content": content, "filename": f"{chapter_name}.v"}
 
 
 @router.get("/coq/file/{volume_id}/{chapter_name}/blocks")
-async def get_chapter_blocks(volume_id: str, chapter_name: str):
-    """Extract the user's last-submitted code blocks from the saved
-    chapter .v file. Walks the same `(** ... *)` / code segmentation
-    the splice uses, returning each substantive code region in
-    document order.
-
-    The client uses this to auto-restore solutions when localStorage
-    is empty (e.g. signing in from a new browser, or after clearing
-    site data). Returns 404 with empty blocks if no .v exists yet."""
+async def get_chapter_blocks(
+    volume_id: str, chapter_name: str,
+    user: "User | None" = Depends(get_optional_user),
+):
+    """Extract the current user's last-submitted code blocks from the
+    saved chapter .v in their workspace. Returns empty blocks for
+    anonymous visitors, or for users who haven't submitted this
+    chapter yet — that way the iframe falls back to the upstream
+    default text."""
     if volume_id not in VOLUMES:
         raise HTTPException(status_code=404, detail=f"Unknown volume: {volume_id}")
-    vol = VOLUMES[volume_id]
-    v_file = Path(vol["path"]) / f"{chapter_name}.v"
+    user_id = user.id if user else None
+    if user_id is None:
+        # Don't expose any other user's saved file to anonymous visitors.
+        return {"blocks": [], "filename": f"{chapter_name}.v"}
+    vp = _user_vol_path(user_id, volume_id)
+    v_file = vp / f"{chapter_name}.v"
     if not v_file.exists():
         return {"blocks": [], "filename": f"{chapter_name}.v"}
     text = v_file.read_text(encoding="utf-8", errors="replace")
@@ -244,6 +261,33 @@ async def get_chapter_imports(volume_id: str, chapter_name: str):
     }
 
 
+def _user_vol_path(user_id: int | None, volume_id: str) -> Path:
+    """Per-user volume directory. Each user grades against their own
+    copy of the chapter files so submissions don't leak between users.
+    Lazily initialized: copies the global vol's .v / .vo / .glob /
+    Makefile / _CoqProject the first time the user touches it.
+    Anonymous users (no auth) fall back to the global vol — they
+    can't persist anything anyway."""
+    from server.config import WORKSPACES_DIR
+    vol = VOLUMES[volume_id]
+    if user_id is None:
+        return Path(vol["path"])
+    user_vol = WORKSPACES_DIR / str(user_id) / volume_id
+    if user_vol.exists():
+        return user_vol
+    user_vol.mkdir(parents=True, exist_ok=True)
+    src = Path(vol["path"])
+    if src.exists():
+        import shutil
+        for f in src.iterdir():
+            if f.is_file() and (
+                f.suffix in (".v", ".vo", ".glob", ".vos", ".vok")
+                or f.name in ("Makefile", "Makefile.coq", "_CoqProject", "LICENSE")
+            ):
+                shutil.copy2(str(f), str(user_vol / f.name))
+    return user_vol
+
+
 async def _save_and_grade_internal(
     volume_id: str, chapter_name: str, content: str,
     target_exercise: str | None,
@@ -258,13 +302,21 @@ async def _save_and_grade_internal(
         raise HTTPException(status_code=404, detail=f"Unknown volume: {volume_id}")
     if not content or len(content.strip()) < 10:
         raise HTTPException(status_code=400, detail="Refusing to save empty or near-empty content")
-    vol = VOLUMES[volume_id]
-    v_file = Path(vol["path"]) / f"{chapter_name}.v"
+    user_id = user.id if user else None
+    vp = _user_vol_path(user_id, volume_id)
+    v_file = vp / f"{chapter_name}.v"
     if not v_file.exists():
-        raise HTTPException(status_code=404, detail=f"File not found: {chapter_name}.v")
+        # Workspace was missing this chapter — fall back to the global
+        # template if it exists so we have something to save against.
+        global_v = Path(VOLUMES[volume_id]["path"]) / f"{chapter_name}.v"
+        if global_v.exists():
+            import shutil
+            shutil.copy2(str(global_v), str(v_file))
+        else:
+            raise HTTPException(status_code=404, detail=f"File not found: {chapter_name}.v")
 
     # Create .orig backup on first save (for reset + splice).
-    orig_file = Path(vol["path"]) / f"{chapter_name}.v.orig"
+    orig_file = vp / f"{chapter_name}.v.orig"
     if not orig_file.exists():
         import shutil
         shutil.copy2(str(v_file), str(orig_file))
@@ -276,11 +328,10 @@ async def _save_and_grade_internal(
     from server.services.progress_tracker import update_progress_from_grade
 
     if target_exercise:
-        grade_result = await full_grade_exercise(volume_id, chapter_name, target_exercise)
+        grade_result = await full_grade_exercise(volume_id, chapter_name, target_exercise, vp)
     else:
-        grade_result = await full_grade(volume_id, chapter_name)
+        grade_result = await full_grade(volume_id, chapter_name, vp)
 
-    user_id = user.id if user else None
     await update_progress_from_grade(session, grade_result, user_id)
 
     exercises = [
@@ -321,61 +372,11 @@ async def save_chapter_file(
                           for just that one. This is what the per-exercise
                           "Submit & Grade" button uses.
     """
-    if volume_id not in VOLUMES:
-        raise HTTPException(status_code=404, detail=f"Unknown volume: {volume_id}")
     content = body.get("content", "")
     target_exercise = body.get("target_exercise")
-    if not content or len(content.strip()) < 10:
-        raise HTTPException(status_code=400, detail="Refusing to save empty or near-empty content")
-    vol = VOLUMES[volume_id]
-    v_file = Path(vol["path"]) / f"{chapter_name}.v"
-    if not v_file.exists():
-        raise HTTPException(status_code=404, detail=f"File not found: {chapter_name}.v")
-
-    # Create .orig backup on first save (for reset functionality)
-    orig_file = Path(vol["path"]) / f"{chapter_name}.v.orig"
-    if not orig_file.exists():
-        import shutil
-        shutil.copy2(str(v_file), str(orig_file))
-        logger.info(f"Created backup: {orig_file}")
-
-    # Save full content always (per-exercise grading compiles a temp truncated copy)
-    v_file.write_text(content, encoding="utf-8")
-
-    from server.services.grader import full_grade, full_grade_exercise
-    from server.services.progress_tracker import update_progress_from_grade
-
-    if target_exercise:
-        grade_result = await full_grade_exercise(volume_id, chapter_name, target_exercise)
-    else:
-        grade_result = await full_grade(volume_id, chapter_name)
-
-    # Save progress for the current user (if authenticated)
-    user_id = user.id if user else None
-    await update_progress_from_grade(session, grade_result, user_id)
-
-    # Build exercise status summary including detailed feedback
-    exercises = [
-        {
-            "name": ex.exercise_name,
-            "status": ex.status,
-            "points": ex.points_earned,
-            "feedback": ex.feedback,
-            "error_detail": ex.error_detail,
-        }
-        for ex in grade_result.exercises
-    ]
-    completed = sum(1 for ex in grade_result.exercises if ex.status == "completed")
-    total = len(grade_result.exercises)
-
-    return {
-        "status": "saved",
-        "graded": True,
-        "completed": completed,
-        "total": total,
-        "exercises": exercises,
-        "compile_output": grade_result.compile_output,
-    }
+    return await _save_and_grade_internal(
+        volume_id, chapter_name, content, target_exercise, user, session,
+    )
 
 
 @router.post("/coq/file/{volume_id}/{chapter_name}/blocks")
@@ -402,11 +403,21 @@ async def grade_from_blocks(
     if not isinstance(blocks, list) or not blocks:
         raise HTTPException(status_code=400, detail="Body must include a non-empty `blocks` list")
     target_exercise = body.get("target_exercise")
-    vol = VOLUMES[volume_id]
-    v_file = Path(vol["path"]) / f"{chapter_name}.v"
-    orig_file = Path(vol["path"]) / f"{chapter_name}.v.orig"
+    user_id = user.id if user else None
+    # Splice templates can come from either the per-user workspace (so
+    # users don't see each other's local .v.orig if it ever differs)
+    # or the global volume — the upstream-HTML path is preferred either
+    # way, but we want the fallback to also be user-isolated.
+    vp = _user_vol_path(user_id, volume_id) if user_id else Path(VOLUMES[volume_id]["path"])
+    v_file = vp / f"{chapter_name}.v"
+    orig_file = vp / f"{chapter_name}.v.orig"
     if not v_file.exists():
-        raise HTTPException(status_code=404, detail=f"File not found: {chapter_name}.v")
+        # User workspace missing this chapter — fall back to global template.
+        global_v = Path(VOLUMES[volume_id]["path"]) / f"{chapter_name}.v"
+        if not global_v.exists():
+            raise HTTPException(status_code=404, detail=f"File not found: {chapter_name}.v")
+        v_file = global_v
+        orig_file = Path(VOLUMES[volume_id]["path"]) / f"{chapter_name}.v.orig"
 
     from server.services.coq_splice import (
         splice_blocks, reassemble_v_from_html, SpliceError,

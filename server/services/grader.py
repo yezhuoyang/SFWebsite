@@ -12,7 +12,10 @@ from server.services.parser import parse_exercises, parse_test_file
 logger = logging.getLogger(__name__)
 
 
-async def _rebuild_predecessors(volume_id: str, chapter_name: str) -> str | None:
+async def _rebuild_predecessors(
+    volume_id: str, chapter_name: str,
+    vol_path_override: "Path | None" = None,
+) -> str | None:
     """Recompile every same-volume chapter that appears BEFORE `chapter_name`
     in the canonical CHAPTER_ORDER whose .vo is stale or missing. Required
     because editing-and-grading chapters out of order leaves .vo files with
@@ -35,7 +38,7 @@ async def _rebuild_predecessors(volume_id: str, chapter_name: str) -> str | None
         return None  # first chapter — no predecessors to worry about
 
     vol = VOLUMES[volume_id]
-    vol_path = str(vol["path"])
+    vol_path = str(vol_path_override) if vol_path_override else str(vol["path"])
 
     needs_rebuild = False
     for pred in order[:idx]:
@@ -143,19 +146,27 @@ async def quick_grade(volume_id: str, chapter_name: str) -> GradeResult:
     )
 
 
-async def full_grade(volume_id: str, chapter_name: str) -> GradeResult:
-    """Tier 2: Full compilation with coqc + static analysis + tampering detection."""
+async def full_grade(
+    volume_id: str, chapter_name: str,
+    vol_path_override: "Path | None" = None,
+) -> GradeResult:
+    """Tier 2: Full compilation with coqc + static analysis + tampering detection.
+
+    `vol_path_override` lets the caller point at a per-user workspace
+    (workspaces/<user_id>/<vol_id>/) so users don't share each other's
+    submissions through a global on-disk file."""
     if volume_id not in VOLUMES:
         return GradeResult(volume_id, chapter_name, False, [], "Unknown volume")
 
     vol = VOLUMES[volume_id]
-    vol_path = str(vol["path"])
-    v_file = Path(vol["path"]) / f"{chapter_name}.v"
+    vp = Path(vol_path_override) if vol_path_override else Path(vol["path"])
+    vol_path = str(vp)
+    v_file = vp / f"{chapter_name}.v"
     if not v_file.exists():
         return GradeResult(volume_id, chapter_name, False, [], f"{chapter_name}.v not found")
 
     # Rebuild stale predecessor .vo files first so transitive imports line up.
-    predecessor_err = await _rebuild_predecessors(volume_id, chapter_name)
+    predecessor_err = await _rebuild_predecessors(volume_id, chapter_name, vol_path_override)
     if predecessor_err:
         # Can't grade this chapter if earlier chapters don't compile cleanly.
         compile_output = predecessor_err
@@ -182,7 +193,7 @@ async def full_grade(volume_id: str, chapter_name: str) -> GradeResult:
 
     # Parse exercises in current file
     exercises = parse_exercises(v_file)
-    test_file = Path(vol["path"]) / f"{chapter_name}Test.v"
+    test_file = vp / f"{chapter_name}Test.v"
     test_points = parse_test_file(test_file) if test_file.exists() else {}
 
     # Per-exercise tamper detection: each exercise is considered tampered
@@ -201,7 +212,7 @@ async def full_grade(volume_id: str, chapter_name: str) -> GradeResult:
     )
     current_names = {m.group(1) for m in _IDENT_RE.finditer(current_text)}
 
-    orig_file = Path(vol["path"]) / f"{chapter_name}.v.orig"
+    orig_file = vp / f"{chapter_name}.v.orig"
     orig_names: set[str] = set()
     if orig_file.exists():
         try:
@@ -280,7 +291,8 @@ async def full_grade(volume_id: str, chapter_name: str) -> GradeResult:
 
 
 async def full_grade_exercise(
-    volume_id: str, chapter_name: str, exercise_name: str
+    volume_id: str, chapter_name: str, exercise_name: str,
+    vol_path_override: "Path | None" = None,
 ) -> GradeResult:
     """Per-exercise grade: compile only up to (and including) the target
     exercise, so unrelated errors later in the file don't block judgment,
@@ -289,12 +301,15 @@ async def full_grade_exercise(
     Strategy: write a truncated copy of the saved .v file to a temporary
     `{chapter}__grade_{ex}.v` next to the original, close any open Modules /
     Sections, and run coqc on that.
-    """
+
+    `vol_path_override` lets the caller point at a per-user workspace
+    so grading isolation works."""
     if volume_id not in VOLUMES:
         return GradeResult(volume_id, chapter_name, False, [], "Unknown volume")
     vol = VOLUMES[volume_id]
-    vol_path = str(vol["path"])
-    v_file = Path(vol["path"]) / f"{chapter_name}.v"
+    vp = Path(vol_path_override) if vol_path_override else Path(vol["path"])
+    vol_path = str(vp)
+    v_file = vp / f"{chapter_name}.v"
     if not v_file.exists():
         return GradeResult(volume_id, chapter_name, False, [], f"{chapter_name}.v not found")
 
@@ -331,7 +346,7 @@ async def full_grade_exercise(
         # "Compiled library LF.Induction makes inconsistent assumptions over
         # library LF.Basics" because Induction.vo was compiled against an
         # older Basics.vo digest.
-        predecessor_err = await _rebuild_predecessors(volume_id, chapter_name)
+        predecessor_err = await _rebuild_predecessors(volume_id, chapter_name, vol_path_override)
         if predecessor_err:
             compile_output = predecessor_err
             compiled_ok = False
@@ -359,7 +374,7 @@ async def full_grade_exercise(
         truncated_exercises = parse_exercises(temp_path)
         ex = next((e for e in truncated_exercises if e.name == exercise_name), None)
 
-        test_file = Path(vol["path"]) / f"{chapter_name}Test.v"
+        test_file = vp / f"{chapter_name}Test.v"
         test_points = parse_test_file(test_file) if test_file.exists() else {}
         pts = test_points.get(exercise_name, float(ex.stars if ex else target.stars))
 
@@ -381,7 +396,7 @@ async def full_grade_exercise(
         # group labels (e.g. `list_funs` bundles nonzeros/oddmembers/
         # countoddmembers) — the label itself is never declared, so the
         # tamper check would always fire as a false positive.
-        orig_file = Path(vol["path"]) / f"{chapter_name}.v.orig"
+        orig_file = vp / f"{chapter_name}.v.orig"
         orig_has_target = False
         if orig_file.exists():
             try:
