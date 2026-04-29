@@ -31,6 +31,13 @@ interface Props {
   /** Called after a successful grade so the parent can refetch
    *  per-chapter progress and bump leaderboard widgets. */
   onGraded: () => void;
+  /** TOC visibility (left sidebar). Collapsed gives the IDE
+   *  more horizontal space. */
+  tocOpen?: boolean;
+  onToggleToc?: () => void;
+  /** Fullscreen / Present mode toggle. */
+  isPresenting?: boolean;
+  onPresent?: () => void;
 }
 
 interface SubmitFeedback {
@@ -51,7 +58,10 @@ function looksLikeChapter(s: string): boolean {
   return /\b(Require|From|Import|Theorem|Lemma|Definition|Inductive|Fixpoint|Module|Example)\b/.test(s);
 }
 
-export default function ChapterProgressBar({ progress, volumeId, chapterSlug, iframeRef, onGraded }: Props) {
+export default function ChapterProgressBar({
+  progress, volumeId, chapterSlug, iframeRef, onGraded,
+  tocOpen, onToggleToc, isPresenting, onPresent,
+}: Props) {
   const { requireLogin } = useAuth();
   const notify = useNotify();
   const { code, setCode } = useChapterCodeBuffer(volumeId, chapterSlug);
@@ -180,7 +190,31 @@ export default function ChapterProgressBar({ progress, volumeId, chapterSlug, if
 
   return (
     <div className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-gray-200 shadow-sm">
-      <div className="px-4 py-2 flex items-center gap-3 text-[12px]">
+      <div className="px-4 py-2 flex items-center gap-2 text-[12px]">
+        {onToggleToc && (
+          <button
+            onClick={onToggleToc}
+            className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded border border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+            title={tocOpen ? 'Hide chapter sidebar' : 'Show chapter sidebar'}
+            aria-label={tocOpen ? 'Hide sidebar' : 'Show sidebar'}
+          >
+            {tocOpen ? '◀' : '▶'}
+          </button>
+        )}
+        {onPresent && (
+          <button
+            onClick={onPresent}
+            className={`shrink-0 inline-flex items-center gap-1 px-2 h-7 rounded border text-[11px] font-semibold transition-colors ${
+              isPresenting
+                ? 'border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                : 'border-gray-200 text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+            }`}
+            title={isPresenting ? 'Exit presentation mode (Esc)' : 'Enter fullscreen presentation'}
+          >
+            {isPresenting ? '⤓ Exit' : '⛶ Present'}
+          </button>
+        )}
+        {(onToggleToc || onPresent) && <span className="text-gray-200">|</span>}
         {progress && progress.total > 0 ? (
           <>
             <span className="font-bold text-gray-800">

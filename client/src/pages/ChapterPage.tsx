@@ -30,6 +30,23 @@ export default function ChapterPage() {
   // Bumped on each successful grade so listeners (leaderboard widget, etc.)
   // can re-fetch via prop changes.
   const [, setGradeVersion] = useState(0);
+  // TOC visibility — collapse to give the IDE more horizontal space.
+  const [tocOpen, setTocOpen] = useState(true);
+  // Fullscreen "present" mode tracking. Updated by the document-level
+  // fullscreenchange event so we stay in sync if the user hits ESC.
+  const [isPresenting, setIsPresenting] = useState(false);
+  useEffect(() => {
+    const onChange = () => setIsPresenting(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  const togglePresent = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => { /* ignored */ });
+    } else {
+      document.documentElement.requestFullscreen().catch(() => { /* ignored */ });
+    }
+  };
 
   // Strip any `.v` suffix the URL might carry; SF pages are <Chapter>.html.
   const chapter = (chapterName ?? '').replace(/\.v$/, '');
@@ -117,20 +134,26 @@ export default function ChapterPage() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-white">
-      <ChapterTOC
-        volumeId={volumeId}
-        currentSlug={chapter}
-        iframeRef={iframeRef}
-        serverProgress={progress}
-        refreshProgress={refreshProgress}
-        onGraded={() => { setGradeVersion(v => v + 1); refreshProgress(); }}
-      />
+      {tocOpen && (
+        <ChapterTOC
+          volumeId={volumeId}
+          currentSlug={chapter}
+          iframeRef={iframeRef}
+          serverProgress={progress}
+          refreshProgress={refreshProgress}
+          onGraded={() => { setGradeVersion(v => v + 1); refreshProgress(); }}
+        />
+      )}
       <div className="flex-1 flex flex-col min-w-0 bg-white">
         <ChapterProgressBar
           progress={progress}
           volumeId={volumeId}
           chapterSlug={chapter}
           iframeRef={iframeRef}
+          tocOpen={tocOpen}
+          onToggleToc={() => setTocOpen(o => !o)}
+          onPresent={togglePresent}
+          isPresenting={isPresenting}
           onGraded={() => { setGradeVersion(v => v + 1); refreshProgress(); }}
         />
         <iframe
@@ -146,7 +169,9 @@ export default function ChapterPage() {
           credentialless="true"
         />
       </div>
-      <TutorPanel volumeId={volumeId} chapterSlug={chapter} iframeRef={iframeRef} />
+      {!isPresenting && (
+        <TutorPanel volumeId={volumeId} chapterSlug={chapter} iframeRef={iframeRef} />
+      )}
     </div>
   );
 }
