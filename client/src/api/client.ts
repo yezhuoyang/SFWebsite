@@ -112,6 +112,16 @@ export const resetChapterFile = (volumeId: string, chapterName: string) =>
     method: 'POST',
   });
 
+/** Fetch the user's last-submitted code blocks (extracted from the
+ *  saved chapter .v on the server). Used to auto-restore previously
+ *  solved exercises when localStorage doesn't have a copy. Distinct
+ *  from `getChapterBlocks` below (which is the legacy ChapterPage's
+ *  block-with-metadata API — different shape, different endpoint). */
+export const getSavedChapterBlocks = (volumeId: string, chapterName: string) =>
+  fetchJSON<{ blocks: string[]; filename: string }>(
+    `${BASE}/coq/file/${volumeId}/${encodeURIComponent(chapterName)}/blocks`,
+  );
+
 /** Grade by sending the per-block edits read from the same-origin
  *  iframe. The server splices them into the original chapter source
  *  before running coqc — that way prose comments + Exercise headers

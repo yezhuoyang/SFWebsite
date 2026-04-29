@@ -21,6 +21,7 @@ import ChapterProgressBar from '../components/ChapterProgressBar';
 import TutorPanel from '../components/TutorPanel';
 import { useChapterProgress, useChapterBlocks } from '../coq/exerciseGrading';
 import { writeChapterBlocks } from '../coq/iframeReader';
+import { getSavedChapterBlocks } from '../api/client';
 
 export default function ChapterPage() {
   const { volumeId, chapterName } = useParams<{ volumeId: string; chapterName: string }>();
@@ -41,49 +42,60 @@ export default function ChapterPage() {
   // Persisted per-block edits (from previous Submit clicks). Restored
   // into the iframe's CodeMirror instances once wacoq has finished
   // creating them.
-  const { read: readSavedBlocks } = useChapterBlocks(volumeId ?? '', chapter);
+  const { read: readSavedBlocks, write: writeSavedBlocks } = useChapterBlocks(volumeId ?? '', chapter);
 
   // After the iframe (re)mounts, poll until wacoq has spun up its
-  // CodeMirrors, then push the previously-saved blocks back into them.
-  // Without this, navigating away and back wipes the user's solution.
+  // CodeMirrors, then push previously-saved blocks back into them.
+  // Source priority:
+  //   1. localStorage `sf:blocks:<vol>:<slug>` — written on every Submit.
+  //   2. Server's saved chapter .v (extracted via /coq/file/.../blocks)
+  //      — covers the case where the user is on a fresh browser /
+  //      cleared site data but has solutions in the DB from earlier.
   useEffect(() => {
     if (!volumeId || !chapterName) return;
-    const saved = readSavedBlocks();
-    if (!saved || saved.length === 0) return;
-
     let cancelled = false;
-    let lastCount = -1;
-    let stableTicks = 0;
 
-    const tick = () => {
-      if (cancelled) return;
-      const iframe = iframeRef.current;
-      const doc = iframe?.contentDocument;
-      const count = doc?.querySelectorAll('.CodeMirror').length ?? 0;
-      // Wait for the count to be > 0 and stable for a few ticks
-      // (wacoq adds editors progressively).
-      if (count > 0 && count === lastCount) {
-        stableTicks++;
-        if (stableTicks >= 2) {
-          writeChapterBlocks(iframe, saved);
-          return;
-        }
-      } else {
-        stableTicks = 0;
+    const restore = async () => {
+      let blocks = readSavedBlocks();
+      if (!blocks || blocks.length === 0) {
+        try {
+          const resp = await getSavedChapterBlocks(volumeId, chapter);
+          if (resp.blocks && resp.blocks.length > 0) {
+            blocks = resp.blocks;
+            // Mirror to localStorage so subsequent reloads use the
+            // fast-path without a server round-trip.
+            writeSavedBlocks(blocks);
+          }
+        } catch { /* no saved file or auth/network issue — that's fine */ }
       }
-      lastCount = count;
-      // Cap retries so we don't poll forever on a broken iframe.
-      setTimeout(tick, 500);
+      if (!blocks || blocks.length === 0 || cancelled) return;
+
+      // Wait for wacoq to finish creating its CodeMirrors. Poll until
+      // the count stabilises across two ticks before writing.
+      let lastCount = -1;
+      let stableTicks = 0;
+      const tick = () => {
+        if (cancelled) return;
+        const iframe = iframeRef.current;
+        const doc = iframe?.contentDocument;
+        const count = doc?.querySelectorAll('.CodeMirror').length ?? 0;
+        if (count > 0 && count === lastCount) {
+          stableTicks++;
+          if (stableTicks >= 2) {
+            writeChapterBlocks(iframe, blocks!);
+            return;
+          }
+        } else {
+          stableTicks = 0;
+        }
+        lastCount = count;
+        setTimeout(tick, 500);
+      };
+      setTimeout(tick, 800);
     };
 
-    // Kick off after the iframe element exists; the load event also
-    // restarts polling since src changes via key={src} cause a remount.
-    const start = setTimeout(tick, 800);
-    return () => {
-      cancelled = true;
-      clearTimeout(start);
-    };
-    // re-run when chapter changes (different saved blocks).
+    void restore();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [volumeId, chapter]);
 

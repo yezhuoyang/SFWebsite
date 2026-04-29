@@ -186,6 +186,37 @@ async def get_chapter_file(volume_id: str, chapter_name: str):
     return {"content": content, "filename": f"{chapter_name}.v"}
 
 
+@router.get("/coq/file/{volume_id}/{chapter_name}/blocks")
+async def get_chapter_blocks(volume_id: str, chapter_name: str):
+    """Extract the user's last-submitted code blocks from the saved
+    chapter .v file. Walks the same `(** ... *)` / code segmentation
+    the splice uses, returning each substantive code region in
+    document order.
+
+    The client uses this to auto-restore solutions when localStorage
+    is empty (e.g. signing in from a new browser, or after clearing
+    site data). Returns 404 with empty blocks if no .v exists yet."""
+    if volume_id not in VOLUMES:
+        raise HTTPException(status_code=404, detail=f"Unknown volume: {volume_id}")
+    vol = VOLUMES[volume_id]
+    v_file = Path(vol["path"]) / f"{chapter_name}.v"
+    if not v_file.exists():
+        return {"blocks": [], "filename": f"{chapter_name}.v"}
+    text = v_file.read_text(encoding="utf-8", errors="replace")
+
+    from server.services.coq_splice import split_segments, is_substantive_code
+    segments = split_segments(text)
+    # Strip the leading newline / trailing newline reassemble_v_from_html
+    # adds around each user block so the restored content matches what
+    # the user originally typed (more or less).
+    blocks = [
+        s.text.strip('\n')
+        for s in segments
+        if s.kind == 'code' and is_substantive_code(s.text)
+    ]
+    return {"blocks": blocks, "filename": f"{chapter_name}.v"}
+
+
 @router.get("/coq/imports/{volume_id}/{chapter_name}")
 async def get_chapter_imports(volume_id: str, chapter_name: str):
     """Resolve every `From X Require Import Y` in this chapter into a flat
