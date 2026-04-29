@@ -232,7 +232,15 @@ def _wrap_as_doc_comment(prose: str) -> str:
     if prose.strip() == '[]':
         return '(** [] *)'
 
-    safe = prose.replace('*)', '* )')
+    # Both `(*` and `*)` need escaping inside a `(** ... *)` doc
+    # comment. Coqdoc sometimes renders source like `(* FILL IN HERE *)`
+    # AS LITERAL TEXT inside prose (when the parser doesn't elide it),
+    # which when wrapped naively becomes
+    #   (** ... (* FILL IN HERE *) ... *)
+    # — Coq comments nest, but our `*)` escape turns the inner close
+    # into `* )` (not a valid close), leaving the inner `(*` open and
+    # the lexer chokes on "Unterminated comment".
+    safe = prose.replace('(*', '( *').replace('*)', '* )')
 
     chunks: list[str] = []
     last = 0
