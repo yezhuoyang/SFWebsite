@@ -244,12 +244,59 @@ def _wrap_as_doc_comment(prose: str) -> str:
     return '\n\n'.join(chunks)
 
 
+# Coqdoc with `--utf8` (which is what coq.vercel.app's HTML uses)
+# replaces ASCII tokens with Unicode glyphs for prettier rendering.
+# wacoq imports a `utf8` package so its Coq accepts these tokens;
+# standalone coqc doesn't, and Coq's stdlib `Utf8` only covers a few
+# (→ ∀ ∃ ↔ ¬ ∧ ∨ — *not* ⇒ ≤ ≥ ≠ ×). Easiest reliable answer:
+# translate every glyph back to its ASCII source before grading.
+# Risk: would break a Notation definition that uses these glyphs as
+# literals — SF chapters don't define such notations in editable
+# code (they live in imported support modules), so this is safe here.
+_UTF8_TO_ASCII = {
+    '→': '->',
+    '⇒': '=>',
+    '↔': '<->',
+    '⇔': '<->',
+    '∀': 'forall',
+    '∃': 'exists',
+    '≤': '<=',
+    '≥': '>=',
+    '≠': '<>',
+    '¬': '~',
+    '∧': '/\\',
+    '∨': '\\/',
+    '×': '*',
+    '·': '.',
+    '∈': 'In',
+    '∅': 'empty',
+    '☐': '',      # coqdoc trailing ballot-box marker (&#9744;) emitted
+                       # at end of some code blocks; visible in the iframe
+                       # but not Coq source.
+    '☑': '',
+    ' ': ' ',     # NBSP — coqdoc uses these for indentation; coqc's
+                       # lexer doesn't accept them as whitespace.
+    '​': '',      # zero-width space (just in case)
+    ' ': ' ',     # em space
+}
+
+
+def _utf8_to_ascii(text: str) -> str:
+    for u, a in _UTF8_TO_ASCII.items():
+        text = text.replace(u, a)
+    return text
+
+
 def reassemble_v_from_html(html_text: str, user_blocks: list[str]) -> str:
     """Build a Coq .v source by walking the upstream chapter HTML and
     substituting each `<div class="code">` with the corresponding
     entry from `user_blocks` (in document order). `<div class="doc">`
     contents are wrapped as `(** ... *)` so the grader still sees the
     Exercise: headers it needs.
+
+    Prepends `From Coq Require Import Utf8.` so coqc accepts the
+    Unicode glyphs (→ ∀ ∃ ⇒ ≤ ⇔ ¬ ∧ ∨) coqdoc emits in place of
+    `-> forall exists => <= <-> ~ /\ \/`.
 
     Raises SpliceError if user_blocks count doesn't match the HTML's
     code-block count (these MUST be 1:1 — they come from the same
@@ -269,7 +316,7 @@ def reassemble_v_from_html(html_text: str, user_blocks: list[str]) -> str:
             out.append(_wrap_as_doc_comment(text))
         else:
             out.append('\n')
-            out.append(user_blocks[bi])
+            out.append(_utf8_to_ascii(user_blocks[bi]))
             out.append('\n')
             bi += 1
     return '\n'.join(out)
