@@ -216,15 +216,22 @@ def _wrap_as_doc_comment(prose: str) -> str:
 
     coqdoc merges adjacent source `(** ... *)` blocks into a single
     `<div class="doc">`, so one prose segment can contain *multiple*
-    Exercise headings. We:
+    Exercise headings AND end markers. We:
       * Escape any `*)` inside the prose (would close the comment
         prematurely).
       * Split each `Exercise: N stars... (name)` line out into its
         own dedicated `(** **** Exercise: ... (name) *)` comment.
-        The grader's regex requires `(**` and `****` and `Exercise:`
-        all on the same line, which a single big multi-line comment
-        fails to satisfy.
+      * Detect bare `[]` end markers and emit them as single-line
+        `(** [] *)` so parse_exercises's line-based EXERCISE_END_RE
+        matches.
+
+    Both regexes in parse_exercises require the relevant marker to be
+    on a single line, so a multi-line wrapped comment fails them.
     """
+    # If the entire segment is just an end marker, emit it inline.
+    if prose.strip() == '[]':
+        return '(** [] *)'
+
     safe = prose.replace('*)', '* )')
 
     chunks: list[str] = []
@@ -232,16 +239,33 @@ def _wrap_as_doc_comment(prose: str) -> str:
     for m in _EXERCISE_LINE_RE.finditer(safe):
         before = safe[last:m.start()].strip()
         if before:
-            chunks.append(f'(**\n{before}\n*)')
+            chunks.append(_wrap_prose_chunk(before))
         # One-line exercise comment so parse_exercises matches.
         chunks.append(f'(** **** {m.group(1)} *)')
         last = m.end()
     tail = safe[last:].strip()
     if tail:
-        chunks.append(f'(**\n{tail}\n*)')
+        chunks.append(_wrap_prose_chunk(tail))
     if not chunks:
         return f'(**\n{safe}\n*)'
     return '\n\n'.join(chunks)
+
+
+def _wrap_prose_chunk(text: str) -> str:
+    """Wrap a piece of prose as a Coq doc comment, special-casing the
+    bare end marker `[]` which must stay on one line for the grader's
+    EXERCISE_END_RE."""
+    if text.strip() == '[]':
+        return '(** [] *)'
+    # If the trimmed text *ends* with a `[]` line on its own, peel it
+    # into its own one-line comment so the line-based regex matches.
+    lines = text.splitlines()
+    if lines and lines[-1].strip() == '[]':
+        head = '\n'.join(lines[:-1]).rstrip()
+        if head:
+            return f'(**\n{head}\n*)\n\n(** [] *)'
+        return '(** [] *)'
+    return f'(**\n{text}\n*)'
 
 
 # Coqdoc with `--utf8` (which is what coq.vercel.app's HTML uses)
@@ -315,9 +339,17 @@ def reassemble_v_from_html(html_text: str, user_blocks: list[str]) -> str:
         if kind == 'doc':
             out.append(_wrap_as_doc_comment(text))
         else:
+            # Coqdoc replaces the source's `(** [] *)` exercise-end
+            # markers with a `☐` (U+2610) glyph at the end of the code
+            # block. We check the *original* (pre-translation) code
+            # text for this glyph and inject the end marker so
+            # parse_exercises can find each exercise's bounds.
+            ends_exercise = '☐' in text or '☑' in text
             out.append('\n')
             out.append(_utf8_to_ascii(user_blocks[bi]))
             out.append('\n')
+            if ends_exercise:
+                out.append('(** [] *)')
             bi += 1
     return '\n'.join(out)
 
