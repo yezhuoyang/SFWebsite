@@ -423,35 +423,50 @@ async def grade_from_blocks(
         splice_blocks, reassemble_v_from_html, SpliceError,
     )
 
-    # Preferred path: rebuild the .v from the same upstream chapter HTML
-    # the iframe is rendered from. That guarantees block alignment 1:1
-    # with the user's CodeMirror instances even if our local .v.orig has
-    # drifted from upstream's revision.
+    # Preferred path: splice into our LOCAL .v.orig template. That's
+    # the version of SF compiled by our Coq 8.17 (clean), so the
+    # resulting file is guaranteed to compile here. Upstream
+    # coq.vercel.app's HTML may use a different (newer) SF revision
+    # whose Coq stdlib usage doesn't match ours — `apply minus_diag`,
+    # for instance, was renamed to `Nat.sub_diag` and would fail
+    # locally. The trade-off: block boundaries may differ slightly
+    # between upstream HTML's `<div class=code>` count and our
+    # local .v.orig's segments, so user edits to specific blocks may
+    # land at adjacent positions. `splice_blocks` tolerates that
+    # drift (up to 5 blocks).
     content: str | None = None
-    try:
-        import httpx
-        from server.routers.sf_proxy import UPSTREAM
-        upstream_path = f"{UPSTREAM}/ext/sf/{volume_id}/full/{chapter_name}.html"
-        async with httpx.AsyncClient(timeout=30.0) as fc:
-            r = await fc.get(upstream_path, headers={"Accept-Encoding": "gzip, deflate"})
-        if r.status_code == 200:
-            content = reassemble_v_from_html(r.text, [str(b) for b in blocks])
-    except SpliceError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        logger.warning("upstream HTML fetch for splice failed: %s", e)
-        content = None
-
-    # Fallback path: splice into our local .v.orig. Used when upstream
-    # is unreachable. Brittle if revisions have drifted, but better
-    # than failing.
-    if content is None:
-        template_file = orig_file if orig_file.exists() else v_file
+    template_file = orig_file if orig_file.exists() else v_file
+    if template_file.exists():
         template_text = template_file.read_text(encoding="utf-8", errors="replace")
         try:
             content = splice_blocks(template_text, [str(b) for b in blocks])
         except SpliceError as e:
+            logger.info("local .v.orig splice failed (%s); trying upstream HTML", e)
+            content = None
+
+    # Fallback path: rebuild from upstream chapter HTML. Used when
+    # local .v.orig is missing or has more drift than splice_blocks
+    # can absorb. Block alignment is 1:1 with the iframe but the
+    # resulting Coq may not compile under our local stdlib.
+    if content is None:
+        try:
+            import httpx
+            from server.routers.sf_proxy import UPSTREAM
+            upstream_path = f"{UPSTREAM}/ext/sf/{volume_id}/full/{chapter_name}.html"
+            async with httpx.AsyncClient(timeout=30.0) as fc:
+                r = await fc.get(upstream_path, headers={"Accept-Encoding": "gzip, deflate"})
+            if r.status_code == 200:
+                content = reassemble_v_from_html(r.text, [str(b) for b in blocks])
+        except SpliceError as e:
             raise HTTPException(status_code=422, detail=str(e))
+        except Exception as e:
+            logger.warning("upstream HTML fetch for splice failed: %s", e)
+
+    if content is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Couldn't reconstruct chapter source for grading.",
+        )
 
     return await _save_and_grade_internal(
         volume_id, chapter_name, content, target_exercise, user, session,
