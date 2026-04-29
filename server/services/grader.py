@@ -46,6 +46,29 @@ async def _rebuild_predecessors(
         vo_file = Path(vol_path) / f"{pred}.vo"
         if not v_file.exists():
             continue
+        # If the user's saved predecessor has obviously broken comment
+        # structure (e.g. from a pre-fix bad save), reset it to .v.orig
+        # so it doesn't block grading of every downstream chapter. The
+        # user only loses corrupted edits — clean solutions stay
+        # tracked in the per-exercise progress table.
+        try:
+            text = v_file.read_text(encoding='utf-8', errors='replace')
+            if text.count('(*') != text.count('*)'):
+                orig = Path(vol_path) / f"{pred}.v.orig"
+                if orig.exists():
+                    orig_text = orig.read_text(encoding='utf-8', errors='replace')
+                    if orig_text.count('(*') == orig_text.count('*)'):
+                        import shutil as _sh
+                        _sh.copy2(str(orig), str(v_file))
+                        # Drop stale .vo so it gets rebuilt now.
+                        for ext in ('.vo', '.vos', '.vok', '.glob'):
+                            (v_file.parent / f"{pred}{ext}").unlink(missing_ok=True)
+                        logger.warning(
+                            "predecessor %s.v had unbalanced comments; reset to .v.orig",
+                            pred,
+                        )
+        except Exception as e:
+            logger.warning("predecessor sanity check failed for %s: %s", pred, e)
         should_compile = needs_rebuild or (
             not vo_file.exists() or vo_file.stat().st_mtime < v_file.stat().st_mtime
         )
