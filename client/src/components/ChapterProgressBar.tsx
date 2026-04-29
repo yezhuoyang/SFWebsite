@@ -16,7 +16,7 @@
 import { useState } from 'react';
 import { saveChapterFile, gradeChapterBlocks, type ChapterProgress, type ExerciseGrade, type SaveResult } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
-import { useChapterCodeBuffer, useExerciseGrades } from '../coq/exerciseGrading';
+import { useChapterCodeBuffer, useExerciseGrades, useChapterBlocks } from '../coq/exerciseGrading';
 import { readChapterBlocks } from '../coq/iframeReader';
 import CodePasteModal from './CodePasteModal';
 import { useNotify } from './Toast';
@@ -56,6 +56,7 @@ export default function ChapterProgressBar({ progress, volumeId, chapterSlug, if
   const notify = useNotify();
   const { code, setCode } = useChapterCodeBuffer(volumeId, chapterSlug);
   const { recordGrade } = useExerciseGrades(volumeId, chapterSlug);
+  const { write: persistBlocks } = useChapterBlocks(volumeId, chapterSlug);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<SubmitFeedback | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -99,6 +100,7 @@ export default function ChapterProgressBar({ progress, volumeId, chapterSlug, if
       }
       // eslint-disable-next-line no-console
       console.log('[ChapterProgressBar] grading via blocks', { count: blocks.length });
+      persistBlocks(blocks);
       const result = await gradeChapterBlocks(volumeId, chapterSlug, blocks);
       processResult(result);
     } catch (err) {

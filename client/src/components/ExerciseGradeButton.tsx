@@ -19,7 +19,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { gradeExercise, type ExerciseGradingResult } from '../coq/exerciseGrading';
+import { gradeExercise, type ExerciseGradingResult, useChapterBlocks } from '../coq/exerciseGrading';
 import { gradeChapterBlocks } from '../api/client';
 import { readChapterBlocks } from '../coq/iframeReader';
 import CodePasteModal from './CodePasteModal';
@@ -80,6 +80,7 @@ export default function ExerciseGradeButton({
 }: Props) {
   const { requireLogin } = useAuth();
   const notify = useNotify();
+  const { write: persistBlocks } = useChapterBlocks(volumeId, chapterSlug);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -157,6 +158,9 @@ export default function ExerciseGradeButton({
       }
       // eslint-disable-next-line no-console
       console.log('[ExerciseGradeButton] grading via blocks', { exerciseName, count: blocks.length });
+      // Persist BEFORE the grade call returns — even if the user
+      // navigates away during a slow grade, their edits are saved.
+      persistBlocks(blocks);
       const result = await gradeChapterBlocks(volumeId, chapterSlug, blocks, exerciseName);
       const target = result.exercises.find(e => e.name === exerciseName);
       // eslint-disable-next-line no-console

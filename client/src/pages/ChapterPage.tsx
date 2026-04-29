@@ -15,11 +15,12 @@
  */
 
 import { useParams, useNavigate } from 'react-router-dom';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ChapterTOC from '../components/ChapterTOC';
 import ChapterProgressBar from '../components/ChapterProgressBar';
 import TutorPanel from '../components/TutorPanel';
-import { useChapterProgress } from '../coq/exerciseGrading';
+import { useChapterProgress, useChapterBlocks } from '../coq/exerciseGrading';
+import { writeChapterBlocks } from '../coq/iframeReader';
 
 export default function ChapterPage() {
   const { volumeId, chapterName } = useParams<{ volumeId: string; chapterName: string }>();
@@ -36,6 +37,55 @@ export default function ChapterPage() {
   // the TOC checkmarks. `refresh()` is called from inside ChapterTOC
   // after each successful Grade.
   const { progress, refresh: refreshProgress } = useChapterProgress(volumeId ?? '', chapter);
+
+  // Persisted per-block edits (from previous Submit clicks). Restored
+  // into the iframe's CodeMirror instances once wacoq has finished
+  // creating them.
+  const { read: readSavedBlocks } = useChapterBlocks(volumeId ?? '', chapter);
+
+  // After the iframe (re)mounts, poll until wacoq has spun up its
+  // CodeMirrors, then push the previously-saved blocks back into them.
+  // Without this, navigating away and back wipes the user's solution.
+  useEffect(() => {
+    if (!volumeId || !chapterName) return;
+    const saved = readSavedBlocks();
+    if (!saved || saved.length === 0) return;
+
+    let cancelled = false;
+    let lastCount = -1;
+    let stableTicks = 0;
+
+    const tick = () => {
+      if (cancelled) return;
+      const iframe = iframeRef.current;
+      const doc = iframe?.contentDocument;
+      const count = doc?.querySelectorAll('.CodeMirror').length ?? 0;
+      // Wait for the count to be > 0 and stable for a few ticks
+      // (wacoq adds editors progressively).
+      if (count > 0 && count === lastCount) {
+        stableTicks++;
+        if (stableTicks >= 2) {
+          writeChapterBlocks(iframe, saved);
+          return;
+        }
+      } else {
+        stableTicks = 0;
+      }
+      lastCount = count;
+      // Cap retries so we don't poll forever on a broken iframe.
+      setTimeout(tick, 500);
+    };
+
+    // Kick off after the iframe element exists; the load event also
+    // restarts polling since src changes via key={src} cause a remount.
+    const start = setTimeout(tick, 800);
+    return () => {
+      cancelled = true;
+      clearTimeout(start);
+    };
+    // re-run when chapter changes (different saved blocks).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [volumeId, chapter]);
 
   // With cross-origin iframe to coq.vercel.app, we can't read the
   // iframe's location to detect internal navigations. Users navigate

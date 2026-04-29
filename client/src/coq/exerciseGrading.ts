@@ -27,6 +27,10 @@ function bufferKey(volumeId: string, slug: string): string {
   return `sf:codeBuffer:${volumeId}:${slug}`;
 }
 
+function blocksKey(volumeId: string, slug: string): string {
+  return `sf:blocks:${volumeId}:${slug}`;
+}
+
 /** Persistent per-chapter code buffer. The textarea reads/writes this;
  *  Grade buttons on individual exercises read it too. */
 export function useChapterCodeBuffer(volumeId: string, slug: string) {
@@ -43,6 +47,27 @@ export function useChapterCodeBuffer(volumeId: string, slug: string) {
     try { localStorage.setItem(bufferKey(volumeId, slug), next); } catch { /* quota */ }
   }, [volumeId, slug]);
   return { code, setCode: persist };
+}
+
+/** Persistent per-block edits, written after every successful Submit
+ *  and restored into the iframe's CodeMirror instances on chapter load
+ *  (so navigating away and back doesn't lose the user's solution). */
+export function useChapterBlocks(volumeId: string, slug: string) {
+  const key = blocksKey(volumeId, slug);
+  const read = useCallback((): string[] | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.every(s => typeof s === 'string')) return parsed;
+    } catch { /* malformed */ }
+    return null;
+  }, [key]);
+  const write = useCallback((blocks: string[]) => {
+    try { localStorage.setItem(key, JSON.stringify(blocks)); } catch { /* quota */ }
+  }, [key]);
+  return { read, write };
 }
 
 export interface ExerciseGradingResult extends ExerciseGrade {
