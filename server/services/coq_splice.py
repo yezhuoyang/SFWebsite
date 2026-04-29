@@ -322,19 +322,18 @@ def reassemble_v_from_html(html_text: str, user_blocks: list[str]) -> str:
     Unicode glyphs (→ ∀ ∃ ⇒ ≤ ⇔ ¬ ∧ ∨) coqdoc emits in place of
     `-> forall exists => <= <-> ~ /\ \/`.
 
-    Raises SpliceError if user_blocks count doesn't match the HTML's
-    code-block count (these MUST be 1:1 — they come from the same
-    iframe DOM)."""
+    Tolerant of count mismatch:
+      * If client sent fewer blocks than the HTML has (e.g. wacoq
+        was still creating CodeMirrors when the user clicked Submit),
+        the missing tail uses the HTML's own extracted code text — the
+        user just hasn't edited those blocks. The file still compiles.
+      * If client sent more blocks than the HTML has, the extras are
+        dropped (mirror situation, less common).
+    """
     segments = extract_chapter_segments(html_text)
-    code_count = sum(1 for k, _ in segments if k == 'code')
-    if code_count != len(user_blocks):
-        raise SpliceError(
-            f"Block count mismatch: client sent {len(user_blocks)} block(s) but "
-            f"upstream HTML has {code_count} code region(s). The iframe DOM "
-            f"and the proxy HTML have diverged — try reloading the chapter."
-        )
     out: list[str] = []
     bi = 0
+    n_blocks = len(user_blocks)
     for kind, text in segments:
         if kind == 'doc':
             out.append(_wrap_as_doc_comment(text))
@@ -345,8 +344,9 @@ def reassemble_v_from_html(html_text: str, user_blocks: list[str]) -> str:
             # text for this glyph and inject the end marker so
             # parse_exercises can find each exercise's bounds.
             ends_exercise = '☐' in text or '☑' in text
+            block_text = user_blocks[bi] if bi < n_blocks else text
             out.append('\n')
-            out.append(_utf8_to_ascii(user_blocks[bi]))
+            out.append(_utf8_to_ascii(block_text))
             out.append('\n')
             if ends_exercise:
                 out.append('(** [] *)')
